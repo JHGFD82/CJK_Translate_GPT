@@ -48,3 +48,11 @@ parser.add_argument('-a', '--abstract', dest='abstract', action='store_true',
                     help='The text has an abstract')
 
 args = parser.parse_args()
+
+# Set up global variables for script
+file = args.input_PDF
+custom_text = args.custom_text
+language = args.input_type
+page_nums = validate_page_nums(args.page_nums) if args.page_nums else None
+abstract = args.abstract
+API_KEY = os.getenv('API_KEY')  # get API key from environment variables
