@@ -56,3 +56,20 @@ language = args.input_type
 page_nums = validate_page_nums(args.page_nums) if args.page_nums else None
 abstract = args.abstract
 API_KEY = os.getenv('API_KEY')  # get API key from environment variables
+
+
+def main() -> None:
+    if file:
+        abstract_text = input('Enter abstract text: ') if abstract else None
+        with open(file, 'rb') as f:
+            pages, device, interpreter = process_pdf(f)
+            document_text = translate_document(pages, interpreter, device, abstract_text)
+        print("".join(document_text))
+    elif custom_text:
+        text_input = input('Enter custom text to be translated: ')
+        translated_text = generate_text('', text_input, '', 0)
+        print(translated_text)
+
+
+if __name__ == '__main__':
+    main()
