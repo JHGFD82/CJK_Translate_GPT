@@ -17,6 +17,11 @@ from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
 from pdfminer.pdfpage import PDFPage
 
 
+def validate_page_nums(value: str) -> str:
+    if not re.match(r"^\d+(-\d+)?$", value):
+        raise argparse.ArgumentTypeError("Letters, commas, and other symbols not allowed.")
+    return value
+
 
 parser = argparse.ArgumentParser(description='Extract text from PDF and translate it using the GPT engine.')
 
