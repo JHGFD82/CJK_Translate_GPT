@@ -108,6 +108,26 @@ def generate_process_text(abstract_text: str, page_text: str, previous_page: str
         context = f"--Context: \n{context}"
     return f"--Current Page: \n{page_text}\n{context}"
 
+
+def api_call(requests_function: Callable[..., Response], url: str, **kwargs: Any) -> Union[str, None]:
+    try:
+        response = requests_function(url, **kwargs)
+        response.raise_for_status()  # Raise an HTTPError if the status is 4xx, 5xx
+    except ConnectionError:
+        logging.error('Network problem, such as a DNS resolution issue or a refused connection.')
+        response = None
+    except Timeout:
+        logging.error('The request to the url timed out.')
+        response = None
+    except TooManyRedirects:
+        logging.error('The request exceeded the configured number of maximum redirections.')
+        response = None
+    except RequestException as req_exception:
+        logging.error(f'An ambiguous exception occurred while handling the request: {req_exception}')
+        response = None
+    return response
+
+
 def translate_text(text: str) -> str:
     setup_logging()
 
