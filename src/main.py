@@ -101,6 +101,11 @@ def parse_layout(layout: LTPage) -> str:
 
     return "".join(result)
 
+def translate_page_text(abstract_text: str, page_text: str, previous_page: str) -> str:
+    process_text = generate_process_text(abstract_text, page_text, previous_page)
+    translated_text = translate_text(process_text)
+    return translated_text
+
 def generate_text(abstract_text: str, page_text: str, previous_page: str, i: int) -> str:
     result = []
     parts_to_translate = [page_text]
