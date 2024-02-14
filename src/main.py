@@ -68,6 +68,25 @@ def process_pdf(f: BinaryIO) -> Tuple[Iterator[PDFPage], PDFPageAggregator, PDFP
     return pages, device, interpreter
 
 
+def extract_page_nums() -> Tuple[int, int]:
+    """Extracts the start and end page numbers from the given string."""
+
+    if page_nums is None:
+        start_page = 1
+        end_page = None
+    elif '-' in page_nums:
+        start_page, end_page = map(int, page_nums.split('-'))
+    elif int(page_nums) > 0:
+        start_page = int(page_nums)
+        end_page = start_page
+    else:
+        raise ValueError(f"{page_nums} is not a valid page number.")
+
+    if end_page is not None:
+        end_page -= 1
+    return start_page - 1, end_page
+
+
 def translate_document(pages: Iterator[PDFPage], interpreter: Any,
                        device: PDFPageAggregator, abstract_text: Optional[str]) -> List[str]:
     document_text = []
