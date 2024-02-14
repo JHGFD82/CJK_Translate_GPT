@@ -68,6 +68,23 @@ def process_pdf(f: BinaryIO) -> Tuple[Iterator[PDFPage], PDFPageAggregator, PDFP
     return pages, device, interpreter
 
 
+def translate_document(pages: Iterator[PDFPage], interpreter: Any,
+                       device: PDFPageAggregator, abstract_text: Optional[str]) -> List[str]:
+    document_text = []
+    start_page, end_page = extract_page_nums()
+    pages = islice(pages, start_page, end_page + 1 if end_page is not None else None)
+    page_text = ""
+    for i, page in tqdm(enumerate(pages, start=start_page), desc="Translating... ", ascii=True):
+        interpreter.process_page(page)
+        layout = device.get_result()
+        previous_page = page_text
+        page_text = parse_layout(layout)
+        translated_text = generate_text(abstract_text, page_text, previous_page, i)
+        document_text.append(translated_text)
+
+    return document_text
+
+
 def main() -> None:
     if file:
         abstract_text = input('Enter abstract text: ') if abstract else None
