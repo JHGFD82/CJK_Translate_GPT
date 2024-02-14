@@ -108,11 +108,71 @@ def generate_process_text(abstract_text: str, page_text: str, previous_page: str
         context = f"--Context: \n{context}"
     return f"--Current Page: \n{page_text}\n{context}"
 
+def translate_text(text: str) -> str:
+    setup_logging()
+
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {API_KEY}"
+    }
+
+    prompt_system = (f'Follow the instructions carefully. Please act as a professional translator from {language} '
+                     f'to English. I will provide you with text from a PDF document, and your task is '
+                     f'to translate it from {language} to English. Please only output the translation and do not '
+                     f'output any irrelevant content. If there are garbled characters or other non-standard text '
+                     f'content, delete the garbled characters. '
+                     f'You can format and line break the output yourself using "\\n" for line breaks. '
+                     f'You may be provided with "--Context: " and the text from either the document\'s abstract or '
+                     f'a sample of text from the previous page. You will also be provided with "--Current Page: " '
+                     f'which includes the OCR characters of the current page. Only output the English translation of '
+                     f'the "--Current Page: ". Do not output the context, nor the "--Context: " and "--Current Page: " '
+                     f'labels.')
+    prompt_user = (f'Translate only the {language} text of the "--Current Page: ", without outputting any other '
+                   f'content, and without outputting anything related to "--Context: ", if provided. Do not provide '
+                   f'any prompts to the user, for example: "This is the translation of the current page.":\n') + text
+
+    data = {
+        "model": "gpt-3.5-turbo",
+        "messages": [
+            {
+                "role": "system",
+                "content": prompt_system
+            },
+            {
+                "role": "user",
+                "content": prompt_user
+            }
+        ]
+    }
+    print(data)
+    response = api_call(
+        post, url,
+        headers=headers,
+        json=data,
+        timeout=240  # set request timeout
+    )
+
+    if response is None:
+        logging.error('API call was not successful.')
+        raise Exception('API call was not successful.')
+
+    response_data = json.loads(response.text)
+    logging.info('API call successful.')
+    print(response_data)
+
+    if 'error' in response_data and response_data['error']['code'] == "context_length_exceeded":
+        return "context_length_exceeded"
+    content = response_data["choices"][0]["message"]["content"]
+    # content = 'test'
+    return content
+
 
 def translate_page_text(abstract_text: str, page_text: str, previous_page: str) -> str:
     process_text = generate_process_text(abstract_text, page_text, previous_page)
     translated_text = translate_text(process_text)
     return translated_text
+
 
 def generate_text(abstract_text: str, page_text: str, previous_page: str, i: int) -> str:
     result = []
