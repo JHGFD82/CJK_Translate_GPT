@@ -101,6 +101,26 @@ def parse_layout(layout: LTPage) -> str:
 
     return "".join(result)
 
+def generate_text(abstract_text: str, page_text: str, previous_page: str, i: int) -> str:
+    result = []
+    parts_to_translate = [page_text]
+
+    while parts_to_translate:
+        current_part = parts_to_translate.pop()
+        translated_text = translate_page_text(abstract_text, current_part, previous_page)
+
+        if translated_text == "context_length_exceeded":
+            middle_index = len(current_part) // 2
+            parts_to_translate.extend([current_part[:middle_index], current_part[middle_index:]])
+        elif translated_text is None:
+            result.append(f"\n***Translation error on page {i + 1}.***\n")
+        else:
+            result.append(translated_text)
+
+    returned_text = f"\n\n-- Page {i + 1} -- \n\n" + "\n".join(result)
+
+    return returned_text
+
 
 def translate_document(pages: Iterator[PDFPage], interpreter: Any,
                        device: PDFPageAggregator, abstract_text: Optional[str]) -> List[str]:
