@@ -58,6 +58,16 @@ abstract = args.abstract
 API_KEY = os.getenv('API_KEY')  # get API key from environment variables
 
 
+def process_pdf(f: BinaryIO) -> Tuple[Iterator[PDFPage], PDFPageAggregator, PDFPageInterpreter]:
+    rsrcmgr = PDFResourceManager()
+    laparams = LAParams()
+    device = PDFPageAggregator(rsrcmgr, laparams=laparams)
+    interpreter = PDFPageInterpreter(rsrcmgr, device)
+    pages = PDFPage.get_pages(f)
+
+    return pages, device, interpreter
+
+
 def main() -> None:
     if file:
         abstract_text = input('Enter abstract text: ') if abstract else None
