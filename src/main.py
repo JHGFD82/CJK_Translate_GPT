@@ -101,6 +101,14 @@ def parse_layout(layout: LTPage) -> str:
 
     return "".join(result)
 
+
+def generate_process_text(abstract_text: str, page_text: str, previous_page: str) -> str:
+    context = abstract_text if abstract_text else previous_page[int(len(previous_page) * .65):]
+    if context:
+        context = f"--Context: \n{context}"
+    return f"--Current Page: \n{page_text}\n{context}"
+
+
 def translate_page_text(abstract_text: str, page_text: str, previous_page: str) -> str:
     process_text = generate_process_text(abstract_text, page_text, previous_page)
     translated_text = translate_text(process_text)
