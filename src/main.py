@@ -87,6 +87,21 @@ def extract_page_nums() -> Tuple[int, int]:
     return start_page - 1, end_page
 
 
+def parse_layout(layout: LTPage) -> str:
+    """Function to parse the layout tree."""
+    result = []
+    stack = list(layout)  # Using a list as a stack
+
+    while stack:
+        lt_obj = stack.pop(0)
+        if isinstance(lt_obj, (LTTextLine, LTChar, LTTextContainer)):
+            result.append(lt_obj.get_text())
+        elif isinstance(lt_obj, (LTFigure, LTTextBox)):
+            stack.extend(list(lt_obj))  # Add children to the stack
+
+    return "".join(result)
+
+
 def translate_document(pages: Iterator[PDFPage], interpreter: Any,
                        device: PDFPageAggregator, abstract_text: Optional[str]) -> List[str]:
     document_text = []
