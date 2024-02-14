@@ -109,6 +109,10 @@ def generate_process_text(abstract_text: str, page_text: str, previous_page: str
     return f"--Current Page: \n{page_text}\n{context}"
 
 
+def setup_logging():
+    logging.basicConfig(level=logging.INFO)
+
+
 def api_call(requests_function: Callable[..., Response], url: str, **kwargs: Any) -> Union[str, None]:
     try:
         response = requests_function(url, **kwargs)
