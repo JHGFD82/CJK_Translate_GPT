@@ -71,9 +71,10 @@ def process_pdf(f: BinaryIO) -> Tuple[Iterator[PDFPage], PDFPageAggregator, PDFP
 def extract_page_nums() -> Tuple[int, int]:
     """Extracts the start and end page numbers from the given string."""
 
+    end_page: int = 0
     if page_nums is None:
         start_page = 1
-        end_page = None
+        end_page = 0
     elif '-' in page_nums:
         start_page, end_page = map(int, page_nums.split('-'))
     elif int(page_nums) > 0:
@@ -82,14 +83,14 @@ def extract_page_nums() -> Tuple[int, int]:
     else:
         raise ValueError(f"{page_nums} is not a valid page number.")
 
-    if end_page is not None:
+    if end_page is not 0:
         end_page -= 1
     return start_page - 1, end_page
 
 
 def parse_layout(layout: LTPage) -> str:
     """Function to parse the layout tree."""
-    result = []
+    result: list[str] = []
     stack = list(layout)  # Using a list as a stack
 
     while stack:
@@ -113,7 +114,7 @@ def setup_logging():
     logging.basicConfig(level=logging.INFO)
 
 
-def api_call(requests_function: Callable[..., Response], url: str, **kwargs: Any) -> Union[str, None]:
+def api_call(requests_function: Callable[..., Response], url: str, **kwargs: Any) -> Union[Response, None]:
     try:
         response = requests_function(url, **kwargs)
         response.raise_for_status()  # Raise an HTTPError if the status is 4xx, 5xx
@@ -199,17 +200,17 @@ def translate_page_text(abstract_text: str, page_text: str, previous_page: str) 
 
 
 def generate_text(abstract_text: str, page_text: str, previous_page: str, i: int) -> str:
-    result = []
+    result: list[str] = []
     parts_to_translate = [page_text]
 
     while parts_to_translate:
         current_part = parts_to_translate.pop()
-        translated_text = translate_page_text(abstract_text, current_part, previous_page)
+        translated_text: str = translate_page_text(abstract_text, current_part, previous_page)
 
         if translated_text == "context_length_exceeded":
             middle_index = len(current_part) // 2
             parts_to_translate.extend([current_part[:middle_index], current_part[middle_index:]])
-        elif translated_text is None:
+        elif translated_text == '':
             result.append(f"\n***Translation error on page {i + 1}.***\n")
         else:
             result.append(translated_text)
@@ -221,16 +222,16 @@ def generate_text(abstract_text: str, page_text: str, previous_page: str, i: int
 
 def translate_document(pages: Iterator[PDFPage], interpreter: Any,
                        device: PDFPageAggregator, abstract_text: Optional[str]) -> List[str]:
-    document_text = []
+    document_text: list[str] = []
     start_page, end_page = extract_page_nums()
-    pages = islice(pages, start_page, end_page + 1 if end_page is not None else None)
+    pages = islice(pages, start_page, end_page + 1 if end_page is not 0 else None)
     page_text = ""
     for i, page in tqdm(enumerate(pages, start=start_page), desc="Translating... ", ascii=True):
         interpreter.process_page(page)
         layout = device.get_result()
         previous_page = page_text
         page_text = parse_layout(layout)
-        translated_text = generate_text(abstract_text, page_text, previous_page, i)
+        translated_text = generate_text(abstract_text or '', page_text, previous_page, i)
         document_text.append(translated_text)
 
     return document_text
