@@ -157,7 +157,7 @@ def translate_text(text: str) -> str:
                    f'content, and without outputting anything related to "--Context: ", if provided. Do not provide '
                    f'any prompts to the user, for example: "This is the translation of the current page.":\n') + text
 
-    data = {
+    data: dict[str, object] = {
         "model": "gpt-3.5-turbo",
         "messages": [
             {
