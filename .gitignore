@@ -22,5 +22,8 @@ ENV/
 .vscode/settings.json
 .vscode/launch.json
 
+# Test PDFs
+tests/
+
 # OS
 Thumbs.db
