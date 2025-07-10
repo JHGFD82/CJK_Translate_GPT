@@ -51,8 +51,9 @@ class FileOutputHandler:
                 normal_style = ParagraphStyle(
                     'Normal',
                     parent=styles['Normal'],
-                    fontName='Helvetica',
+                    fontName='Times-Roman',
                     fontSize=12,
+                    leading=18,  # 1.5 leading (12pt * 1.5 = 18pt)
                     spaceAfter=12,
                     encoding='utf-8'
                 )
