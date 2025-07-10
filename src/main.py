@@ -7,7 +7,9 @@ import argparse
 import logging
 import os
 import re
+from datetime import datetime
 from itertools import islice
+from pathlib import Path
 from typing import List, Optional, Any, Iterator, Tuple, BinaryIO
 
 # Third-party libraries
@@ -76,6 +78,11 @@ Available language codes:
   J = Japanese
   K = Korean
   E = English
+
+Output Options:
+  -o output.txt       Save translation to specified text file
+  -o output.pdf       Save translation to specified PDF file
+  --auto-save         Auto-save to timestamped file in source directory
 ''')
 
 # Language selection - single argument combining source and target
@@ -96,6 +103,12 @@ parser.add_argument('-p', '--page_nums', dest='page_nums', type=str,
 parser.add_argument('-a', '--abstract', dest='abstract', action='store_true',
                     help='The text has an abstract')
 
+parser.add_argument('-o', '--output', dest='output_file', type=str,
+                    help='Output file path to save the translation (with .txt or .pdf extension)')
+
+parser.add_argument('--auto-save', dest='auto_save', action='store_true',
+                    help='Automatically save output to a timestamped file in the same directory as input PDF')
+
 args = parser.parse_args()
 
 # Extract source and target languages from the language code
@@ -106,6 +119,8 @@ file = args.input_PDF
 custom_text = args.custom_text
 page_nums = validate_page_nums(args.page_nums) if args.page_nums else None
 abstract = args.abstract
+output_file = args.output_file
+auto_save = args.auto_save
 
 # Set the model deployment name that the prompt should be sent to
 available_models = [
@@ -306,6 +321,123 @@ def translate_document(pages: Iterator[PDFPage], interpreter: Any,
     return document_text
 
 
+def save_to_text_file(content: str, output_path: str) -> None:
+    """Save content to a text file."""
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        logging.info(f'Translation saved to text file: {output_path}')
+        print(f"\nTranslation saved to: {output_path}")
+    except Exception as e:
+        logging.error(f'Error saving to text file: {e}')
+        print(f"Error saving to text file: {e}")
+
+
+def save_to_pdf(content: str, output_path: str) -> None:
+    """Save content to a PDF file using reportlab."""
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+        
+        # Create PDF document
+        doc = SimpleDocTemplate(output_path, pagesize=letter, 
+                              rightMargin=72, leftMargin=72, 
+                              topMargin=72, bottomMargin=18)
+        
+        # Create story (content container)
+        from reportlab.platypus import Flowable
+        story: list[Flowable] = []
+        styles = getSampleStyleSheet()
+        
+        # Try to register fonts that support CJK characters
+        try:
+            # This is a fallback - users might need to install appropriate fonts
+            normal_style = ParagraphStyle(
+                'Normal',
+                parent=styles['Normal'],
+                fontName='Helvetica',
+                fontSize=12,
+                spaceAfter=12,
+                encoding='utf-8'
+            )
+        except:
+            normal_style = styles['Normal']
+        
+        # Split content into paragraphs and add to story
+        paragraphs = content.split('\n\n')
+        for para in paragraphs:
+            if para.strip():
+                # Clean up the text for PDF
+                clean_text = para.strip()
+                try:
+                    p = Paragraph(clean_text, normal_style)
+                    story.append(p)
+                    story.append(Spacer(1, 12))
+                except:
+                    # Fallback for problematic characters
+                    clean_text = clean_text.encode('ascii', 'ignore').decode('ascii')
+                    p = Paragraph(clean_text, normal_style)
+                    story.append(p)
+                    story.append(Spacer(1, 12))
+        
+        # Build PDF
+        doc.build(story)
+        logging.info(f'Translation saved to PDF file: {output_path}')
+        print(f"\nTranslation saved to PDF: {output_path}")
+        
+    except ImportError:
+        logging.warning('reportlab not installed. Falling back to text file.')
+        print("Warning: reportlab not installed. Saving as text file instead.")
+        text_output_path = output_path.replace('.pdf', '.txt')
+        save_to_text_file(content, text_output_path)
+    except Exception as e:
+        logging.error(f'Error saving to PDF: {e}')
+        print(f"Error saving to PDF: {e}")
+        print("Falling back to text file...")
+        text_output_path = output_path.replace('.pdf', '.txt')
+        save_to_text_file(content, text_output_path)
+
+
+def generate_output_filename(input_file: str, source_lang: str, target_lang: str, extension: str = '.txt') -> str:
+    """Generate an output filename based on input file and languages."""
+    input_path = Path(input_file)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_name = f"{input_path.stem}_{source_lang}to{target_lang}_{timestamp}{extension}"
+    return str(input_path.parent / output_name)
+
+
+def save_translation_output(content: str, input_file: str, output_file: str, auto_save: bool, 
+                          source_lang: str, target_lang: str) -> None:
+    """Save translation output to file based on user preferences."""
+    if not content.strip():
+        print("No content to save.")
+        return
+    
+    # Determine output file path
+    if output_file:
+        output_path = output_file
+    elif auto_save and input_file:
+        # Auto-generate filename with timestamp
+        output_path = generate_output_filename(input_file, source_lang, target_lang, '.txt')
+    else:
+        # No saving requested
+        return
+    
+    # Ensure directory exists
+    output_dir = Path(output_path).parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Determine file type and save accordingly
+    if output_path.lower().endswith('.pdf'):
+        save_to_pdf(content, output_path)
+    else:
+        # Default to text file
+        if not output_path.lower().endswith('.txt'):
+            output_path += '.txt'
+        save_to_text_file(content, output_path)
+
+
 def main() -> None:
     if file:
         abstract_text = input('Enter abstract text: ') if abstract else None
@@ -313,7 +445,17 @@ def main() -> None:
             with open(file, 'rb') as f:
                 pages, device, interpreter = process_pdf(f)
                 document_text = translate_document(pages, interpreter, device, abstract_text, page_nums, language, target_language)
-            print("".join(document_text))
+            
+            # Join all translated content
+            full_translation = "".join(document_text)
+            
+            # Display the translation
+            print(full_translation)
+            
+            # Save the translation if requested
+            if output_file or auto_save:
+                save_translation_output(full_translation, file, output_file, auto_save, language, target_language)
+            
         except FileNotFoundError:
             print(f"Error: File '{file}' not found.")
             exit(1)
@@ -324,6 +466,12 @@ def main() -> None:
         text_input = input('Enter custom text to be translated: ')
         translated_text = generate_text('', text_input, '', 0, language, target_language)
         print(translated_text)
+        
+        # Save custom text translation if requested
+        if output_file or auto_save:
+            # For custom text, use a generic filename
+            input_filename = "custom_text_translation"
+            save_translation_output(translated_text, input_filename, output_file, auto_save, language, target_language)
 
 
 if __name__ == '__main__':
