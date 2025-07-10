@@ -36,15 +36,51 @@ def validate_page_nums(value: str) -> str:
     return value
 
 
-parser = argparse.ArgumentParser(description='Extract text from PDF and translate it using the GPT engine.')
+def parse_language_code(value: str) -> tuple[str, str]:
+    """Parse language code like 'CE' into source and target languages."""
+    if len(value) != 2:
+        raise argparse.ArgumentTypeError("Language code must be exactly 2 characters (e.g., CE, JK, etc.)")
+    
+    language_map = {
+        'C': 'Chinese',
+        'J': 'Japanese', 
+        'K': 'Korean',
+        'E': 'English'
+    }
+    
+    source_char = value[0].upper()
+    target_char = value[1].upper()
+    
+    if source_char not in language_map:
+        raise argparse.ArgumentTypeError(f"Invalid source language code '{source_char}'. Use C, J, K, or E.")
+    if target_char not in language_map:
+        raise argparse.ArgumentTypeError(f"Invalid target language code '{target_char}'. Use C, J, K, or E.")
+    if source_char == target_char:
+        raise argparse.ArgumentTypeError("Source and target languages cannot be the same.")
+    
+    return language_map[source_char], language_map[target_char]
 
-input_group = parser.add_mutually_exclusive_group(required=True)
-input_group.add_argument('-C', '--Chinese', dest='input_type', action='store_const', const='Chinese',
-                         help='Input is Chinese text')
-input_group.add_argument('-J', '--Japanese', dest='input_type', action='store_const', const='Japanese',
-                         help='Input is Japanese text')
-input_group.add_argument('-K', '--Korean', dest='input_type', action='store_const', const='Korean',
-                         help='Input is Korean text')
+
+parser = argparse.ArgumentParser(
+    description='Extract text from PDF and translate it between different languages using the GPT engine.',
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog='''
+Language Code Examples:
+  -CE    Chinese to English
+  -JK    Japanese to Korean  
+  -EJ    English to Japanese
+  -KC    Korean to Chinese
+  
+Available language codes:
+  C = Chinese
+  J = Japanese
+  K = Korean
+  E = English
+''')
+
+# Language selection - single argument combining source and target
+parser.add_argument('language_code', type=parse_language_code, metavar='LANG_CODE',
+                    help='Two-letter language code: first letter is source, second is target (e.g., CE, JK, EJ)')
 
 source_group = parser.add_mutually_exclusive_group(required=True)
 source_group.add_argument('-i', '--input_PDF', dest='input_PDF', type=str,
@@ -61,6 +97,9 @@ parser.add_argument('-a', '--abstract', dest='abstract', action='store_true',
                     help='The text has an abstract')
 
 args = parser.parse_args()
+
+# Extract source and target languages from the language code
+language, target_language = args.language_code
 
 # Set up global variables for script
 file = args.input_PDF
