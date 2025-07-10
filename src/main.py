@@ -1,3 +1,7 @@
+'''This script extracts text from a PDF file and translates it between different languages using the GPT engine. 
+It supports translation between Chinese, Japanese, Korean, and English in any direction.
+This script is for Princeton University use only and will only function using a valid API key to the AI Sandbox.'''
+
 # Python standard libraries
 import argparse
 import json
