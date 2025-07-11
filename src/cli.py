@@ -101,7 +101,7 @@ class CJKTranslator:
     
     def translate_pdf(self, file_path: str, source_language: str, target_language: str,
                      page_nums: Optional[str] = None, abstract: bool = False,
-                     output_file: Optional[str] = None, auto_save: bool = False) -> None:
+                     output_file: Optional[str] = None, auto_save: bool = False, custom_font: Optional[str] = None) -> None:
         """Translate a PDF file."""
         abstract_text = input('Enter abstract text: ') if abstract else None
         
@@ -121,7 +121,7 @@ class CJKTranslator:
             # Save the translation if requested
             if output_file or auto_save:
                 self.file_output.save_translation_output(
-                    full_translation, file_path, output_file, auto_save, source_language, target_language
+                    full_translation, file_path, output_file, auto_save, source_language, target_language, custom_font
                 )
                 
         except FileNotFoundError:
@@ -132,7 +132,7 @@ class CJKTranslator:
             exit(1)
     
     def translate_custom_text(self, source_language: str, target_language: str,
-                            output_file: Optional[str] = None, auto_save: bool = False) -> None:
+                            output_file: Optional[str] = None, auto_save: bool = False, custom_font: Optional[str] = None) -> None:
         """Translate custom text input."""
         text_input = input('Enter custom text to be translated: ')
         
@@ -158,7 +158,7 @@ class CJKTranslator:
         if output_file or auto_save:
             input_filename = "custom_text_translation"
             self.file_output.save_translation_output(
-                translated_text, input_filename, output_file, auto_save, source_language, target_language
+                translated_text, input_filename, output_file, auto_save, source_language, target_language, custom_font
             )
     
     def run(self) -> None:
@@ -172,11 +172,11 @@ class CJKTranslator:
         if args.input_PDF:
             self.translate_pdf(
                 args.input_PDF, source_language, target_language,
-                args.page_nums, args.abstract, args.output_file, args.auto_save
+                args.page_nums, args.abstract, args.output_file, args.auto_save, args.custom_font
             )
         elif args.custom_text:
             self.translate_custom_text(
-                source_language, target_language, args.output_file, args.auto_save
+                source_language, target_language, args.output_file, args.auto_save, args.custom_font
             )
 
 
