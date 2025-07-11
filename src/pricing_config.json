@@ -31,10 +31,6 @@
     "Meta-Llama-3-1-70B-Instruct": {
       "input": 2.68,
       "output": 3.54
-    },
-    "test-model": {
-      "input": 1.0,
-      "output": 2.0
     }
   }
 }
