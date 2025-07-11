@@ -29,6 +29,28 @@ class TokenUsage:
     total_cost: float
 
 
+@dataclass
+class UsageStats:
+    """Usage statistics structure."""
+    total_tokens: int = 0
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_cost: float = 0.0
+    call_count: int = 0
+    
+    def add_usage(self, prompt_tokens: int, completion_tokens: int, total_tokens: int, cost: float):
+        """Add usage data to the statistics."""
+        self.total_tokens += total_tokens
+        self.total_input_tokens += prompt_tokens
+        self.total_output_tokens += completion_tokens
+        self.total_cost += cost
+        self.call_count += 1
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary format."""
+        return asdict(self)
+
+
 class TokenTracker:
     """Tracks and manages token usage and costs."""
     
