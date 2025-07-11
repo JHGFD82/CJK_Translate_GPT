@@ -29,5 +29,8 @@ tests/
 fonts/*
 !fonts/README.md
 
+# Token usage - exclude token tracker file
+token_usage.json
+
 # OS
 Thumbs.db
