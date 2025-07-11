@@ -25,7 +25,7 @@ class FileOutputHandler:
             print(f"Error saving to text file: {e}")
     
     @staticmethod
-    def save_to_pdf(content: str, output_path: str) -> None:
+    def save_to_pdf(content: str, output_path: str, custom_font: Optional[str] = None) -> None:
         """Save content to a PDF file using reportlab."""
         try:
             from reportlab.lib.pagesizes import letter
@@ -47,11 +47,13 @@ class FileOutputHandler:
             styles = getSampleStyleSheet()
             
             # Configure style for CJK characters
+            font_name = FileOutputHandler._get_cjk_font(custom_font)
+            
             try:
                 normal_style = ParagraphStyle(
-                    'Normal',
+                    'CJKNormal',
                     parent=styles['Normal'],
-                    fontName='Times-Roman',
+                    fontName=font_name,
                     fontSize=12,
                     leading=18,  # 1.5 leading (12pt * 1.5 = 18pt)
                     spaceAfter=12,
@@ -66,15 +68,34 @@ class FileOutputHandler:
                 if para.strip():
                     clean_text = para.strip()
                     try:
+                        # For CJK characters, we need to handle the text more carefully
+                        # Replace line breaks within paragraphs with spaces
+                        clean_text = clean_text.replace('\n', ' ')
                         p = Paragraph(clean_text, normal_style)
                         story.append(p)
                         story.append(Spacer(1, 12))
-                    except:
-                        # Fallback for problematic characters
-                        clean_text = clean_text.encode('ascii', 'ignore').decode('ascii')
-                        p = Paragraph(clean_text, normal_style)
-                        story.append(p)
-                        story.append(Spacer(1, 12))
+                    except Exception as e:
+                        # More graceful fallback for problematic characters
+                        logging.warning(f"Error processing paragraph, trying fallback: {e}")
+                        try:
+                            # Try with a simpler style
+                            simple_style = ParagraphStyle(
+                                'SimpleCJK',
+                                parent=styles['Normal'],
+                                fontName='Helvetica',
+                                fontSize=12,
+                                leading=18,
+                                spaceAfter=12
+                            )
+                            p = Paragraph(clean_text, simple_style)
+                            story.append(p)
+                            story.append(Spacer(1, 12))
+                        except Exception:
+                            # Ultimate fallback: just add as plain text
+                            logging.warning("Using ultimate fallback for problematic text")
+                            p = Paragraph(clean_text.encode('ascii', 'ignore').decode('ascii'), styles['Normal'])
+                            story.append(p)
+                            story.append(Spacer(1, 12))
             
             # Build PDF
             doc.build(story)
@@ -88,14 +109,14 @@ class FileOutputHandler:
             FileOutputHandler.save_to_text_file(content, text_output_path)
         except Exception as e:
             logging.error(f'Error saving to PDF: {e}')
-            print(f"Error saving to PDF: {e}")
-            print("Falling back to text file...")
+            print(f"Error generating PDF: {e}")
+            print("Falling back to text file for reliable CJK character support...")
             text_output_path = output_path.replace('.pdf', '.txt')
             FileOutputHandler.save_to_text_file(content, text_output_path)
     
     @staticmethod
     def save_translation_output(content: str, input_file: Optional[str], output_file: Optional[str], 
-                              auto_save: bool, source_lang: str, target_lang: str) -> None:
+                              auto_save: bool, source_lang: str, target_lang: str, custom_font: Optional[str] = None) -> None:
         """Save translation output to file based on user preferences."""
         if not content.strip():
             print("No content to save.")
@@ -117,9 +138,92 @@ class FileOutputHandler:
         
         # Determine file type and save accordingly
         if output_path.lower().endswith('.pdf'):
-            FileOutputHandler.save_to_pdf(content, output_path)
+            FileOutputHandler.save_to_pdf(content, output_path, custom_font)
         else:
             # Default to text file
             if not output_path.lower().endswith('.txt'):
                 output_path += '.txt'
             FileOutputHandler.save_to_text_file(content, output_path)
+    
+    @staticmethod
+    def _get_cjk_font(custom_font: Optional[str] = None) -> str:
+        """Get an appropriate font for CJK characters from the fonts directory."""
+        try:
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+            import os
+            
+            # Check fonts from the local fonts directory
+            fonts_dir = os.path.join(os.path.dirname(__file__), '..', 'fonts')
+            if os.path.exists(fonts_dir):
+                # If a custom font is specified, try it first
+                if custom_font:
+                    custom_font_path = os.path.join(fonts_dir, f"{custom_font}.ttf")
+                    if os.path.exists(custom_font_path):
+                        try:
+                            if custom_font not in pdfmetrics.getRegisteredFontNames():
+                                pdfmetrics.registerFont(TTFont(custom_font, custom_font_path))  # type: ignore
+                            logging.info(f"Using custom CJK font: {custom_font}")
+                            return custom_font
+                        except Exception as e:
+                            logging.warning(f"Failed to register custom font {custom_font}: {e}")
+                            print(f"Warning: Custom font '{custom_font}' failed to load. Using default font selection.")
+                    else:
+                        logging.warning(f"Custom font file not found: {custom_font_path}")
+                        print(f"Warning: Custom font '{custom_font}.ttf' not found in fonts/ directory. Using default font selection.")
+                
+                # Preferred CJK fonts (in order of preference)
+                preferred_fonts = [
+                    'NotoSansCJK-Regular.ttf',      # Google Noto Sans CJK
+                    'NotoSansCJK.ttf',
+                    'SourceHanSans-Regular.ttf',    # Adobe Source Han Sans
+                    'SourceHanSans.ttf',
+                    'DejaVuSans.ttf',               # DejaVu Sans
+                    'ArialUnicodeMS.ttf',           # Arial Unicode MS
+                    'Arial Unicode MS.ttf'
+                ]
+                
+                # First, try preferred fonts
+                for preferred_font in preferred_fonts:
+                    font_path = os.path.join(fonts_dir, preferred_font)
+                    if os.path.exists(font_path):
+                        font_name = os.path.splitext(preferred_font)[0]
+                        try:
+                            if font_name not in pdfmetrics.getRegisteredFontNames():
+                                pdfmetrics.registerFont(TTFont(font_name, font_path))  # type: ignore
+                            logging.info(f"Using preferred CJK font: {font_name}")
+                            return font_name
+                        except Exception as e:
+                            logging.debug(f"Failed to register preferred font {font_name}: {e}")
+                            continue
+                
+                # If no preferred fonts, use any available .ttf file (reportlab only supports TTF, not OTF)
+                for font_file in os.listdir(fonts_dir):
+                    if font_file.endswith('.ttf'):
+                        font_path = os.path.join(fonts_dir, font_file)
+                        font_name = os.path.splitext(font_file)[0]  # Use filename without extension
+                        try:
+                            if font_name not in pdfmetrics.getRegisteredFontNames():
+                                pdfmetrics.registerFont(TTFont(font_name, font_path))  # type: ignore
+                            logging.info(f"Using available CJK font: {font_name}")
+                            return font_name
+                        except Exception as e:
+                            logging.debug(f"Failed to register font {font_name}: {e}")
+                            continue
+            
+            # No compatible fonts found - give clear guidance
+            logging.warning("No CJK fonts found in fonts/ directory.")
+            print("Warning: No CJK fonts available for PDF generation.")
+            print("To fix: Add CJK .ttf fonts to the 'fonts/' directory in this project.")
+            print("Note: Only .ttf fonts are supported. OTF fonts will not work with reportlab.")
+            print("Recommended CJK fonts:")
+            print("  - Noto Sans CJK (Google): https://fonts.google.com/noto/specimen/Noto+Sans")
+            print("  - Source Han Sans (Adobe): https://github.com/adobe-fonts/source-han-sans")
+            print("  - Arial Unicode MS (Microsoft)")
+            print("Alternative: Save as .txt file for proper CJK character display.")
+            
+            return 'Times-Roman'  # Fallback to reportlab default
+            
+        except Exception as e:
+            logging.debug(f"Error checking CJK fonts: {e}")
+            return 'Times-Roman'
