@@ -25,5 +25,9 @@ ENV/
 # Test PDFs
 tests/
 
+# Fonts - include folder and README but exclude font files
+fonts/*
+!fonts/README.md
+
 # OS
 Thumbs.db
