@@ -10,6 +10,12 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass, asdict
 
 
+# Constants
+DEFAULT_FALLBACK_MODEL = "gpt-4o-mini"
+PRICING_CONFIG_FILE = "pricing_config.json"
+USAGE_DATA_FILE = "token_usage.json"
+
+
 @dataclass
 class TokenUsage:
     """Token usage data for a single API call."""
