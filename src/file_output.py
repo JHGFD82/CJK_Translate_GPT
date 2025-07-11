@@ -25,7 +25,7 @@ class FileOutputHandler:
             print(f"Error saving to text file: {e}")
     
     @staticmethod
-    def save_to_pdf(content: str, output_path: str, custom_font: Optional[str] = None) -> None:
+    def save_to_pdf(content: str, output_path: str, custom_font: Optional[str] = None, target_lang: Optional[str] = None) -> None:
         """Save content to a PDF file using reportlab."""
         try:
             from reportlab.lib.pagesizes import letter
@@ -46,8 +46,13 @@ class FileOutputHandler:
             story: list[Flowable] = []
             styles = getSampleStyleSheet()
             
-            # Configure style for CJK characters
-            font_name = FileOutputHandler._get_cjk_font(custom_font)
+            # Configure font - use Times-Roman for English unless custom font specified
+            if not custom_font and target_lang == 'English':
+                font_name = 'Times-Roman'
+                logging.info(f"Using Times-Roman for English translation (target_lang={target_lang})")
+            else:
+                font_name = FileOutputHandler._get_cjk_font(custom_font)
+                logging.info(f"Using CJK font logic (custom_font={custom_font}, target_lang={target_lang})")
             
             try:
                 normal_style = ParagraphStyle(
@@ -138,7 +143,7 @@ class FileOutputHandler:
         
         # Determine file type and save accordingly
         if output_path.lower().endswith('.pdf'):
-            FileOutputHandler.save_to_pdf(content, output_path, custom_font)
+            FileOutputHandler.save_to_pdf(content, output_path, custom_font, target_lang)
         else:
             # Default to text file
             if not output_path.lower().endswith('.txt'):
@@ -176,11 +181,13 @@ class FileOutputHandler:
                 preferred_fonts = [
                     'NotoSansCJK-Regular.ttf',      # Google Noto Sans CJK
                     'NotoSansCJK.ttf',
+                    'NotoSans-VariableFont_wdth,wght.ttf',  # Your available Noto Sans
                     'SourceHanSans-Regular.ttf',    # Adobe Source Han Sans
                     'SourceHanSans.ttf',
                     'DejaVuSans.ttf',               # DejaVu Sans
                     'ArialUnicodeMS.ttf',           # Arial Unicode MS
-                    'Arial Unicode MS.ttf'
+                    'Arial Unicode MS.ttf',         # Your available Arial Unicode
+                    'Arial Unicode.ttf'             # Your available Arial Unicode
                 ]
                 
                 # First, try preferred fonts
@@ -222,7 +229,7 @@ class FileOutputHandler:
             print("  - Arial Unicode MS (Microsoft)")
             print("Alternative: Save as .txt file for proper CJK character display.")
             
-            return 'Times-Roman'  # Fallback to reportlab default
+            return 'Times-Roman'  # Fallback to reportlab default (Times New Roman equivalent)
             
         except Exception as e:
             logging.debug(f"Error checking CJK fonts: {e}")
