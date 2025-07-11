@@ -39,10 +39,10 @@ def create_argument_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 Language Code Examples:
-  -CE    Chinese to English
-  -JK    Japanese to Korean  
-  -EJ    English to Japanese
-  -KC    Korean to Chinese
+  CE    Chinese to English
+  JK    Japanese to Korean  
+  EJ    English to Japanese
+  KC    Korean to Chinese
   
 Available language codes:
   C = Chinese
