@@ -9,10 +9,13 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, asdict
 
+from .config import (
+    load_pricing_config, get_model_pricing, get_pricing_unit, 
+    get_monthly_limit, save_pricing_config
+)
+
 
 # Constants
-DEFAULT_FALLBACK_MODEL = "gpt-4o-mini"
-PRICING_CONFIG_FILE = "pricing_config.json"
 USAGE_DATA_FILE = "token_usage.json"
 
 
@@ -57,19 +60,14 @@ class TokenTracker:
     def __init__(self, data_file: Optional[str] = None, monthly_limit: Optional[float] = None):
         """Initialize the token tracker with optional custom data file path and monthly limit."""
         self.data_file = Path(data_file) if data_file else Path(__file__).parent.parent / USAGE_DATA_FILE
-        self.pricing_config = self._load_pricing_config()
         
         # Set monthly limit from config or parameter
         if monthly_limit is not None:
             self.monthly_limit = monthly_limit
         else:
-            self.monthly_limit = self.pricing_config["config"]["monthly_limit"]
+            self.monthly_limit = get_monthly_limit()
         
         self.usage_data = self._load_usage_data()
-    
-    def _get_pricing_file_path(self) -> Path:
-        """Get the path to the pricing configuration file."""
-        return Path(__file__).parent / PRICING_CONFIG_FILE
     
     def _save_json_file(self, file_path: Path, data: Dict[str, Any]):
         """Save data to a JSON file."""
@@ -80,45 +78,6 @@ class TokenTracker:
         """Load data from a JSON file."""
         with open(file_path, 'r') as f:
             return json.load(f)
-    
-    def _load_pricing_config(self) -> Dict[str, Any]:
-        """Load pricing configuration from file."""
-        pricing_file = self._get_pricing_file_path()
-        
-        if not pricing_file.exists():
-            error_msg = (
-                f"Pricing configuration file not found at {pricing_file}. "
-                "This file is required for the application to function. "
-                "Please create the pricing configuration file with your model pricing information."
-            )
-            logging.error(error_msg)
-            raise FileNotFoundError(error_msg)
-        
-        try:
-            config = self._load_json_file(pricing_file)
-        except json.JSONDecodeError as e:
-            error_msg = f"Invalid JSON in pricing configuration file {pricing_file}: {e}"
-            logging.error(error_msg)
-            raise ValueError(error_msg)
-        
-        # Validate that the config has required structure
-        if "config" not in config:
-            error_msg = f"Pricing configuration file {pricing_file} missing required 'config' section."
-            logging.error(error_msg)
-            raise ValueError(error_msg)
-        
-        if "models" not in config:
-            error_msg = f"Pricing configuration file {pricing_file} missing required 'models' section."
-            logging.error(error_msg)
-            raise ValueError(error_msg)
-        
-        models = config["models"]
-        if not models:
-            error_msg = f"Pricing configuration file {pricing_file} has no models configured."
-            logging.error(error_msg)
-            raise ValueError(error_msg)
-        
-        return config
     
     def _get_default_usage_structure(self) -> Dict[str, Any]:
         """Get the default usage data structure."""
@@ -140,32 +99,10 @@ class TokenTracker:
         """Save usage data to file."""
         self._save_json_file(self.data_file, self.usage_data)
     
-    def _get_model_pricing(self, model: str) -> Dict[str, float]:
-        """Get pricing for a specific model."""
-        models = self.pricing_config["models"]
-        
-        if model not in models:
-            # Try to find a fallback model
-            if DEFAULT_FALLBACK_MODEL in models:
-                logging.warning(f"Model {model} not found in pricing config. Using {DEFAULT_FALLBACK_MODEL} rates.")
-                return models[DEFAULT_FALLBACK_MODEL]
-            else:
-                # No fallback available - this is a configuration error
-                available_models = list(models.keys())
-                error_msg = (
-                    f"Model '{model}' not found in pricing configuration and no fallback model '{DEFAULT_FALLBACK_MODEL}' available. "
-                    f"Available models: {available_models}. "
-                    f"Please update your pricing configuration file."
-                )
-                logging.error(error_msg)
-                raise ValueError(error_msg)
-        
-        return models[model]
-    
     def _calculate_costs(self, model: str, prompt_tokens: int, completion_tokens: int) -> tuple[float, float, float]:
         """Calculate costs for input, output, and total tokens."""
-        pricing_unit = self.pricing_config["config"]["pricing_unit"]
-        pricing = self._get_model_pricing(model)
+        pricing_unit = get_pricing_unit()
+        pricing = get_model_pricing(model)
         
         # Calculate costs using the configurable pricing unit
         input_cost = (prompt_tokens / pricing_unit) * pricing["input"]
@@ -189,6 +126,25 @@ class TokenTracker:
         stats["total_cost"] += cost
         if "call_count" in stats:
             stats["call_count"] += 1
+    
+    def _update_usage_category(self, category: str, key: str, prompt_tokens: int, completion_tokens: int, 
+                             total_tokens: int, cost: float):
+        """Update usage statistics for a specific category and key."""
+        stats = self._get_or_create_usage_stats(category, key)
+        self._update_usage_stats(stats, prompt_tokens, completion_tokens, total_tokens, cost)
+    
+    def _update_all_usage_categories(self, model: str, prompt_tokens: int, completion_tokens: int, 
+                                   total_tokens: int, cost: float):
+        """Update usage statistics for all categories (total, model, daily)."""
+        # Update total usage
+        self._update_usage_stats(self.usage_data["total_usage"], prompt_tokens, completion_tokens, total_tokens, cost)
+        
+        # Update model usage
+        self._update_usage_category("model_usage", model, prompt_tokens, completion_tokens, total_tokens, cost)
+        
+        # Update daily usage
+        date_str = self._get_current_date()
+        self._update_usage_category("daily_usage", date_str, prompt_tokens, completion_tokens, total_tokens, cost)
     
     def _get_current_date(self) -> str:
         """Get current date as string."""
@@ -231,16 +187,7 @@ class TokenTracker:
         )
         
         # Update all usage categories
-        self._update_usage_stats(self.usage_data["total_usage"], prompt_tokens, completion_tokens, total_tokens, total_cost)
-        
-        # Update model usage
-        model_stats = self._get_or_create_usage_stats("model_usage", model)
-        self._update_usage_stats(model_stats, prompt_tokens, completion_tokens, total_tokens, total_cost)
-        
-        # Update daily usage
-        date_str = self._get_current_date()
-        daily_stats = self._get_or_create_usage_stats("daily_usage", date_str)
-        self._update_usage_stats(daily_stats, prompt_tokens, completion_tokens, total_tokens, total_cost)
+        self._update_all_usage_categories(model, prompt_tokens, completion_tokens, total_tokens, total_cost)
         
         # Add to session history
         self.usage_data["session_history"].append(asdict(usage))
@@ -285,20 +232,32 @@ class TokenTracker:
         
         return monthly_stats.to_dict()
     
+    def _get_monthly_budget_status(self, month: Optional[str] = None) -> Dict[str, Any]:
+        """Get comprehensive monthly budget status information."""
+        monthly_usage = self.get_monthly_usage(month)
+        usage_percentage = (monthly_usage["total_cost"] / self.monthly_limit) * 100 if self.monthly_limit > 0 else 0.0
+        remaining_budget = max(0.0, self.monthly_limit - monthly_usage["total_cost"])
+        is_exceeded = monthly_usage["total_cost"] >= self.monthly_limit
+        
+        return {
+            "monthly_usage": monthly_usage,
+            "usage_percentage": usage_percentage,
+            "remaining_budget": remaining_budget,
+            "is_exceeded": is_exceeded,
+            "approaching_limit": usage_percentage > 80
+        }
+    
     def get_remaining_monthly_budget(self, month: Optional[str] = None) -> float:
         """Get remaining budget for the month."""
-        monthly_usage = self.get_monthly_usage(month)
-        return max(0.0, self.monthly_limit - monthly_usage["total_cost"])
+        return self._get_monthly_budget_status(month)["remaining_budget"]
     
     def is_monthly_limit_exceeded(self, month: Optional[str] = None) -> bool:
         """Check if monthly cost limit has been exceeded."""
-        monthly_usage = self.get_monthly_usage(month)
-        return monthly_usage["total_cost"] >= self.monthly_limit
+        return self._get_monthly_budget_status(month)["is_exceeded"]
     
     def get_monthly_usage_percentage(self, month: Optional[str] = None) -> float:
         """Get percentage of monthly limit used."""
-        monthly_usage = self.get_monthly_usage(month)
-        return (monthly_usage["total_cost"] / self.monthly_limit) * 100 if self.monthly_limit > 0 else 0.0
+        return self._get_monthly_budget_status(month)["usage_percentage"]
     
     def print_usage_report(self):
         """Print a formatted usage report."""
@@ -329,44 +288,48 @@ class TokenTracker:
             print(f"Cost: ${today_usage['total_cost']:.4f}")
         
         # Monthly usage and budget
-        monthly_usage = self.get_monthly_usage()
-        usage_percentage = self.get_monthly_usage_percentage()
-        remaining_budget = self.get_remaining_monthly_budget()
+        budget_status = self._get_monthly_budget_status()
+        monthly_usage = budget_status["monthly_usage"]
         
         print(f"\nMonthly Budget Status ({self._get_current_month()}):")
         print("-" * 40)
         print(f"Monthly Limit: ${self.monthly_limit:.2f}")
-        print(f"Used: ${monthly_usage['total_cost']:.4f} ({usage_percentage:.1f}%)")
-        print(f"Remaining: ${remaining_budget:.2f}")
+        print(f"Used: ${monthly_usage['total_cost']:.4f} ({budget_status['usage_percentage']:.1f}%)")
+        print(f"Remaining: ${budget_status['remaining_budget']:.2f}")
         
-        if self.is_monthly_limit_exceeded():
+        if budget_status["is_exceeded"]:
             print("⚠️  MONTHLY LIMIT EXCEEDED!")
-        elif usage_percentage > 80:
+        elif budget_status["approaching_limit"]:
             print("⚠️  Approaching monthly limit!")
         
         print("="*60)
     
     def update_pricing(self, model: str, input_price: float, output_price: float):
         """Update pricing for a specific model."""
+        # Load current config
+        config = load_pricing_config()
+        
         # Ensure models section exists
-        if "models" not in self.pricing_config:
-            self.pricing_config["models"] = {}
+        if "models" not in config:
+            config["models"] = {}
         
-        self.pricing_config["models"][model] = {"input": input_price, "output": output_price}
+        config["models"][model] = {"input": input_price, "output": output_price}
         
-        # Save updated pricing config
-        self._save_json_file(self._get_pricing_file_path(), self.pricing_config)
-        
+        # Save updated config
+        save_pricing_config(config)
         logging.info(f"Updated pricing for {model}: input=${input_price}, output=${output_price}")
     
     def update_pricing_unit(self, new_unit: int):
         """Update the pricing unit (e.g., change from per 1M tokens to per 1K tokens)."""
-        if "config" not in self.pricing_config:
-            self.pricing_config["config"] = {}
+        # Load current config
+        config = load_pricing_config()
         
-        self.pricing_config["config"]["pricing_unit"] = new_unit
+        # Ensure config section exists
+        if "config" not in config:
+            config["config"] = {}
         
-        # Save updated pricing config
-        self._save_json_file(self._get_pricing_file_path(), self.pricing_config)
+        config["config"]["pricing_unit"] = new_unit
         
+        # Save updated config
+        save_pricing_config(config)
         logging.info(f"Updated pricing unit to {new_unit:,} tokens")
