@@ -5,16 +5,42 @@ Command-line interface for the CJK Translation script.
 import argparse
 import logging
 import os
-from typing import Optional
+import re
+from typing import Optional, Tuple
 
 from dotenv import load_dotenv
 
-from .utils import validate_page_nums, parse_language_code
+from .config import LANGUAGE_MAP
 from .translation_service import TranslationService
 from .file_output import FileOutputHandler
 
 # Load environment variables
 load_dotenv()
+
+
+def validate_page_nums(value: str) -> str:
+    """Validate the page numbers input."""
+    if not re.match(r"^\d+(-\d+)?$", value):
+        raise argparse.ArgumentTypeError("Letters, commas, and other symbols not allowed.")
+    return value
+
+
+def parse_language_code(value: str) -> Tuple[str, str]:
+    """Parse language code like 'CE' into source and target languages."""
+    if len(value) != 2:
+        raise argparse.ArgumentTypeError("Language code must be exactly 2 characters (e.g., CE, JK, etc.)")
+    
+    source_char = value[0].upper()
+    target_char = value[1].upper()
+    
+    if source_char not in LANGUAGE_MAP:
+        raise argparse.ArgumentTypeError(f"Invalid source language code '{source_char}'. Use C, J, K, or E.")
+    if target_char not in LANGUAGE_MAP:
+        raise argparse.ArgumentTypeError(f"Invalid target language code '{target_char}'. Use C, J, K, or E.")
+    if source_char == target_char:
+        raise argparse.ArgumentTypeError("Source and target languages cannot be the same.")
+    
+    return LANGUAGE_MAP[source_char], LANGUAGE_MAP[target_char]
 
 
 def setup_logging() -> None:
