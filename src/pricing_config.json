@@ -1,34 +1,40 @@
 {
-  "o3-mini": {
-    "input": 1.21,
-    "output": 4.84
+  "config": {
+    "pricing_unit": 1000000,
+    "monthly_limit": 250.0
   },
-  "gpt-4o-mini": {
-    "input": 0.165,
-    "output": 0.66
-  },
-  "gpt-4o": {
-    "input": 2.75,
-    "output": 11.0
-  },
-  "gpt-35-turbo-16k": {
-    "input": 3.0,
-    "output": 4.0
-  },
-  "Mistral-Small": {
-    "input": 1.0,
-    "output": 3.0
-  },
-  "Meta-Llama-3-1-8B-Instruct": {
-    "input": 3.0,
-    "output": 0.61
-  },
-  "Meta-Llama-3-1-70B-Instruct": {
-    "input": 2.68,
-    "output": 3.54
-  },
-  "test-model": {
-    "input": 1.0,
-    "output": 2.0
+  "models": {
+    "o3-mini": {
+      "input": 1.21,
+      "output": 4.84
+    },
+    "gpt-4o-mini": {
+      "input": 0.165,
+      "output": 0.66
+    },
+    "gpt-4o": {
+      "input": 2.75,
+      "output": 11.0
+    },
+    "gpt-35-turbo-16k": {
+      "input": 3.0,
+      "output": 4.0
+    },
+    "Mistral-Small": {
+      "input": 1.0,
+      "output": 3.0
+    },
+    "Meta-Llama-3-1-8B-Instruct": {
+      "input": 3.0,
+      "output": 0.61
+    },
+    "Meta-Llama-3-1-70B-Instruct": {
+      "input": 2.68,
+      "output": 3.54
+    },
+    "test-model": {
+      "input": 1.0,
+      "output": 2.0
+    }
   }
 }
