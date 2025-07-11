@@ -3,7 +3,7 @@ Translation service for the CJK Translation script.
 """
 
 import logging
-from typing import List, Optional, Iterable
+from typing import List, Optional, Iterable, Dict, Any
 from itertools import islice
 from tqdm import tqdm
 
@@ -16,12 +16,13 @@ from .config import (
 )
 from .pdf_processor import PDFProcessor
 from .utils import extract_page_nums, generate_process_text
+from .token_tracker import TokenTracker
 
 
 class TranslationService:
     """Handles translation operations using OpenAI API."""
     
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, token_tracker_file: Optional[str] = None):
         self.api_key = api_key
         self.client = AzureOpenAI(
             api_key=api_key,
@@ -29,6 +30,7 @@ class TranslationService:
             api_version=SANDBOX_API_VERSION
         )
         self.pdf_processor = PDFProcessor()
+        self.token_tracker = TokenTracker(token_tracker_file)
     
     def _get_model(self) -> str:
         """Get the default model, with fallback if not available."""
@@ -95,9 +97,20 @@ class TranslationService:
             
             # Log token usage if available
             if response.usage:
+                # Record token usage
+                usage = self.token_tracker.record_usage(
+                    model=response.model,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    total_tokens=response.usage.total_tokens
+                )
+                
                 logging.info(f'Tokens used - Prompt: {response.usage.prompt_tokens}, '
                            f'Completion: {response.usage.completion_tokens}, '
-                           f'Total: {response.usage.total_tokens}')
+                           f'Total: {response.usage.total_tokens}, '
+                           f'Cost: ${usage.total_cost:.4f}')
+            else:
+                logging.warning('No token usage information available in response.')
             
             content = response.choices[0].message.content
             if content is not None:
@@ -197,3 +210,19 @@ class TranslationService:
             document_text.append(translated_text)
 
         return document_text
+    
+    def get_token_usage_summary(self) -> Dict[str, Any]:
+        """Get a summary of token usage."""
+        return self.token_tracker.get_usage_summary()
+    
+    def print_usage_report(self):
+        """Print a formatted usage report."""
+        self.token_tracker.print_usage_report()
+    
+    def get_daily_usage(self, date: Optional[str] = None) -> Dict[str, Any]:
+        """Get usage for a specific date or today."""
+        return self.token_tracker.get_daily_usage(date)
+    
+    def update_model_pricing(self, model: str, input_price: float, output_price: float):
+        """Update pricing for a specific model."""
+        self.token_tracker.update_pricing(model, input_price, output_price)
