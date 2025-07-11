@@ -5,8 +5,17 @@ File output utilities for the CJK Translation script.
 import logging
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
 
 from .config import PDF_MARGINS
+
+
+def generate_output_filename(input_file: str, source_lang: str, target_lang: str, extension: str = '.txt') -> str:
+    """Generate an output filename based on input file and languages."""
+    input_path = Path(input_file)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_name = f"{input_path.stem}_{source_lang}to{target_lang}_{timestamp}{extension}"
+    return str(input_path.parent / output_name)
 
 
 class FileOutputHandler:
@@ -131,7 +140,6 @@ class FileOutputHandler:
         if output_file:
             output_path = output_file
         elif auto_save and input_file:
-            from .utils import generate_output_filename
             output_path = generate_output_filename(input_file, source_lang, target_lang, '.txt')
         else:
             # No saving requested

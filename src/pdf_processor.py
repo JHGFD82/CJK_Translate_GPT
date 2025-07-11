@@ -2,11 +2,34 @@
 PDF processing utilities for the CJK Translation script.
 """
 
-from typing import Iterator, BinaryIO
+from typing import Iterator, BinaryIO, Optional, Tuple
 from pdfminer.converter import PDFPageAggregator
 from pdfminer.layout import LAParams, LTTextContainer, LTTextBox, LTTextLine, LTFigure, LTChar, LTPage
 from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
 from pdfminer.pdfpage import PDFPage
+
+
+def extract_page_nums(page_nums_str: Optional[str]) -> Tuple[int, int]:
+    """Extract the start and end page numbers from the given string."""
+    if page_nums_str is None:
+        return 0, 0  # Process all pages
+    
+    if '-' in page_nums_str:
+        start_page, end_page = map(int, page_nums_str.split('-'))
+        return start_page - 1, end_page - 1
+    else:
+        page_num = int(page_nums_str)
+        if page_num <= 0:
+            raise ValueError(f"{page_nums_str} is not a valid page number.")
+        return page_num - 1, page_num - 1
+
+
+def generate_process_text(abstract_text: str, page_text: str, previous_page: str, context_percentage: float = 0.65) -> str:
+    """Generate text for processing with context."""
+    context = abstract_text if abstract_text else previous_page[int(len(previous_page) * context_percentage):]
+    if context:
+        context = f"--Context: \n{context}"
+    return f"--Current Page: \n{page_text}\n{context}"
 
 
 class PDFProcessor:

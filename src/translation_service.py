@@ -14,8 +14,7 @@ from .config import (
     get_available_models, DEFAULT_MODEL, SANDBOX_API_VERSION, SANDBOX_ENDPOINT,
     TRANSLATION_TEMPERATURE, TRANSLATION_MAX_TOKENS, TRANSLATION_TOP_P, CONTEXT_PERCENTAGE
 )
-from .pdf_processor import PDFProcessor
-from .utils import extract_page_nums, generate_process_text
+from .pdf_processor import PDFProcessor, extract_page_nums, generate_process_text
 from .token_tracker import TokenTracker
 
 
