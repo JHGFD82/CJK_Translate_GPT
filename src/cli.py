@@ -58,11 +58,11 @@ Output Options:
     )
 
     # Language selection - single argument combining source and target
-    parser.add_argument('language_code', type=parse_language_code, metavar='LANG_CODE',
+    parser.add_argument('language_code', type=parse_language_code, metavar='LANG_CODE', nargs='?',
                         help='Two-letter language code: first letter is source, second is target (e.g., CE, JK, EJ)')
 
     # Input source selection
-    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group = parser.add_mutually_exclusive_group()
     source_group.add_argument('-i', '--input_PDF', dest='input_PDF', type=str,
                               help='The name of the input PDF file')
     source_group.add_argument('-c', '--custom_text', dest='custom_text', action='store_true',
@@ -82,6 +82,19 @@ Output Options:
 
     parser.add_argument('--auto-save', dest='auto_save', action='store_true',
                         help='Automatically save output to a timestamped file in the same directory as input PDF')
+
+    parser.add_argument('-f', '--font', dest='custom_font', type=str,
+                        help='Custom font name to use for PDF generation (font must be in fonts/ directory)')
+
+    # Token usage commands
+    parser.add_argument('--usage-report', dest='usage_report', action='store_true',
+                        help='Display token usage and cost report')
+    
+    parser.add_argument('--daily-usage', dest='daily_usage', type=str, nargs='?', const='today',
+                        help='Display daily usage for a specific date (YYYY-MM-DD format) or today if no date specified')
+    
+    parser.add_argument('--update-pricing', dest='update_pricing', type=str, nargs=3, metavar=('MODEL', 'INPUT_PRICE', 'OUTPUT_PRICE'),
+                        help='Update pricing for a model (e.g., --update-pricing gpt-4o 2.75 11.00)')
 
     return parser
 
@@ -161,10 +174,77 @@ class CJKTranslator:
                 translated_text, input_filename, output_file, auto_save, source_language, target_language, custom_font
             )
     
+    def show_usage_report(self) -> None:
+        """Display token usage report."""
+        self.translation_service.print_usage_report()
+    
+    def show_daily_usage(self, date: Optional[str] = None) -> None:
+        """Display daily usage for a specific date or today."""
+        if date and date != 'today':
+            # Validate date format
+            try:
+                from datetime import datetime
+                datetime.strptime(date, '%Y-%m-%d')
+            except ValueError:
+                print("Error: Date must be in YYYY-MM-DD format")
+                return
+        
+        target_date = None if date == 'today' else date
+        usage = self.translation_service.get_daily_usage(target_date)
+        
+        display_date = date if date != 'today' else 'today'
+        print(f"\nDaily Usage Report ({display_date}):")
+        print("-" * 40)
+        print(f"Total Tokens: {usage['total_tokens']:,}")
+        print(f"  • Input Tokens: {usage['total_input_tokens']:,}")
+        print(f"  • Output Tokens: {usage['total_output_tokens']:,}")
+        print(f"Total Cost: ${usage['total_cost']:.4f}")
+        print("-" * 40)
+    
+    def update_pricing(self, model: str, input_price: str, output_price: str) -> None:
+        """Update pricing for a model."""
+        try:
+            input_price_float = float(input_price)
+            output_price_float = float(output_price)
+            
+            self.translation_service.update_model_pricing(model, input_price_float, output_price_float)
+            print(f"Updated pricing for {model}:")
+            print(f"  Input: ${input_price_float:.3f} per 1M tokens")
+            print(f"  Output: ${output_price_float:.3f} per 1M tokens")
+            
+        except ValueError:
+            print("Error: Prices must be valid numbers")
+            return
+    
     def run(self) -> None:
         """Run the main application."""
         parser = create_argument_parser()
         args = parser.parse_args()
+        
+        # Handle token usage commands first (these don't require language codes)
+        if args.usage_report:
+            self.show_usage_report()
+            return
+        
+        if args.daily_usage is not None:
+            self.show_daily_usage(args.daily_usage)
+            return
+        
+        if args.update_pricing:
+            model, input_price, output_price = args.update_pricing
+            self.update_pricing(model, input_price, output_price)
+            return
+        
+        # Check if language_code is provided for translation commands
+        if not args.language_code:
+            if args.input_PDF or args.custom_text:
+                print("Error: Language code is required for translation commands")
+                parser.print_help()
+                exit(1)
+            else:
+                print("Error: Please specify a command (translation, usage report, etc.)")
+                parser.print_help()
+                exit(1)
         
         # Extract source and target languages from the language code
         source_language, target_language = args.language_code
