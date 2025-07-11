@@ -102,7 +102,8 @@ class TranslationService:
                     model=response.model,
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
-                    total_tokens=response.usage.total_tokens
+                    total_tokens=response.usage.total_tokens,
+                    requested_model=model
                 )
                 
                 logging.info(f'Tokens used - Prompt: {response.usage.prompt_tokens}, '
