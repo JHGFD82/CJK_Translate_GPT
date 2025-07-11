@@ -11,7 +11,7 @@ from openai import AzureOpenAI
 from pdfminer.pdfpage import PDFPage
 
 from .config import (
-    AVAILABLE_MODELS, DEFAULT_MODEL, SANDBOX_API_VERSION, SANDBOX_ENDPOINT,
+    get_available_models, DEFAULT_MODEL, SANDBOX_API_VERSION, SANDBOX_ENDPOINT,
     TRANSLATION_TEMPERATURE, TRANSLATION_MAX_TOKENS, TRANSLATION_TOP_P, CONTEXT_PERCENTAGE
 )
 from .pdf_processor import PDFProcessor
@@ -34,7 +34,8 @@ class TranslationService:
     
     def _get_model(self) -> str:
         """Get the default model, with fallback if not available."""
-        return DEFAULT_MODEL if DEFAULT_MODEL in AVAILABLE_MODELS else AVAILABLE_MODELS[0]
+        available_models = get_available_models()
+        return DEFAULT_MODEL if DEFAULT_MODEL in available_models else available_models[0]
     
     def _create_translation_prompt(self, source_language: str, target_language: str, output_format: str = "console") -> tuple[str, str]:
         """Create system and user prompt templates for translation."""
