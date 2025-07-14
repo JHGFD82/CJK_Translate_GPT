@@ -23,31 +23,31 @@ This application is designed exclusively for Princeton University faculty member
 ### Basic Translation
 ```bash
 # Translate PDF from Chinese to English
-python src/main.py CE -i document.pdf
+python main.py CE -i document.pdf
 
 # Translate custom text from Japanese to Korean
-python src/main.py JK -c
+python main.py JK -c
 ```
 
 ### Save Output Options
 ```bash
 # Save translation to a specific text file
-python src/main.py CE -i document.pdf -o translation.txt
+python main.py CE -i document.pdf -o translation.txt
 
 # Save translation to a PDF file
-python src/main.py CE -i document.pdf -o translation.pdf
+python main.py CE -i document.pdf -o translation.pdf
 
 # Auto-save with timestamp in the same directory as input
-python src/main.py CE -i document.pdf --auto-save
+python main.py CE -i document.pdf --auto-save
 ```
 
 ### Advanced Options
 ```bash
 # Translate specific pages with abstract context
-python src/main.py CE -i document.pdf -p 5-10 -a
+python main.py CE -i document.pdf -p 5-10 -a
 
 # Translate single page and save to PDF
-python src/main.py JE -i document.pdf -p 3 -o page3_translation.pdf
+python main.py JE -i document.pdf -p 3 -o page3_translation.pdf
 ```
 
 ## Language Codes
