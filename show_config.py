@@ -20,9 +20,11 @@ def make_safe_filename(name: str) -> str:
     safe_name = safe_name.strip('_')
     return safe_name.lower()
 
-def load_professor_config():
+from typing import Dict, Any
+
+def load_professor_config() -> Dict[str, Dict[str, Any]]:
     """Load professor configuration from environment variables."""
-    professors = {}
+    professors: Dict[str, Dict[str, Any]] = {}
     
     # Look for all PROF_[ID]_NAME variables
     for key, value in os.environ.items():
