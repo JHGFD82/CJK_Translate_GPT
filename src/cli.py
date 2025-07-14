@@ -157,11 +157,10 @@ def create_argument_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 Usage Examples:
-  python main.py "Professor Heller" CE -i document.pdf    # Translate PDF using Professor Heller's keys
-  python main.py professor_heller CE -i document.pdf     # Same using safe name
-  python main.py "John Smith" JK -i document.pdf         # Translate PDF using John Smith's keys
-  python main.py "Professor Heller" --usage-report       # Show usage report for Professor Heller
-  python main.py professor_heller CE -c                   # Translate custom text using Professor Heller's keys
+  python main.py heller CE -i document.pdf               # Translate PDF using Heller's keys
+  python main.py smith JK -i document.pdf               # Translate PDF using Smith's keys  
+  python main.py heller --usage-report                  # Show usage report for Heller
+  python main.py smith CE -c                            # Translate custom text using Smith's keys
 
 Language Code Examples:
   CE    Chinese to English
@@ -195,7 +194,7 @@ Output Options:
 
     # Required professor selection
     parser.add_argument('professor_name', type=str, metavar='PROFESSOR_NAME',
-                        help='Professor name to select appropriate API key (e.g., "Professor Heller", "professor_heller")')
+                        help='Professor name to select appropriate API key (e.g., "heller", "smith")')
 
     # Language selection - single argument combining source and target
     parser.add_argument('language_code', type=parse_language_code, metavar='LANG_CODE', nargs='?',
