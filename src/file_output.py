@@ -73,48 +73,70 @@ class FileOutputHandler:
                     spaceAfter=12,
                     encoding='utf-8'
                 )
-            except:
+                logging.info(f"Created paragraph style with font: {font_name}")
+            except Exception as e:
+                logging.warning(f"Failed to create custom style with font {font_name}: {e}")
                 normal_style = styles['Normal']
+                font_name = 'Times-Roman'  # Fallback to default
             
             # Split content into paragraphs and add to story
             paragraphs = content.split('\n\n')
-            for para in paragraphs:
+            for i, para in enumerate(paragraphs):
                 if para.strip():
                     clean_text = para.strip()
                     try:
                         # For CJK characters, we need to handle the text more carefully
                         # Replace line breaks within paragraphs with spaces
                         clean_text = clean_text.replace('\n', ' ')
+                        
+                        # Test if the font can handle the text
                         p = Paragraph(clean_text, normal_style)
                         story.append(p)
                         story.append(Spacer(1, 12))
+                        logging.debug(f"Successfully added paragraph {i+1} with font {font_name}")
+                        
                     except Exception as e:
-                        # More graceful fallback for problematic characters
-                        logging.warning(f"Error processing paragraph, trying fallback: {e}")
+                        logging.warning(f"Error processing paragraph {i+1} with font {font_name}: {e}")
+                        # Try with a different font as fallback
                         try:
-                            # Try with a simpler style
-                            simple_style = ParagraphStyle(
-                                'SimpleCJK',
+                            # Try with Times-Roman as fallback
+                            fallback_style = ParagraphStyle(
+                                'FallbackCJK',
                                 parent=styles['Normal'],
-                                fontName='Helvetica',
+                                fontName='Times-Roman',
                                 fontSize=12,
                                 leading=18,
                                 spaceAfter=12
                             )
-                            p = Paragraph(clean_text, simple_style)
+                            p = Paragraph(clean_text, fallback_style)
                             story.append(p)
                             story.append(Spacer(1, 12))
-                        except Exception:
-                            # Ultimate fallback: just add as plain text
-                            logging.warning("Using ultimate fallback for problematic text")
-                            p = Paragraph(clean_text.encode('ascii', 'ignore').decode('ascii'), styles['Normal'])
-                            story.append(p)
-                            story.append(Spacer(1, 12))
+                            logging.info(f"Used fallback font Times-Roman for paragraph {i+1}")
+                        except Exception as e2:
+                            logging.warning(f"Fallback font also failed for paragraph {i+1}: {e2}")
+                            # Ultimate fallback: convert to ASCII-safe text
+                            ascii_safe_text = clean_text.encode('ascii', 'ignore').decode('ascii')
+                            if ascii_safe_text.strip():
+                                p = Paragraph(ascii_safe_text, styles['Normal'])
+                                story.append(p)
+                                story.append(Spacer(1, 12))
+                                logging.warning(f"Used ASCII-safe fallback for paragraph {i+1}")
+                            else:
+                                logging.warning(f"Paragraph {i+1} contained no ASCII-safe characters, skipping")
             
             # Build PDF
-            doc.build(story)
-            logging.info(f'Translation saved to PDF file: {output_path}')
-            print(f"\nTranslation saved to PDF: {output_path}")
+            if story:
+                doc.build(story)
+                logging.info(f'Translation saved to PDF file: {output_path}')
+                print(f"\nTranslation saved to PDF: {output_path}")
+                if font_name != 'Times-Roman':
+                    print(f"Used font: {font_name}")
+            else:
+                logging.error("No content could be processed for PDF generation")
+                print("Error: No content could be processed for PDF generation")
+                # Fallback to text file
+                text_output_path = output_path.replace('.pdf', '.txt')
+                FileOutputHandler.save_to_text_file(content, text_output_path)
             
         except ImportError:
             logging.warning('reportlab not installed. Falling back to text file.')
@@ -174,10 +196,11 @@ class FileOutputHandler:
                     custom_font_path = os.path.join(fonts_dir, f"{custom_font}.ttf")
                     if os.path.exists(custom_font_path):
                         try:
-                            if custom_font not in pdfmetrics.getRegisteredFontNames():
-                                pdfmetrics.registerFont(TTFont(custom_font, custom_font_path))  # type: ignore
-                            logging.info(f"Using custom CJK font: {custom_font}")
-                            return custom_font
+                            custom_font_name = f"CustomFont_{custom_font}"
+                            if custom_font_name not in pdfmetrics.getRegisteredFontNames():
+                                pdfmetrics.registerFont(TTFont(custom_font_name, custom_font_path))  # type: ignore
+                            logging.info(f"Using custom CJK font: {custom_font_name}")
+                            return custom_font_name
                         except Exception as e:
                             logging.warning(f"Failed to register custom font {custom_font}: {e}")
                             print(f"Warning: Custom font '{custom_font}' failed to load. Using default font selection.")
@@ -193,31 +216,31 @@ class FileOutputHandler:
                 ]
                 
                 # First, try preferred fonts
-                for preferred_font in preferred_fonts:
-                    font_path = os.path.join(fonts_dir, preferred_font)
+                for font_filename, font_name in preferred_fonts:
+                    font_path = os.path.join(fonts_dir, font_filename)
                     if os.path.exists(font_path):
-                        font_name = os.path.splitext(preferred_font)[0]
                         try:
                             if font_name not in pdfmetrics.getRegisteredFontNames():
                                 pdfmetrics.registerFont(TTFont(font_name, font_path))  # type: ignore
-                            logging.info(f"Using preferred CJK font: {font_name}")
+                            logging.info(f"Using preferred CJK font: {font_name} ({font_filename})")
                             return font_name
                         except Exception as e:
-                            logging.debug(f"Failed to register preferred font {font_name}: {e}")
+                            logging.warning(f"Failed to register preferred font {font_name}: {e}")
                             continue
                 
                 # If no preferred fonts, use any available .ttf file (reportlab only supports TTF, not OTF)
                 for font_file in os.listdir(fonts_dir):
                     if font_file.endswith('.ttf'):
                         font_path = os.path.join(fonts_dir, font_file)
-                        font_name = os.path.splitext(font_file)[0]  # Use filename without extension
+                        # Create a safe font name by removing problematic characters
+                        safe_font_name = font_file.replace('.ttf', '').replace('-', '_').replace(',', '_').replace(' ', '_')
                         try:
-                            if font_name not in pdfmetrics.getRegisteredFontNames():
-                                pdfmetrics.registerFont(TTFont(font_name, font_path))  # type: ignore
-                            logging.info(f"Using available CJK font: {font_name}")
-                            return font_name
+                            if safe_font_name not in pdfmetrics.getRegisteredFontNames():
+                                pdfmetrics.registerFont(TTFont(safe_font_name, font_path))  # type: ignore
+                            logging.info(f"Using available CJK font: {safe_font_name} ({font_file})")
+                            return safe_font_name
                         except Exception as e:
-                            logging.debug(f"Failed to register font {font_name}: {e}")
+                            logging.warning(f"Failed to register font {safe_font_name}: {e}")
                             continue
             
             # No compatible fonts found - give clear guidance
@@ -234,5 +257,5 @@ class FileOutputHandler:
             return 'Times-Roman'  # Fallback to reportlab default (Times New Roman equivalent)
             
         except Exception as e:
-            logging.debug(f"Error checking CJK fonts: {e}")
+            logging.warning(f"Error checking CJK fonts: {e}")
             return 'Times-Roman'
