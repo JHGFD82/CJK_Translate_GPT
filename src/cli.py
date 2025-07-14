@@ -6,7 +6,7 @@ import argparse
 import logging
 import os
 import re
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict
 
 from dotenv import load_dotenv
 
