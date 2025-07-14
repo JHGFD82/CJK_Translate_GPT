@@ -179,8 +179,10 @@ class TranslationService:
 
     def translate_document(self, pages: Iterable[PDFPage], abstract_text: Optional[str], page_nums_str: Optional[str],
                            source_language: str, target_language: str, output_file: Optional[str] = None, 
-                           auto_save: bool = False) -> List[str]:
+                           auto_save: bool = False, progressive_save: bool = False, input_file_path: Optional[str] = None) -> List[str]:
         """Translate all pages in a document."""
+        from .file_output import FileOutputHandler
+        
         document_text: list[str] = []
         start_page, end_page = extract_page_nums(page_nums_str)
         
@@ -201,14 +203,62 @@ class TranslationService:
         if page_nums_str:
             pages = islice(pages, start_page, end_page + 1)
 
+        # For progressive saving
+        progressive_output_path = None
+
         page_text = ""
         for i, page in tqdm(enumerate(pages, start=start_page), desc="Translating... ", ascii=True):
             previous_page = page_text
             page_text = self.pdf_processor.process_page(page)
-            translated_text = self.generate_text(
-                abstract_text or '', page_text, previous_page, i, source_language, target_language, output_format
-            )
-            document_text.append(translated_text)
+            
+            try:
+                translated_text = self.generate_text(
+                    abstract_text or '', page_text, previous_page, i, source_language, target_language, output_format
+                )
+                document_text.append(translated_text)
+                
+                # Add delay between pages to prevent rate limiting and content filter triggers
+                # This helps avoid jailbreak detection issues
+                if i > start_page:  # Don't delay on the first page
+                    time.sleep(PAGE_DELAY_SECONDS)
+                
+                # Save page progressively if requested
+                if progressive_save and (output_file or auto_save):
+                    is_first_page = (i == start_page)
+                    progressive_output_path = FileOutputHandler.save_page_progressively(
+                        translated_text, 
+                        input_file_path,
+                        output_file,
+                        auto_save,
+                        source_language,
+                        target_language,
+                        is_first_page
+                    )
+                    
+            except Exception as e:
+                error_message = f"\n***Translation error on page {i + 1}: {e}***\n"
+                document_text.append(error_message)
+                print(f"Error on page {i + 1}: {e}")
+                
+                # Still save the error message progressively
+                if progressive_save and (output_file or auto_save):
+                    is_first_page = (i == start_page and len(document_text) == 1)
+                    FileOutputHandler.save_page_progressively(
+                        error_message,
+                        input_file_path,
+                        output_file,
+                        auto_save,
+                        source_language,
+                        target_language,
+                        is_first_page
+                    )
+                
+                # Continue with next page instead of stopping
+                continue
+
+        # If progressive saving was used, inform user about the output file
+        if progressive_save and progressive_output_path:
+            print(f"\nProgressive translation saved to: {progressive_output_path}")
 
         return document_text
     
