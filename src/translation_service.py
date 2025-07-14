@@ -23,15 +23,16 @@ from .token_tracker import TokenTracker
 class TranslationService:
     """Handles translation operations using OpenAI API."""
     
-    def __init__(self, api_key: str, token_tracker_file: Optional[str] = None):
+    def __init__(self, api_key: str, professor: Optional[str] = None, token_tracker_file: Optional[str] = None):
         self.api_key = api_key
+        self.professor = professor
         self.client = AzureOpenAI(
             api_key=api_key,
             azure_endpoint=SANDBOX_ENDPOINT,
             api_version=SANDBOX_API_VERSION
         )
         self.pdf_processor = PDFProcessor()
-        self.token_tracker = TokenTracker(token_tracker_file)
+        self.token_tracker = TokenTracker(professor=professor, data_file=token_tracker_file)
     
     def _get_model(self) -> str:
         """Get the default model, with fallback if not available."""

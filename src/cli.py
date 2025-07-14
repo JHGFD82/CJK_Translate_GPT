@@ -6,7 +6,7 @@ import argparse
 import logging
 import os
 import re
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 
 from dotenv import load_dotenv
 
@@ -16,6 +16,17 @@ from .file_output import FileOutputHandler
 
 # Load environment variables
 load_dotenv()
+
+
+def make_safe_filename(name: str) -> str:
+    """Convert a professor name to a safe filename by replacing spaces and special chars with underscores."""
+    # Replace spaces and special characters with underscores
+    safe_name = re.sub(r'[^\w\-_\.]', '_', name)
+    # Remove multiple underscores
+    safe_name = re.sub(r'_+', '_', safe_name)
+    # Remove leading/trailing underscores
+    safe_name = safe_name.strip('_')
+    return safe_name.lower()
 
 
 def validate_page_nums(value: str) -> str:
@@ -48,14 +59,95 @@ def setup_logging() -> None:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def get_api_key() -> str:
-    """Get API key from environment variables."""
+def load_professor_config() -> Dict[str, Dict[str, str]]:
+    """Load professor configuration from environment variables.
+    
+    Returns:
+        Dict with professor names as keys (safe filename format) and config as values
+    """
+    professors: Dict[str, Dict[str, str]] = {}
+    
+    # Look for all PROF_[ID]_NAME variables
+    for key, value in os.environ.items():
+        if key.startswith('PROF_') and key.endswith('_NAME'):
+            # Extract the ID from PROF_[ID]_NAME
+            prof_id = key[5:-5]  # Remove 'PROF_' and '_NAME'
+            
+            # Get the corresponding keys
+            primary_key_var = f'PROF_{prof_id}_KEY'
+            backup_key_var = f'PROF_{prof_id}_BACKUP_KEY'
+            
+            # Check if required keys exist
+            if primary_key_var in os.environ:
+                safe_name = make_safe_filename(value)
+                professors[safe_name] = {
+                    'name': value,
+                    'primary_key': primary_key_var,
+                    'backup_key': backup_key_var,
+                    'id': prof_id,
+                    'safe_name': safe_name
+                }
+    
+    return professors
+
+
+def get_api_key(professor_name: str) -> Tuple[str, str]:
+    """Get API key for the specified professor name from environment variables.
+    
+    Args:
+        professor_name: Professor name or safe filename version
+        
+    Returns:
+        tuple: (api_key, professor_display_name)
+    """
+    professors = load_professor_config()
+    
+    # Try to find professor by safe name first
+    safe_name = make_safe_filename(professor_name)
+    
+    if safe_name not in professors:
+        # Try exact match in case user provided the safe name directly
+        if professor_name.lower() not in professors:
+            available_names = [prof['name'] for prof in professors.values()]
+            available_safe_names = list(professors.keys())
+            
+            print(f"Error: Unknown professor '{professor_name}'.")
+            print(f"Available professors: {', '.join(available_names)}")
+            print(f"You can use either the full name or safe name: {', '.join(available_safe_names)}")
+            print("\nAvailable professors:")
+            for safe_name_iter, prof_info in professors.items():
+                print(f"  '{prof_info['name']}' (or '{safe_name_iter}')")
+            exit(1)
+        else:
+            safe_name = professor_name.lower()
+    
+    prof_info = professors[safe_name]
+    professor_display_name = prof_info['name']
+    primary_key_var = prof_info['primary_key']
+    backup_key_var = prof_info['backup_key']
+    
+    # Try primary key first
     try:
-        return os.environ['AI_SANDBOX_KEY']
+        api_key = os.environ[primary_key_var]
+        if api_key:
+            print(f"Using primary API key for {professor_display_name}")
+            return api_key, professor_display_name
     except KeyError:
-        print("Error: AI_SANDBOX_KEY environment variable not found.")
-        print("Please set your API key in the environment variables.")
-        exit(1)
+        pass
+    
+    # Try backup key
+    try:
+        api_key = os.environ[backup_key_var]
+        if api_key:
+            print(f"Using backup API key for {professor_display_name}")
+            return api_key, professor_display_name
+    except KeyError:
+        pass
+    
+    # If neither key is found
+    print(f"Error: API keys for {professor_display_name} not found in environment variables.")
+    print(f"Please set either {primary_key_var} or {backup_key_var} in your .env file.")
+    exit(1)
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
@@ -64,6 +156,13 @@ def create_argument_parser() -> argparse.ArgumentParser:
         description='Extract text from PDF and translate it between different languages using the GPT engine.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
+Usage Examples:
+  python main.py "Professor Heller" CE -i document.pdf    # Translate PDF using Professor Heller's keys
+  python main.py professor_heller CE -i document.pdf     # Same using safe name
+  python main.py "John Smith" JK -i document.pdf         # Translate PDF using John Smith's keys
+  python main.py "Professor Heller" --usage-report       # Show usage report for Professor Heller
+  python main.py professor_heller CE -c                   # Translate custom text using Professor Heller's keys
+
 Language Code Examples:
   CE    Chinese to English
   JK    Japanese to Korean  
@@ -76,6 +175,16 @@ Available language codes:
   K = Korean
   E = English
 
+Professor Configuration:
+  Professor names and API keys are configured in .env file
+  Use professor names (full name or safe filename) to select the appropriate professor
+  Run "python show_config.py" to see available professors
+  Safe names are created by converting spaces to underscores (e.g., "John Smith" -> "john_smith")
+  
+Token Tracking:
+  Each professor has separate token usage tracking and monthly budgets
+  Usage data is stored in data/token_usage_[safe_name].json files
+
 Output Options:
   -o output.txt       Save translation to specified text file
   -o output.pdf       Save translation to specified PDF file
@@ -83,6 +192,10 @@ Output Options:
   --progressive-save  Save each page immediately after translation (for error recovery)
 '''
     )
+
+    # Required professor selection
+    parser.add_argument('professor_name', type=str, metavar='PROFESSOR_NAME',
+                        help='Professor name to select appropriate API key (e.g., "Professor Heller", "professor_heller")')
 
     # Language selection - single argument combining source and target
     parser.add_argument('language_code', type=parse_language_code, metavar='LANG_CODE', nargs='?',
@@ -132,10 +245,15 @@ Output Options:
 class CJKTranslator:
     """Main application class for CJK translation."""
     
-    def __init__(self):
+    def __init__(self, professor_name: str):
+        self.professor_name = professor_name
         self.setup_logging()
-        self.api_key = get_api_key()
-        self.translation_service = TranslationService(self.api_key)
+        self.api_key, self.professor_display_name = get_api_key(professor_name)
+        
+        # Use safe name for file operations
+        self.safe_name = make_safe_filename(self.professor_display_name)
+        
+        self.translation_service = TranslationService(self.api_key, self.safe_name)
         self.file_output = FileOutputHandler()
         
     def setup_logging(self) -> None:
@@ -224,13 +342,13 @@ class CJKTranslator:
         usage = self.translation_service.get_daily_usage(target_date)
         
         display_date = date if date != 'today' else 'today'
-        print(f"\nDaily Usage Report ({display_date}):")
-        print("-" * 40)
+        print(f"\nDaily Usage Report for {self.professor_display_name} ({display_date}):")
+        print("-" * 50)
         print(f"Total Tokens: {usage['total_tokens']:,}")
         print(f"  • Input Tokens: {usage['total_input_tokens']:,}")
         print(f"  • Output Tokens: {usage['total_output_tokens']:,}")
         print(f"Total Cost: ${usage['total_cost']:.4f}")
-        print("-" * 40)
+        print("-" * 50)
     
     def update_pricing(self, model: str, input_price: str, output_price: str) -> None:
         """Update pricing for a model."""
@@ -247,12 +365,9 @@ class CJKTranslator:
             print("Error: Prices must be valid numbers")
             return
     
-    def run(self) -> None:
-        """Run the main application."""
-        parser = create_argument_parser()
-        args = parser.parse_args()
-        
-        # Handle token usage commands first (these don't require language codes)
+    def run(self, args: argparse.Namespace) -> None:
+        """Run the main application with parsed arguments."""
+        # Handle token usage commands first (these don't require language codes but still need professor)
         if args.usage_report:
             self.show_usage_report()
             return
@@ -270,11 +385,9 @@ class CJKTranslator:
         if not args.language_code:
             if args.input_PDF or args.custom_text:
                 print("Error: Language code is required for translation commands")
-                parser.print_help()
                 exit(1)
             else:
                 print("Error: Please specify a command (translation, usage report, etc.)")
-                parser.print_help()
                 exit(1)
         
         # Extract source and target languages from the language code
@@ -293,8 +406,12 @@ class CJKTranslator:
 
 def main() -> None:
     """Main entry point."""
-    translator = CJKTranslator()
-    translator.run()
+    parser = create_argument_parser()
+    args = parser.parse_args()
+    
+    # Create translator with professor name parameter
+    translator = CJKTranslator(args.professor_name)
+    translator.run(args)
 
 
 if __name__ == '__main__':
