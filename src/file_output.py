@@ -185,17 +185,11 @@ class FileOutputHandler:
                         logging.warning(f"Custom font file not found: {custom_font_path}")
                         print(f"Warning: Custom font '{custom_font}.ttf' not found in fonts/ directory. Using default font selection.")
                 
-                # Preferred CJK fonts (in order of preference)
+                # Preferred CJK fonts (in order of preference) - map to available fonts
                 preferred_fonts = [
-                    'NotoSansCJK-Regular.ttf',      # Google Noto Sans CJK
-                    'NotoSansCJK.ttf',
-                    'NotoSans-VariableFont_wdth,wght.ttf',  # Your available Noto Sans
-                    'SourceHanSans-Regular.ttf',    # Adobe Source Han Sans
-                    'SourceHanSans.ttf',
-                    'DejaVuSans.ttf',               # DejaVu Sans
-                    'ArialUnicodeMS.ttf',           # Arial Unicode MS
-                    'Arial Unicode MS.ttf',         # Your available Arial Unicode
-                    'Arial Unicode.ttf'             # Your available Arial Unicode
+                    ('Arial Unicode.ttf', 'ArialUnicode'),         # Your available Arial Unicode
+                    ('AppleGothic.ttf', 'AppleGothic'),           # Apple Gothic (good for CJK)
+                    ('AppleMyungjo.ttf', 'AppleMyungjo'),         # Apple Myungjo (good for CJK)
                 ]
                 
                 # First, try preferred fonts
@@ -232,9 +226,9 @@ class FileOutputHandler:
             print("To fix: Add CJK .ttf fonts to the 'fonts/' directory in this project.")
             print("Note: Only .ttf fonts are supported. OTF fonts will not work with reportlab.")
             print("Recommended CJK fonts:")
-            print("  - Noto Sans CJK (Google): https://fonts.google.com/noto/specimen/Noto+Sans")
-            print("  - Source Han Sans (Adobe): https://github.com/adobe-fonts/source-han-sans")
             print("  - Arial Unicode MS (Microsoft)")
+            print("  - Source Han Sans (Adobe): https://github.com/adobe-fonts/source-han-sans")
+            print("  - Apple system fonts (AppleGothic, AppleMyungjo)")
             print("Alternative: Save as .txt file for proper CJK character display.")
             
             return 'Times-Roman'  # Fallback to reportlab default (Times New Roman equivalent)

@@ -12,10 +12,8 @@ Place your CJK-compatible TrueType fonts (.ttf files) in this directory for PDF 
 ## Recommended Fonts (in order of preference)
 
 ### **Best CJK Fonts:**
-1. **Noto Sans CJK** (Google) - Comprehensive CJK support
-   - Download: https://fonts.google.com/noto/specimen/Noto+Sans
-   - **Important**: Download the .ttf version, not .otf
-   - File names: `NotoSansCJK-Regular.ttf` or `NotoSansCJK.ttf`
+1. **Arial Unicode MS** (Microsoft) - Universal Unicode font
+   - File names: `ArialUnicodeMS.ttf` or `Arial Unicode MS.ttf`
 
 2. **Source Han Sans** (Adobe) - Open-source CJK font family
    - Download: https://github.com/adobe-fonts/source-han-sans
@@ -24,9 +22,6 @@ Place your CJK-compatible TrueType fonts (.ttf files) in this directory for PDF 
 
 3. **DejaVu Sans** - Good Unicode support
    - File name: `DejaVuSans.ttf`
-
-4. **Arial Unicode MS** (Microsoft) - Universal Unicode font
-   - File names: `ArialUnicodeMS.ttf` or `Arial Unicode MS.ttf`
 
 ### **Language-Specific Alternatives:**
 
