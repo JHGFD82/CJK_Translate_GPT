@@ -90,8 +90,8 @@ def show_professor_config():
     print("\n" + "=" * 50)
     print("💡 Usage Tips:")
     print("   • Use either the full name or safe name for CLI commands")
-    print("   • Example: python main.py \"Professor Heller\" CE -i file.pdf")
-    print("   • Example: python main.py professor_heller CE -i file.pdf")
+    print("   • Example: python main.py heller CE -i file.pdf")
+    print("   • Example: python main.py smith JK -i file.pdf")
     print("   • Run python main.py --help for more information")
 
 if __name__ == "__main__":
