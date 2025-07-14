@@ -80,6 +80,7 @@ Output Options:
   -o output.txt       Save translation to specified text file
   -o output.pdf       Save translation to specified PDF file
   --auto-save         Auto-save to timestamped file in source directory
+  --progressive-save  Save each page immediately after translation (for error recovery)
 '''
     )
 
@@ -108,6 +109,9 @@ Output Options:
 
     parser.add_argument('--auto-save', dest='auto_save', action='store_true',
                         help='Automatically save output to a timestamped file in the same directory as input PDF')
+
+    parser.add_argument('--progressive-save', dest='progressive_save', action='store_true',
+                        help='Save each page to output file immediately after translation (useful for error recovery)')
 
     parser.add_argument('-f', '--font', dest='custom_font', type=str,
                         help='Custom font name to use for PDF generation (font must be in fonts/ directory)')
@@ -140,7 +144,8 @@ class CJKTranslator:
     
     def translate_pdf(self, file_path: str, source_language: str, target_language: str,
                      page_nums: Optional[str] = None, abstract: bool = False,
-                     output_file: Optional[str] = None, auto_save: bool = False, custom_font: Optional[str] = None) -> None:
+                     output_file: Optional[str] = None, auto_save: bool = False, progressive_save: bool = False, 
+                     custom_font: Optional[str] = None) -> None:
         """Translate a PDF file."""
         abstract_text = input('Enter abstract text: ') if abstract else None
         
@@ -148,7 +153,7 @@ class CJKTranslator:
             with open(file_path, 'rb') as f:
                 pages = self.translation_service.pdf_processor.process_pdf(f)
                 document_text = self.translation_service.translate_document(
-                    pages, abstract_text, page_nums, source_language, target_language, output_file, auto_save
+                    pages, abstract_text, page_nums, source_language, target_language, output_file, auto_save, progressive_save, file_path
                 )
             
             # Join all translated content
@@ -157,8 +162,8 @@ class CJKTranslator:
             # Display the translation
             print(full_translation)
             
-            # Save the translation if requested
-            if output_file or auto_save:
+            # Save the translation if requested (skip if progressive saving was used)
+            if not progressive_save and (output_file or auto_save):
                 self.file_output.save_translation_output(
                     full_translation, file_path, output_file, auto_save, source_language, target_language, custom_font
                 )
@@ -278,7 +283,7 @@ class CJKTranslator:
         if args.input_PDF:
             self.translate_pdf(
                 args.input_PDF, source_language, target_language,
-                args.page_nums, args.abstract, args.output_file, args.auto_save, args.custom_font
+                args.page_nums, args.abstract, args.output_file, args.auto_save, args.progressive_save, args.custom_font
             )
         elif args.custom_text:
             self.translate_custom_text(

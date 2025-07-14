@@ -32,6 +32,18 @@ class FileOutputHandler:
         except Exception as e:
             logging.error(f'Error saving to text file: {e}')
             print(f"Error saving to text file: {e}")
+
+    @staticmethod
+    def append_to_text_file(content: str, output_path: str) -> None:
+        """Append content to a text file."""
+        try:
+            with open(output_path, 'a', encoding='utf-8') as f:
+                f.write(content + '\n\n')
+            logging.info(f'Translation appended to text file: {output_path}')
+            print(f"Page appended to: {output_path}")
+        except Exception as e:
+            logging.error(f'Error appending to text file: {e}')
+            print(f"Error appending to text file: {e}")
     
     @staticmethod
     def save_to_pdf(content: str, output_path: str, custom_font: Optional[str] = None, target_lang: Optional[str] = None) -> None:
@@ -61,8 +73,9 @@ class FileOutputHandler:
                 logging.info(f"Using Times-Roman for English translation (target_lang={target_lang})")
             else:
                 font_name = FileOutputHandler._get_cjk_font(custom_font)
-                logging.info(f"Using CJK font logic (custom_font={custom_font}, target_lang={target_lang})")
+                logging.info(f"Using CJK font: {font_name} (custom_font={custom_font}, target_lang={target_lang})")
             
+            # Create paragraph style with proper font
             try:
                 normal_style = ParagraphStyle(
                     'CJKNormal',
@@ -179,6 +192,46 @@ class FileOutputHandler:
             if not output_path.lower().endswith('.txt'):
                 output_path += '.txt'
             FileOutputHandler.save_to_text_file(content, output_path)
+
+    @staticmethod
+    def save_page_progressively(content: str, input_file: Optional[str], output_file: Optional[str], 
+                               auto_save: bool, source_lang: str, target_lang: str, is_first_page: bool = False,
+                               custom_font: Optional[str] = None) -> Optional[str]:
+        """Save a single page progressively to output file. Returns the output path."""
+        if not content.strip():
+            print("No content to save.")
+            return None
+        
+        # Determine output file path
+        if output_file:
+            output_path = output_file
+        elif auto_save and input_file:
+            output_path = generate_output_filename(input_file, source_lang, target_lang, '.txt')
+        else:
+            # No saving requested
+            return None
+        
+        # Ensure directory exists
+        output_dir = Path(output_path).parent
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # For progressive saving, we currently only support text files
+        # PDF merging is complex and requires additional dependencies
+        if output_path.lower().endswith('.pdf'):
+            print("Note: Progressive saving for PDF format not yet supported. Using text format.")
+            output_path = output_path.replace('.pdf', '.txt')
+        
+        # Default to text file
+        if not output_path.lower().endswith('.txt'):
+            output_path += '.txt'
+        
+        # Save first page or append subsequent pages
+        if is_first_page:
+            FileOutputHandler.save_to_text_file(content, output_path)
+        else:
+            FileOutputHandler.append_to_text_file(content, output_path)
+        
+        return output_path
     
     @staticmethod
     def _get_cjk_font(custom_font: Optional[str] = None) -> str:
