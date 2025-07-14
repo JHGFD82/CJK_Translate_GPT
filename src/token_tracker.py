@@ -69,35 +69,23 @@ class TokenTracker:
         
         self.usage_data = self._load_usage_data()
     
-    def _save_json_file(self, file_path: Path, data: Dict[str, Any]):
-        """Save data to a JSON file."""
-        with open(file_path, 'w') as f:
-            json.dump(data, f, indent=2)
-    
-    def _load_json_file(self, file_path: Path) -> Dict[str, Any]:
-        """Load data from a JSON file."""
-        with open(file_path, 'r') as f:
-            return json.load(f)
-    
-    def _get_default_usage_structure(self) -> Dict[str, Any]:
-        """Get the default usage data structure."""
-        return {
-            "total_usage": UsageStats().to_dict(),
-            "model_usage": {},
-            "daily_usage": {},
-            "session_history": []
-        }
-    
     def _load_usage_data(self) -> Dict[str, Any]:
         """Load existing usage data from file."""
         if not self.data_file.exists():
-            return self._get_default_usage_structure()
+            return {
+                "total_usage": UsageStats().to_dict(),
+                "model_usage": {},
+                "daily_usage": {},
+                "session_history": []
+            }
         
-        return self._load_json_file(self.data_file)
+        with open(self.data_file, 'r') as f:
+            return json.load(f)
     
     def _save_usage_data(self):
         """Save usage data to file."""
-        self._save_json_file(self.data_file, self.usage_data)
+        with open(self.data_file, 'w') as f:
+            json.dump(self.usage_data, f, indent=2)
     
     def _calculate_costs(self, model: str, prompt_tokens: int, completion_tokens: int) -> tuple[float, float, float]:
         """Calculate costs for input, output, and total tokens."""
@@ -111,40 +99,15 @@ class TokenTracker:
         
         return input_cost, output_cost, total_cost
     
-    def _get_or_create_usage_stats(self, category: str, key: str) -> Dict[str, Any]:
-        """Get or create usage statistics for a category and key."""
-        if key not in self.usage_data[category]:
-            self.usage_data[category][key] = UsageStats().to_dict()
-        return self.usage_data[category][key]
-    
-    def _update_usage_stats(self, stats: Dict[str, Any], prompt_tokens: int, completion_tokens: int, 
-                          total_tokens: int, cost: float):
+    def _update_stats(self, stats: Dict[str, Any], prompt_tokens: int, completion_tokens: int, 
+                     total_tokens: int, cost: float):
         """Update usage statistics."""
         stats["total_tokens"] += total_tokens
         stats["total_input_tokens"] += prompt_tokens
         stats["total_output_tokens"] += completion_tokens
         stats["total_cost"] += cost
-        if "call_count" in stats:
-            stats["call_count"] += 1
-    
-    def _update_usage_category(self, category: str, key: str, prompt_tokens: int, completion_tokens: int, 
-                             total_tokens: int, cost: float):
-        """Update usage statistics for a specific category and key."""
-        stats = self._get_or_create_usage_stats(category, key)
-        self._update_usage_stats(stats, prompt_tokens, completion_tokens, total_tokens, cost)
-    
-    def _update_all_usage_categories(self, model: str, prompt_tokens: int, completion_tokens: int, 
-                                   total_tokens: int, cost: float):
-        """Update usage statistics for all categories (total, model, daily)."""
-        # Update total usage
-        self._update_usage_stats(self.usage_data["total_usage"], prompt_tokens, completion_tokens, total_tokens, cost)
-        
-        # Update model usage
-        self._update_usage_category("model_usage", model, prompt_tokens, completion_tokens, total_tokens, cost)
-        
-        # Update daily usage
-        date_str = self._get_current_date()
-        self._update_usage_category("daily_usage", date_str, prompt_tokens, completion_tokens, total_tokens, cost)
+        stats.setdefault("call_count", 0)
+        stats["call_count"] += 1
     
     def _get_current_date(self) -> str:
         """Get current date as string."""
@@ -187,7 +150,19 @@ class TokenTracker:
         )
         
         # Update all usage categories
-        self._update_all_usage_categories(model, prompt_tokens, completion_tokens, total_tokens, total_cost)
+        # Update total usage
+        self._update_stats(self.usage_data["total_usage"], prompt_tokens, completion_tokens, total_tokens, total_cost)
+        
+        # Update model usage
+        if model not in self.usage_data["model_usage"]:
+            self.usage_data["model_usage"][model] = UsageStats().to_dict()
+        self._update_stats(self.usage_data["model_usage"][model], prompt_tokens, completion_tokens, total_tokens, total_cost)
+        
+        # Update daily usage
+        date_str = self._get_current_date()
+        if date_str not in self.usage_data["daily_usage"]:
+            self.usage_data["daily_usage"][date_str] = UsageStats().to_dict()
+        self._update_stats(self.usage_data["daily_usage"][date_str], prompt_tokens, completion_tokens, total_tokens, total_cost)
         
         # Add to session history
         self.usage_data["session_history"].append(asdict(usage))
@@ -310,10 +285,7 @@ class TokenTracker:
         config = load_pricing_config()
         
         # Ensure models section exists
-        if "models" not in config:
-            config["models"] = {}
-        
-        config["models"][model] = {"input": input_price, "output": output_price}
+        config.setdefault("models", {})[model] = {"input": input_price, "output": output_price}
         
         # Save updated config
         save_pricing_config(config)
@@ -325,10 +297,7 @@ class TokenTracker:
         config = load_pricing_config()
         
         # Ensure config section exists
-        if "config" not in config:
-            config["config"] = {}
-        
-        config["config"]["pricing_unit"] = new_unit
+        config.setdefault("config", {})["pricing_unit"] = new_unit
         
         # Save updated config
         save_pricing_config(config)
