@@ -16,7 +16,21 @@ from .config import (
 
 
 # Constants
-USAGE_DATA_FILE = "token_usage.json"
+USAGE_DATA_DIR = "data"
+USAGE_DATA_FILE = "token_usage.json"  # Legacy file name for backward compatibility
+
+
+def get_usage_data_path(professor: Optional[str] = None) -> Path:
+    """Get the path to the usage data file for a specific professor or the legacy file."""
+    base_dir = Path(__file__).parent.parent / USAGE_DATA_DIR
+    
+    if professor:
+        # Ensure data directory exists
+        base_dir.mkdir(exist_ok=True)
+        return base_dir / f"token_usage_{professor.lower()}.json"
+    else:
+        # Legacy path for backward compatibility
+        return Path(__file__).parent.parent / USAGE_DATA_FILE
 
 
 @dataclass
@@ -55,11 +69,23 @@ class UsageStats:
 
 
 class TokenTracker:
-    """Tracks and manages token usage and costs."""
+    """Tracks and manages token usage and costs for a specific professor."""
     
-    def __init__(self, data_file: Optional[str] = None, monthly_limit: Optional[float] = None):
-        """Initialize the token tracker with optional custom data file path and monthly limit."""
-        self.data_file = Path(data_file) if data_file else Path(__file__).parent.parent / USAGE_DATA_FILE
+    def __init__(self, professor: Optional[str] = None, data_file: Optional[str] = None, monthly_limit: Optional[float] = None):
+        """Initialize the token tracker with professor-specific data file.
+        
+        Args:
+            professor: Professor name for data file separation
+            data_file: Custom data file path (overrides professor-based naming)
+            monthly_limit: Custom monthly limit (overrides config)
+        """
+        self.professor = professor
+        
+        # Determine data file path
+        if data_file:
+            self.data_file = Path(data_file)
+        else:
+            self.data_file = get_usage_data_path(professor)
         
         # Set monthly limit from config or parameter
         if monthly_limit is not None:
@@ -68,10 +94,31 @@ class TokenTracker:
             self.monthly_limit = get_monthly_limit()
         
         self.usage_data = self._load_usage_data()
+        
+        # Log which file is being used
+        if professor:
+            logging.info(f"Token tracking initialized for Professor {professor.title()}: {self.data_file}")
+        else:
+            logging.info(f"Token tracking initialized (legacy mode): {self.data_file}")
     
     def _load_usage_data(self) -> Dict[str, Any]:
         """Load existing usage data from file."""
         if not self.data_file.exists():
+            # Check for legacy file migration if professor is specified
+            if self.professor:
+                legacy_file = get_usage_data_path(None)  # Get legacy path
+                if legacy_file.exists():
+                    logging.info(f"Migrating legacy usage data to professor-specific file for {self.professor}")
+                    # Copy legacy data to new location
+                    import shutil
+                    shutil.copy2(legacy_file, self.data_file)
+                    logging.info(f"Legacy data migrated to {self.data_file}")
+                    
+                    # Load the migrated data
+                    with open(self.data_file, 'r') as f:
+                        return json.load(f)
+            
+            # Return empty structure if no existing data
             return {
                 "total_usage": UsageStats().to_dict(),
                 "model_usage": {},
@@ -84,6 +131,9 @@ class TokenTracker:
     
     def _save_usage_data(self):
         """Save usage data to file."""
+        # Ensure the directory exists
+        self.data_file.parent.mkdir(parents=True, exist_ok=True)
+        
         with open(self.data_file, 'w') as f:
             json.dump(self.usage_data, f, indent=2)
     
@@ -239,7 +289,10 @@ class TokenTracker:
         total = self.usage_data["total_usage"]
         
         print("\n" + "="*60)
-        print("TOKEN USAGE REPORT")
+        if self.professor:
+            print(f"TOKEN USAGE REPORT - PROFESSOR {self.professor.upper()}")
+        else:
+            print("TOKEN USAGE REPORT")
         print("="*60)
         print(f"Total Tokens Used: {total['total_tokens']:,}")
         print(f"  • Input Tokens: {total['total_input_tokens']:,}")

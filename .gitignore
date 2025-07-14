@@ -29,8 +29,10 @@ tests/
 fonts/*
 !fonts/README.md
 
-# Token usage - exclude token tracker file
+# Token usage - exclude token tracker files but keep directory structure
 token_usage.json
+data/token_usage_*.json
+!data/README.md
 
 # OS
 Thumbs.db
