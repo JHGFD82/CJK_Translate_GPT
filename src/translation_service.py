@@ -3,6 +3,7 @@ Translation service for the CJK Translation script.
 """
 
 import logging
+import time
 from typing import List, Optional, Iterable, Dict, Any
 from itertools import islice
 from tqdm import tqdm
@@ -12,7 +13,8 @@ from pdfminer.pdfpage import PDFPage
 
 from .config import (
     get_available_models, DEFAULT_MODEL, SANDBOX_API_VERSION, SANDBOX_ENDPOINT,
-    TRANSLATION_TEMPERATURE, TRANSLATION_MAX_TOKENS, TRANSLATION_TOP_P, CONTEXT_PERCENTAGE
+    TRANSLATION_TEMPERATURE, TRANSLATION_MAX_TOKENS, TRANSLATION_TOP_P, CONTEXT_PERCENTAGE,
+    PAGE_DELAY_SECONDS, MAX_RETRIES, BASE_RETRY_DELAY
 )
 from .pdf_processor import PDFProcessor, extract_page_nums, generate_process_text
 from .token_tracker import TokenTracker
@@ -73,58 +75,83 @@ class TranslationService:
         return system_prompt, user_prompt_template
     
     def translate_text(self, text: str, source_language: str, target_language: str, output_format: str = "console") -> str:
-        """Translate text using the specified model."""
+        """Translate text using the specified model with retry logic for content filters."""
         model = self._get_model()
         system_prompt, user_prompt_template = self._create_translation_prompt(source_language, target_language, output_format)
         user_prompt = user_prompt_template + text
         
-        try:
-            logging.info(f'Making API call to model: {model}')
-            response = self.client.chat.completions.create(
-                model=model,
-                temperature=TRANSLATION_TEMPERATURE,
-                max_tokens=TRANSLATION_MAX_TOKENS,
-                top_p=TRANSLATION_TOP_P,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ]
-            )
-            
-            # Log response details
-            logging.info(f'API call successful. Response ID: {response.id}')
-            logging.info(f'Model used: {response.model}')
-            
-            # Log token usage if available
-            if response.usage:
-                # Record token usage
-                usage = self.token_tracker.record_usage(
-                    model=response.model,
-                    prompt_tokens=response.usage.prompt_tokens,
-                    completion_tokens=response.usage.completion_tokens,
-                    total_tokens=response.usage.total_tokens,
-                    requested_model=model
+        # Retry logic for content filter issues
+        max_retries = MAX_RETRIES
+        base_delay = BASE_RETRY_DELAY
+        
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    # Exponential backoff with jitter
+                    delay = base_delay * (2 ** attempt) + (0.1 * attempt)
+                    logging.info(f'Retrying API call (attempt {attempt + 1}/{max_retries}) after {delay:.1f}s delay...')
+                    time.sleep(delay)
+                
+                logging.info(f'Making API call to model: {model}')
+                response = self.client.chat.completions.create(
+                    model=model,
+                    temperature=TRANSLATION_TEMPERATURE,
+                    max_tokens=TRANSLATION_MAX_TOKENS,
+                    top_p=TRANSLATION_TOP_P,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ]
                 )
                 
-                logging.info(f'Tokens used - Prompt: {response.usage.prompt_tokens}, '
-                           f'Completion: {response.usage.completion_tokens}, '
-                           f'Total: {response.usage.total_tokens}, '
-                           f'Cost: ${usage.total_cost:.4f}')
-            else:
-                logging.warning('No token usage information available in response.')
-            
-            content = response.choices[0].message.content
-            if content is not None:
-                print("\n" + content)
-                logging.info('Translation completed successfully.')
-                return content
-            else:
-                print("\n[No content returned by the model]")
-                logging.warning('No content returned by the model.')
-                return ""
+                # Log response details
+                logging.info(f'API call successful. Response ID: {response.id}')
+                logging.info(f'Model used: {response.model}')
                 
-        except Exception as e:
-            return self._handle_translation_error(e)
+                # Log token usage if available
+                if response.usage:
+                    # Record token usage
+                    usage = self.token_tracker.record_usage(
+                        model=response.model,
+                        prompt_tokens=response.usage.prompt_tokens,
+                        completion_tokens=response.usage.completion_tokens,
+                        total_tokens=response.usage.total_tokens,
+                        requested_model=model
+                    )
+                    
+                    logging.info(f'Tokens used - Prompt: {response.usage.prompt_tokens}, '
+                               f'Completion: {response.usage.completion_tokens}, '
+                               f'Total: {response.usage.total_tokens}, '
+                               f'Cost: ${usage.total_cost:.4f}')
+                else:
+                    logging.warning('No token usage information available in response.')
+                
+                content = response.choices[0].message.content
+                if content is not None:
+                    print("\n" + content)
+                    logging.info('Translation completed successfully.')
+                    return content
+                else:
+                    print("\n[No content returned by the model]")
+                    logging.warning('No content returned by the model.')
+                    return ""
+                    
+            except Exception as e:
+                error_result = self._handle_translation_error(e)
+                
+                # If it's a content filter issue and we have retries left, try again
+                if error_result == "content_filter_triggered" and attempt < max_retries - 1:
+                    logging.warning(f'Content filter triggered on attempt {attempt + 1}, retrying...')
+                    continue
+                elif error_result == "content_filter_triggered":
+                    logging.error(f'Content filter triggered after {max_retries} attempts, skipping this text')
+                    return ""
+                else:
+                    # For other errors, return the result or re-raise
+                    return error_result
+        
+        # This should never be reached, but just in case
+        return ""
     
     def _handle_translation_error(self, error: Exception) -> str:
         """Handle translation errors and return appropriate response."""
@@ -144,6 +171,9 @@ class TranslationService:
         elif "authentication" in error_message.lower() or "unauthorized" in error_message.lower():
             logging.error(f'Authentication error: {error_message}')
             raise Exception(f'Authentication error: {error_message}')
+        elif "content_filter" in error_message.lower() or "jailbreak" in error_message.lower():
+            logging.error(f'Content filter triggered: {error_message}')
+            return "content_filter_triggered"
         else:
             logging.error(f'API call failed with {error_type}: {error_message}')
             raise Exception(f'API call failed with {error_type}: {error_message}')
@@ -170,6 +200,8 @@ class TranslationService:
                 # Split the text in half and try again
                 middle_index = len(current_part) // 2
                 parts_to_translate.extend([current_part[:middle_index], current_part[middle_index:]])
+            elif translated_text == "content_filter_triggered":
+                result.append(f"\n***Content filter triggered on page {page_num + 1} - text skipped***\n")
             elif translated_text == '':
                 result.append(f"\n***Translation error on page {page_num + 1}.***\n")
             else:
