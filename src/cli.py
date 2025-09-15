@@ -24,37 +24,6 @@ def setup_logging() -> None:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def load_professor_config() -> Dict[str, Dict[str, str]]:
-    """Load professor configuration from environment variables.
-    
-    Returns:
-        Dict with professor names as keys (safe filename format) and config as values
-    """
-    professors: Dict[str, Dict[str, str]] = {}
-    
-    # Look for all PROF_[ID]_NAME variables
-    for key, value in os.environ.items():
-        if key.startswith('PROF_') and key.endswith('_NAME'):
-            # Extract the ID from PROF_[ID]_NAME
-            prof_id = key[5:-5]  # Remove 'PROF_' and '_NAME'
-            
-            # Get the corresponding keys
-            primary_key_var = f'PROF_{prof_id}_KEY'
-            backup_key_var = f'PROF_{prof_id}_BACKUP_KEY'
-            
-            # Check if required keys exist
-            if primary_key_var in os.environ:
-                safe_name = make_safe_filename(value)
-                professors[safe_name] = {
-                    'name': value,
-                    'primary_key': primary_key_var,
-                    'backup_key': backup_key_var,
-                    'id': prof_id,
-                    'safe_name': safe_name
-                }
-    
-    return professors
-
 
 def get_api_key(professor_name: str) -> Tuple[str, str]:
     """Get API key for the specified professor name from environment variables.
