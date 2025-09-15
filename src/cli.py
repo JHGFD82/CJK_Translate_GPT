@@ -25,19 +25,6 @@ def setup_logging() -> None:
 
 
 
-def get_api_key(professor_name: str) -> Tuple[str, str]:
-    """Get API key for the specified professor name from environment variables.
-    
-    Args:
-        professor_name: Professor name or safe filename version
-        
-    Returns:
-        tuple: (api_key, professor_display_name)
-    """
-    professors = load_professor_config()
-    
-    # Try to find professor by safe name first
-    safe_name = make_safe_filename(professor_name)
     
     if safe_name not in professors:
         # Try exact match in case user provided the safe name directly
