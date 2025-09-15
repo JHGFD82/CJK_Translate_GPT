@@ -21,13 +21,6 @@ load_dotenv()
 
 
 
-def validate_page_nums(value: str) -> str:
-    """Validate the page numbers input."""
-    if not re.match(r"^\d+(-\d+)?$", value):
-        raise argparse.ArgumentTypeError("Letters, commas, and other symbols not allowed.")
-    return value
-
-
 def parse_language_code(value: str) -> Tuple[str, str]:
     """Parse language code like 'CE' into source and target languages."""
     if len(value) != 2:
