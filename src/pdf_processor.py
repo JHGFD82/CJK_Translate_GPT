@@ -1,5 +1,8 @@
 """
 PDF processing utilities for the CJK Translation script.
+
+This module provides functionality to extract and process text from PDF files,
+including support for CJK (Chinese, Japanese, Korean) text extraction.
 """
 
 from typing import Iterator, BinaryIO, Optional, Tuple
@@ -11,7 +14,18 @@ import re
 
 
 def extract_page_nums(page_nums_str: Optional[str]) -> Tuple[int, int]:
-    """Extract the start and end page numbers from the given string."""
+    """
+    Extract the start and end page numbers from a given string.
+
+    Args:
+        page_nums_str: A string representing the page range (e.g., "1-5") or a single page (e.g., "3").
+
+    Returns:
+        A tuple containing the zero-based start and end page indices.
+
+    Raises:
+        ValueError: If the page number string is invalid.
+    """
     if page_nums_str is None:
         return 0, 0  # Process all pages
     
@@ -34,9 +48,20 @@ def generate_process_text(abstract_text: str, page_text: str, previous_page: str
 
 
 class PDFProcessor:
-    """Handles PDF processing operations."""
-    
+    """
+    Handles PDF processing operations, including text extraction and cleaning.
+
+    This class uses pdfminer.six to parse PDF files and extract text content,
+    with optimizations for handling CJK text and vertical text layouts.
+    """
+
     def __init__(self):
+        """
+        Initialize the PDFProcessor with custom layout analysis parameters.
+
+        The parameters are optimized for better handling of CJK text, including
+        vertical text detection and improved character grouping.
+        """
         self.rsrcmgr = PDFResourceManager()
         # Improved LAParams for better CJK text extraction
         self.laparams = LAParams(
@@ -51,7 +76,15 @@ class PDFProcessor:
         self.interpreter = PDFPageInterpreter(self.rsrcmgr, self.device)
     
     def _clean_text(self, text: str) -> str:
-        """Clean extracted text by removing problematic characters and CID references."""
+        """
+        Clean extracted text by removing problematic characters and formatting issues.
+
+        Args:
+            text: The raw text extracted from the PDF layout.
+
+        Returns:
+            A cleaned version of the text with unwanted characters removed.
+        """
         if not text:
             return ""
         
@@ -67,11 +100,27 @@ class PDFProcessor:
         return cleaned_text.strip()
     
     def process_pdf(self, file_handle: BinaryIO) -> Iterator[PDFPage]:
-        """Process a PDF file and return pages iterator."""
+        """
+        Process a PDF file and return an iterator over its pages.
+
+        Args:
+            file_handle: A binary file object representing the PDF file.
+
+        Returns:
+            An iterator over PDFPage objects.
+        """
         return PDFPage.get_pages(file_handle)
     
     def parse_layout(self, layout: LTPage) -> str:
-        """Parse the layout tree and extract text."""
+        """
+        Parse the layout tree of a PDF page and extract text content.
+
+        Args:
+            layout: The LTPage object representing the layout of a PDF page.
+
+        Returns:
+            A string containing the extracted and cleaned text from the page.
+        """
         result: list[str] = []
         stack = list(layout)  # Using a list as a stack
 
@@ -98,7 +147,15 @@ class PDFProcessor:
         return final_text.strip()
     
     def process_page(self, page: PDFPage) -> str:
-        """Process a single page and extract text."""
+        """
+        Process a single PDF page and extract its text content.
+
+        Args:
+            page: The PDFPage object representing the page to process.
+
+        Returns:
+            A string containing the extracted and cleaned text from the page.
+        """
         self.interpreter.process_page(page)
         layout = self.device.get_result()
         return self.parse_layout(layout)
