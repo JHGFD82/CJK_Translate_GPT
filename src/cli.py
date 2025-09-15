@@ -19,15 +19,6 @@ from .txt_processor import TxtProcessor
 load_dotenv()
 
 
-def make_safe_filename(name: str) -> str:
-    """Convert a professor name to a safe filename by replacing spaces and special chars with underscores."""
-    # Replace spaces and special characters with underscores
-    safe_name = re.sub(r'[^\w\-_\.]', '_', name)
-    # Remove multiple underscores
-    safe_name = re.sub(r'_+', '_', safe_name)
-    # Remove leading/trailing underscores
-    safe_name = safe_name.strip('_')
-    return safe_name.lower()
 
 
 def validate_page_nums(value: str) -> str:
