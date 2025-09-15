@@ -8,10 +8,11 @@ This application is designed exclusively for Princeton University faculty member
 - Translate between Chinese, Japanese, Korean, and English in any direction
 - Extract text from PDF files and translate
 - Support for custom text input
-- Save translations to text files or PDF files
+- Save translations to text files, PDF files, or Word documents (.docx)
 - Auto-save functionality with timestamped filenames
 - Page range selection for PDF processing
 - Abstract context support for better translations
+- CJK font support for PDF and Word document generation
 
 ## Requirements
 - Python 3.7+
@@ -37,6 +38,9 @@ python main.py heller CE -i document.pdf -o translation.txt
 # Save translation to a PDF file
 python main.py heller CE -i document.pdf -o translation.pdf
 
+# Save translation to a Word document
+python main.py heller CE -i document.pdf -o translation.docx
+
 # Auto-save with timestamp in the same directory as input
 python main.py heller CE -i document.pdf --auto-save
 ```
@@ -46,8 +50,11 @@ python main.py heller CE -i document.pdf --auto-save
 # Translate specific pages with abstract context
 python main.py smith CE -i document.pdf -p 5-10 -a
 
-# Translate single page and save to PDF
-python main.py heller JE -i document.pdf -p 3 -o page3_translation.pdf
+# Translate single page and save to Word document
+python main.py heller JE -i document.pdf -p 3 -o page3_translation.docx
+
+# Use custom font for PDF/Word output
+python main.py smith CE -i document.pdf -o translation.pdf -f AppleGothic
 ```
 
 ### Token Usage Tracking
@@ -73,7 +80,7 @@ python main.py heller CE -i large_document.txt --progressive-save -o output.txt
 python main.py smith JK -i document.txt --progressive-save --auto-save
 ```
 
-**Note:** When using `--progressive-save`, the translation is saved incrementally as each page is processed, which helps prevent data loss if the process is interrupted. Progressive saving only supports text file output (.txt) - PDF output is not compatible with progressive saving.
+**Note:** When using `--progressive-save`, the translation is saved incrementally as each page is processed, which helps prevent data loss if the process is interrupted. Progressive saving only supports text file output (.txt) - PDF and Word document output are not compatible with progressive saving.
 
 ### Error Handling and Retries
 The system includes robust error handling for API failures:
@@ -103,6 +110,11 @@ Examples:
 pip install -r requirements.txt
 ```
 
+   **Note:** For Word document (.docx) export functionality, ensure `python-docx` is installed. If you encounter issues with Word document export, you can install it separately:
+   ```bash
+   pip install python-docx
+   ```
+
 2. Set up professor configuration in `.env` file:
 
    Copy the example file and configure professors:
@@ -123,7 +135,7 @@ pip install -r requirements.txt
    ```
    
    **Getting your AI Sandbox API key:**
-   Princeton University faculty can obtain their AI Sandbox API key through OIT.
+   This package allows for management of multiple faculty, however each faculty member must register your keys individually. Princeton University faculty can obtain your AI Sandbox API keys through OIT.
    
    **Professor Selection:**
    Use professor names as configured in the `.env` file. The system supports:
@@ -151,6 +163,12 @@ Each professor has separate token usage tracking and monthly budgets:
 - Professional formatting
 - Supports CJK characters
 - Suitable for sharing and archiving
+
+### Word Documents (.docx)
+- Microsoft Word compatible
+- Professional formatting with CJK font support
+- Editable output for further customization
+- 1.5 line spacing and proper margins
 
 ### Auto-Save Naming
 When using `--auto-save`, files are saved with the format:
