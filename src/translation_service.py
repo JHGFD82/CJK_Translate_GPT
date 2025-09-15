@@ -43,7 +43,7 @@ class TranslationService:
         """Create system and user prompt templates for translation."""
         
         # Determine formatting instructions based on output format
-        if output_format.lower() in ["pdf", "txt", "file"]:
+        if output_format.lower() in ["pdf", "txt", "file", "docx"]:
             formatting_instruction = (
                 f'Use proper paragraph breaks and standard text formatting suitable for file output. '
                 f'Use actual line breaks (not \\n characters) to separate paragraphs and sections naturally.'
