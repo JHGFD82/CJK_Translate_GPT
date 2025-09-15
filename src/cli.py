@@ -19,26 +19,6 @@ from .txt_processor import TxtProcessor
 load_dotenv()
 
 
-
-
-def parse_language_code(value: str) -> Tuple[str, str]:
-    """Parse language code like 'CE' into source and target languages."""
-    if len(value) != 2:
-        raise argparse.ArgumentTypeError("Language code must be exactly 2 characters (e.g., CE, JK, etc.)")
-    
-    source_char = value[0].upper()
-    target_char = value[1].upper()
-    
-    if source_char not in LANGUAGE_MAP:
-        raise argparse.ArgumentTypeError(f"Invalid source language code '{source_char}'. Use C, J, K, or E.")
-    if target_char not in LANGUAGE_MAP:
-        raise argparse.ArgumentTypeError(f"Invalid target language code '{target_char}'. Use C, J, K, or E.")
-    if source_char == target_char:
-        raise argparse.ArgumentTypeError("Source and target languages cannot be the same.")
-    
-    return LANGUAGE_MAP[source_char], LANGUAGE_MAP[target_char]
-
-
 def setup_logging() -> None:
     """Set up logging configuration."""
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
