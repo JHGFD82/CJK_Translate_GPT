@@ -6,7 +6,7 @@ This application is designed exclusively for Princeton University faculty member
 
 ## Features
 - Translate between Chinese, Japanese, Korean, and English in any direction
-- Extract text from PDF files and translate
+- Extract text from PDF files and Word documents (.docx) and translate
 - Support for custom text input
 - Save translations to text files, PDF files, or Word documents (.docx)
 - Auto-save functionality with timestamped filenames
@@ -26,6 +26,9 @@ This application is designed exclusively for Princeton University faculty member
 # Translate PDF from Chinese to English
 python main.py heller CE -i document.pdf
 
+# Translate Word document from Japanese to Korean
+python main.py smith JK -i document.docx
+
 # Translate custom text from Japanese to Korean
 python main.py smith JK -c
 ```
@@ -35,23 +38,23 @@ python main.py smith JK -c
 # Save translation to a specific text file
 python main.py heller CE -i document.pdf -o translation.txt
 
-# Save translation to a PDF file
-python main.py heller CE -i document.pdf -o translation.pdf
+# Save Word document translation to PDF
+python main.py heller CE -i document.docx -o translation.pdf
 
 # Save translation to a Word document
 python main.py heller CE -i document.pdf -o translation.docx
 
 # Auto-save with timestamp in the same directory as input
-python main.py heller CE -i document.pdf --auto-save
+python main.py heller CE -i document.docx --auto-save
 ```
 
 ### Advanced Options
 ```bash
-# Translate specific pages with abstract context
+# Translate specific pages of PDF with abstract context
 python main.py smith CE -i document.pdf -p 5-10 -a
 
-# Translate single page and save to Word document
-python main.py heller JE -i document.pdf -p 3 -o page3_translation.docx
+# Translate Word document and save to Word with custom font
+python main.py heller JE -i document.docx -o translation.docx -f AppleGothic
 
 # Use custom font for PDF/Word output
 python main.py smith CE -i document.pdf -o translation.pdf -f AppleGothic
@@ -90,6 +93,21 @@ The system includes robust error handling for API failures:
 - **Graceful Degradation**: Processing continues even when individual pages fail, ensuring you get translations for successful pages
 
 This ensures that temporary API issues or problematic pages don't stop the entire translation process.
+
+## Input File Support
+
+### PDF Files (.pdf)
+- Full text extraction with CJK optimization
+- Page range selection support (`-p` option)
+- Maintains document structure and context
+
+### Word Documents (.docx)
+- Text extraction from paragraphs and sections
+- Images and embedded objects are ignored (text-only processing)
+- Document is automatically split into logical sections for optimal translation
+- Page number selection not supported (entire document is processed)
+
+**Note:** For Word document input, only .docx format is supported. Legacy .doc files are not supported.
 
 ## Language Codes
 - `C` = Chinese
