@@ -58,22 +58,37 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 
 ### Error Handling Pattern
 - **API Failures**: Automatic retries with exponential backoff in `TranslationService`
-- **Progressive Saving**: Text-only (no PDF support), saves each page immediately
+- **Progressive Saving**: Text-only (no PDF/Word support), saves each page immediately
 - **Graceful Degradation**: Failed pages get error messages, processing continues
 
 ### File Output Strategy
 - **Text Files**: Direct UTF-8 output with proper paragraph breaks
 - **PDF Files**: Uses `reportlab` with CJK font support from `fonts/` directory
-- **Auto-save**: Timestamped filenames with language codes
+- **Word Documents**: Uses `python-docx` with CJK font support, professional formatting (1.5 line spacing, proper margins)
+- **Auto-save**: Timestamped filenames with language codes, placed in source file directory
+- **Absolute Path Resolution**: Input files converted to absolute paths to ensure output placement regardless of execution directory
 
 ### PDF Processing Specifics
 - **CJK Optimization**: Custom `LAParams` in `PDFProcessor` for better CJK text extraction
 - **Context Preservation**: Previous page context (65% of content) passed to translation
 - **Page Range Support**: 1-based user input converted to 0-based internally
 
+### Output Format Support
+- **Text Files (.txt)**: Direct UTF-8 output, supports progressive saving
+- **PDF Files (.pdf)**: Uses `reportlab` with CJK font validation via `_get_cjk_font()`
+- **Word Documents (.docx)**: Uses `python-docx` with CJK font selection via `_get_docx_font()`
+- **Path Resolution**: Input files converted to absolute paths in CLI for consistent output placement
+- **Progressive Save Limitation**: Only text format supports progressive saving; PDF/Word fall back to text
+
+### File Path Handling
+- **Input Path Resolution**: `os.path.abspath()` applied to input files in `translate_pdf()` method
+- **Output Path Resolution**: User-specified output paths converted to absolute paths in CLI `run()` method
+- **Directory Placement**: Output files placed in same directory as source file via `generate_output_filename()`
+
 ## External Dependencies
 - **Azure OpenAI**: Uses `SANDBOX_ENDPOINT` and `SANDBOX_API_VERSION` from config
-- **Font Management**: Custom fonts in `fonts/` directory for PDF output
+- **Font Management**: Custom fonts in `fonts/` directory for PDF and Word output
+- **Document Generation**: `reportlab` for PDF, `python-docx` for Word documents
 - **Princeton-Specific**: API keys from Princeton's AI Sandbox service
 
 ## Common Patterns to Follow
