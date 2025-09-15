@@ -9,7 +9,7 @@ from typing import Optional, List
 
 from dotenv import load_dotenv
 
-from .utils import parse_language_code, load_professor_config, get_api_key, validate_page_nums
+from .utils import parse_language_code, get_api_key, validate_page_nums
 from .translation_service import TranslationService
 from .file_output import FileOutputHandler
 from .docx_processor import DocxProcessor
