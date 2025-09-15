@@ -295,6 +295,84 @@ class TranslationService:
 
         return document_text
     
+    def translate_text_pages(self, text_pages: List[str], abstract_text: Optional[str],
+                            source_language: str, target_language: str, output_file: Optional[str] = None, 
+                            auto_save: bool = False, progressive_save: bool = False, input_file_path: Optional[str] = None) -> List[str]:
+        """Translate pre-extracted text pages (e.g., from Word documents)."""
+        from .file_output import FileOutputHandler
+        
+        document_text: list[str] = []
+        
+        # Determine output format based on whether file output is requested
+        if output_file:
+            if output_file.lower().endswith('.pdf'):
+                output_format = "pdf"
+            elif output_file.lower().endswith('.docx'):
+                output_format = "docx"
+            elif output_file.lower().endswith('.txt'):
+                output_format = "txt"
+            else:
+                output_format = "file"
+        elif auto_save:
+            output_format = "txt"  # Auto-save defaults to txt format
+        else:
+            output_format = "console"
+
+        # For progressive saving
+        progressive_output_path = None
+
+        previous_page = ""
+        for i, page_text in tqdm(enumerate(text_pages), desc="Translating... ", ascii=True):
+            try:
+                translated_text = self.generate_text(
+                    abstract_text or '', page_text, previous_page, i, source_language, target_language, output_format
+                )
+                document_text.append(translated_text)
+                
+                # Update previous page for context
+                previous_page = page_text
+                
+                # Add delay between API calls (except for first page)
+                if i > 0:  # Don't delay on the first page
+                    time.sleep(PAGE_DELAY_SECONDS)
+                
+                # Save page progressively if requested
+                if progressive_save and (output_file or auto_save):
+                    is_first_page = (i == 0)
+                    progressive_output_path = FileOutputHandler.save_page_progressively(
+                        translated_text, 
+                        input_file_path,
+                        output_file,
+                        auto_save,
+                        source_language,
+                        target_language,
+                        is_first_page
+                    )
+                    
+            except Exception as e:
+                error_message = f"\n***Translation error on section {i + 1}: {e}***\n"
+                document_text.append(error_message)
+                print(f"Error on section {i + 1}: {e}")
+                
+                # Save page progressively if requested (even with error)
+                if progressive_save and (output_file or auto_save):
+                    is_first_page = (i == 0)
+                    progressive_output_path = FileOutputHandler.save_page_progressively(
+                        error_message, 
+                        input_file_path,
+                        output_file,
+                        auto_save,
+                        source_language,
+                        target_language,
+                        is_first_page
+                    )
+
+        # If progressive saving was used, print the final output path
+        if progressive_save and progressive_output_path:
+            print(f"\nProgressive saving completed. Final output: {progressive_output_path}")
+
+        return document_text
+    
     def get_token_usage_summary(self) -> Dict[str, Any]:
         """Get a summary of token usage."""
         return self.token_tracker.get_usage_summary()

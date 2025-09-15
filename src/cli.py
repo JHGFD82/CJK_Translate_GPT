@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from .config import LANGUAGE_MAP
 from .translation_service import TranslationService
 from .file_output import FileOutputHandler
+from .docx_processor import DocxProcessor
 
 # Load environment variables
 load_dotenv()
@@ -202,8 +203,8 @@ Output Options:
 
     # Input source selection
     source_group = parser.add_mutually_exclusive_group()
-    source_group.add_argument('-i', '--input_PDF', dest='input_PDF', type=str,
-                              help='The name of the input PDF file')
+    source_group.add_argument('-i', '--input', dest='input_file', type=str,
+                              help='The name of the input file (PDF or Word document)')
     source_group.add_argument('-c', '--custom_text', dest='custom_text', action='store_true',
                               help='Input custom text to be translated')
 
@@ -294,6 +295,66 @@ class CJKTranslator:
             exit(1)
         except Exception as e:
             print(f"Error processing PDF: {e}")
+            exit(1)
+    
+    def translate_document(self, file_path: str, source_language: str, target_language: str,
+                          page_nums: Optional[str] = None, abstract: bool = False,
+                          output_file: Optional[str] = None, auto_save: bool = False, progressive_save: bool = False, 
+                          custom_font: Optional[str] = None) -> None:
+        """Translate a document file (PDF or Word document)."""
+        # Convert file_path to absolute path to ensure output is placed in the source file's directory
+        # regardless of where the script is executed from
+        file_path = os.path.abspath(file_path)
+        
+        abstract_text = input('Enter abstract text: ') if abstract else None
+        
+        try:
+            # Determine file type and process accordingly
+            if file_path.lower().endswith('.pdf'):
+                with open(file_path, 'rb') as f:
+                    pages = self.translation_service.pdf_processor.process_pdf(f)
+                    document_text = self.translation_service.translate_document(
+                        pages, abstract_text, page_nums, source_language, target_language, output_file, auto_save, progressive_save, file_path
+                    )
+            elif DocxProcessor.is_docx_file(file_path):
+                # For Word documents, page_nums parameter is not applicable
+                if page_nums:
+                    print("Note: Page number selection is not supported for Word documents. Processing entire document.")
+                
+                with open(file_path, 'rb') as f:
+                    # Use the page-splitting version for better translation handling
+                    pages = DocxProcessor.process_docx_with_pages(f, target_page_size=2000)
+                    document_text = self.translation_service.translate_text_pages(
+                        pages, abstract_text, source_language, target_language, output_file, auto_save, progressive_save, file_path
+                    )
+            else:
+                print(f"Error: Unsupported file format. Please provide a PDF (.pdf) or Word document (.docx) file.")
+                exit(1)
+            
+            # Join all translated content
+            full_translation = "".join(document_text)
+            
+            # Display the translation
+            print(full_translation)
+            
+            # Save the translation if requested (skip if progressive saving was used)
+            if not progressive_save and (output_file or auto_save):
+                self.file_output.save_translation_output(
+                    full_translation, file_path, output_file, auto_save, source_language, target_language, custom_font
+                )
+                
+        except FileNotFoundError:
+            print(f"Error: File '{file_path}' not found.")
+            exit(1)
+        except ImportError as e:
+            if "python-docx" in str(e):
+                print("Error: python-docx is required to process Word documents.")
+                print("Install it with: pip install python-docx")
+            else:
+                print(f"Import error: {e}")
+            exit(1)
+        except Exception as e:
+            print(f"Error processing document: {e}")
             exit(1)
     
     def translate_custom_text(self, source_language: str, target_language: str,
@@ -388,7 +449,7 @@ class CJKTranslator:
         
         # Check if language_code is provided for translation commands
         if not args.language_code:
-            if args.input_PDF or args.custom_text:
+            if args.input_file or args.custom_text:
                 print("Error: Language code is required for translation commands")
                 exit(1)
             else:
@@ -401,9 +462,11 @@ class CJKTranslator:
         # Convert output file to absolute path if provided
         output_file = os.path.abspath(args.output_file) if args.output_file else None
         
-        if args.input_PDF:
-            self.translate_pdf(
-                args.input_PDF, source_language, target_language,
+        # Handle input files (new generic input or legacy PDF input)
+        if args.input_file:
+            input_file = args.input_file
+            self.translate_document(
+                input_file, source_language, target_language,
                 args.page_nums, args.abstract, output_file, args.auto_save, args.progressive_save, args.custom_font
             )
         elif args.custom_text:
