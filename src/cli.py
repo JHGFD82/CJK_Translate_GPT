@@ -5,12 +5,11 @@ Command-line interface for the CJK Translation script.
 import argparse
 import logging
 import os
-import re
-from typing import Optional, Tuple, Dict
+from typing import Optional, List
 
 from dotenv import load_dotenv
 
-from .config import LANGUAGE_MAP
+from .utils import parse_language_code, load_professor_config, get_api_key, validate_page_nums
 from .translation_service import TranslationService
 from .file_output import FileOutputHandler
 from .docx_processor import DocxProcessor
