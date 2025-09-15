@@ -6,9 +6,19 @@ import logging
 from typing import List, TextIO
 import os
 
+from .base_text_processor import BaseTextProcessor
 
-class TxtProcessor:
+
+class TxtProcessor(BaseTextProcessor):
     """Handles extraction of text from plain text files."""
+    
+    def extract_raw_content(self, file_obj: TextIO) -> str:
+        """Extract raw text content from a text file."""
+        return file_obj.read().strip()
+    
+    def get_file_type_name(self) -> str:
+        """Get a human-readable name for the file type this processor handles."""
+        return "text file"
     
     @staticmethod
     def process_txt(file_obj: TextIO) -> List[str]:
@@ -22,13 +32,13 @@ class TxtProcessor:
             List of strings, each representing a "page" of content
         """
         try:
-            # Read the entire file content
-            content = file_obj.read().strip()
+            processor = TxtProcessor()
+            content = processor.extract_raw_content(file_obj)
             
             if not content:
                 logging.warning("No text content found in text file")
                 return [""]
-            
+
             # For simple text files, treat the entire content as one "page"
             return [content]
                 
@@ -49,48 +59,16 @@ class TxtProcessor:
             List of strings, each representing a logical "page" of content
         """
         try:
-            # Read the entire file content
-            content = file_obj.read().strip()
+            processor = TxtProcessor()
+            content = processor.extract_raw_content(file_obj)
             
             if not content:
                 logging.warning("No text content found in text file")
                 return [""]
             
-            # Split by double newlines (paragraph breaks) first
-            paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
-            
-            if not paragraphs:
-                # If no paragraph breaks, split by single newlines
-                paragraphs = [p.strip() for p in content.split('\n') if p.strip()]
-            
-            if not paragraphs:
-                # If still no content, return the raw content
-                return [content]
-            
-            # Split into logical pages based on content size
-            pages: List[str] = []
-            current_page: List[str] = []
-            current_size = 0
-            
-            for paragraph in paragraphs:
-                para_size = len(paragraph)
-                
-                # If adding this paragraph would exceed target size and we have content, start new page
-                if current_size + para_size > target_page_size and current_page:
-                    pages.append('\n\n'.join(current_page))
-                    current_page = [paragraph]
-                    current_size = para_size
-                else:
-                    current_page.append(paragraph)
-                    current_size += para_size + 2  # +2 for the '\n\n' separator
-            
-            # Add the last page if it has content
-            if current_page:
-                pages.append('\n\n'.join(current_page))
-            
-            # If no pages were created (all paragraphs were very small), create one page
-            if not pages:
-                pages = ['\n\n'.join(paragraphs)]
+            # Parse content into paragraphs and split into pages
+            paragraphs = processor.parse_text_into_paragraphs(content)
+            pages = processor.split_text_into_pages(paragraphs, target_page_size)
             
             logging.info(f"Split text file into {len(pages)} logical pages")
             return pages

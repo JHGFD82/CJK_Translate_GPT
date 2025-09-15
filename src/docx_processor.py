@@ -6,8 +6,39 @@ import logging
 from typing import List, BinaryIO
 import os
 
+from .base_text_processor import BaseTextProcessor
 
-class DocxProcessor:
+
+class DocxProcessor(BaseTextProcessor):
+    """Handles extraction of text from Word documents."""
+    
+    def extract_raw_content(self, file_obj: BinaryIO) -> str:
+        """Extract raw text content from a Word document."""
+        try:
+            from docx import Document
+            
+            # Load the document
+            doc = Document(file_obj)
+            
+            # Extract text from all paragraphs
+            paragraphs: List[str] = []
+            for paragraph in doc.paragraphs:
+                text = paragraph.text.strip()
+                if text:  # Only add non-empty paragraphs
+                    paragraphs.append(text)
+            
+            # Join paragraphs with double newlines
+            return '\n\n'.join(paragraphs) if paragraphs else ""
+                
+        except ImportError:
+            raise ImportError(
+                "python-docx is required to process Word documents. "
+                "Install it with: pip install python-docx"
+            )
+    
+    def get_file_type_name(self) -> str:
+        """Get a human-readable name for the file type this processor handles."""
+        return "Word document"
     """Handles extraction of text from Word documents."""
     
     @staticmethod
@@ -22,33 +53,16 @@ class DocxProcessor:
             List of strings, each representing a "page" of content
         """
         try:
-            from docx import Document
+            processor = DocxProcessor()
+            content = processor.extract_raw_content(file_obj)
             
-            # Load the document
-            doc = Document(file_obj)
-            
-            # Extract text from all paragraphs
-            paragraphs: List[str] = []
-            for paragraph in doc.paragraphs:
-                text = paragraph.text.strip()
-                if text:  # Only add non-empty paragraphs
-                    paragraphs.append(text)
-            
-            # Combine paragraphs into pages
-            # For Word documents, we'll treat the entire document as one "page"
-            # since there's no clear page boundary concept like in PDFs
-            if paragraphs:
-                full_text = '\n\n'.join(paragraphs)
-                return [full_text]
-            else:
+            if not content:
                 logging.warning("No text content found in Word document")
                 return [""]
+            
+            # For Word documents, treat the entire document as one "page"
+            return [content]
                 
-        except ImportError:
-            raise ImportError(
-                "python-docx is required to process Word documents. "
-                "Install it with: pip install python-docx"
-            )
         except Exception as e:
             logging.error(f"Error processing Word document: {e}")
             raise Exception(f"Failed to process Word document: {e}")
@@ -66,55 +80,20 @@ class DocxProcessor:
             List of strings, each representing a logical "page" of content
         """
         try:
-            from docx import Document
+            processor = DocxProcessor()
+            content = processor.extract_raw_content(file_obj)
             
-            # Load the document
-            doc = Document(file_obj)
-            
-            # Extract text from all paragraphs
-            paragraphs: List[str] = []
-            for paragraph in doc.paragraphs:
-                text = paragraph.text.strip()
-                if text:  # Only add non-empty paragraphs
-                    paragraphs.append(text)
-            
-            if not paragraphs:
+            if not content:
                 logging.warning("No text content found in Word document")
                 return [""]
             
-            # Split into logical pages based on content size
-            pages: List[str] = []
-            current_page: List[str] = []
-            current_size = 0
-            
-            for paragraph in paragraphs:
-                para_size = len(paragraph)
-                
-                # If adding this paragraph would exceed target size and we have content, start new page
-                if current_size + para_size > target_page_size and current_page:
-                    pages.append('\n\n'.join(current_page))
-                    current_page = [paragraph]
-                    current_size = para_size
-                else:
-                    current_page.append(paragraph)
-                    current_size += para_size + 2  # +2 for the '\n\n' separator
-            
-            # Add the last page if it has content
-            if current_page:
-                pages.append('\n\n'.join(current_page))
-            
-            # If no pages were created (all paragraphs were very small), create one page
-            if not pages:
-                pages = ['\n\n'.join(paragraphs)]
+            # Parse content into paragraphs and split into pages
+            paragraphs = processor.parse_text_into_paragraphs(content)
+            pages = processor.split_text_into_pages(paragraphs, target_page_size)
             
             logging.info(f"Split Word document into {len(pages)} logical pages")
             return pages
                 
-        except ImportError:
-            raise ImportError(
-                "python-docx is required to process Word documents. "
-                "Install it with: pip install python-docx"
-            )
         except Exception as e:
             logging.error(f"Error processing Word document: {e}")
             raise Exception(f"Failed to process Word document: {e}")
