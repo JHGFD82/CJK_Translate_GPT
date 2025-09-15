@@ -98,7 +98,7 @@ def get_api_key(professor_name: str) -> Tuple[str, str]:
     else:
         # Try to find by original name (case-insensitive)
         prof_config = None
-        for safe_name, config in professors.items():
+        for _, config in professors.items():
             if config['name'].lower() == professor_name.lower():
                 prof_config = config
                 break
