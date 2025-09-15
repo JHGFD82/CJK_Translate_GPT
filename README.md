@@ -6,7 +6,7 @@ This application is designed exclusively for Princeton University faculty member
 
 ## Features
 - Translate between Chinese, Japanese, Korean, and English in any direction
-- Extract text from PDF files and Word documents (.docx) and translate
+- Extract text from PDF files, Word documents (.docx), and plain text files (.txt) and translate
 - Support for custom text input
 - Save translations to text files, PDF files, or Word documents (.docx)
 - Auto-save functionality with timestamped filenames
@@ -29,6 +29,9 @@ python main.py heller CE -i document.pdf
 # Translate Word document from Japanese to Korean
 python main.py smith JK -i document.docx
 
+# Translate text file from Korean to English
+python main.py heller KE -i document.txt
+
 # Translate custom text from Japanese to Korean
 python main.py smith JK -c
 ```
@@ -41,11 +44,11 @@ python main.py heller CE -i document.pdf -o translation.txt
 # Save Word document translation to PDF
 python main.py heller CE -i document.docx -o translation.pdf
 
-# Save translation to a Word document
-python main.py heller CE -i document.pdf -o translation.docx
+# Save text file translation to Word document
+python main.py heller CE -i document.txt -o translation.docx
 
 # Auto-save with timestamp in the same directory as input
-python main.py heller CE -i document.docx --auto-save
+python main.py heller CE -i document.txt --auto-save
 ```
 
 ### Advanced Options
@@ -53,8 +56,8 @@ python main.py heller CE -i document.docx --auto-save
 # Translate specific pages of PDF with abstract context
 python main.py smith CE -i document.pdf -p 5-10 -a
 
-# Translate Word document and save to Word with custom font
-python main.py heller JE -i document.docx -o translation.docx -f AppleGothic
+# Translate text file and save to Word with custom font
+python main.py heller JE -i document.txt -o translation.docx -f AppleGothic
 
 # Use custom font for PDF/Word output
 python main.py smith CE -i document.pdf -o translation.pdf -f AppleGothic
@@ -106,6 +109,12 @@ This ensures that temporary API issues or problematic pages don't stop the entir
 - Images and embedded objects are ignored (text-only processing)
 - Document is automatically split into logical sections for optimal translation
 - Page number selection not supported (entire document is processed)
+
+### Text Files (.txt)
+- Direct UTF-8 text processing
+- Automatic paragraph detection and logical section splitting
+- Preserves original text structure and formatting
+- Page number selection not supported (entire file is processed)
 
 **Note:** For Word document input, only .docx format is supported. Legacy .doc files are not supported.
 
