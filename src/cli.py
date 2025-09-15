@@ -211,9 +211,9 @@ Output Options:
 
     # Optional arguments
     parser.add_argument('-p', '--page_nums', dest='page_nums', type=validate_page_nums,
-                        help='Page numbers to output\\nEnter either a single page number or a range in this format: '
+                        help='Page numbers to process\\nEnter either a single page number or a range in this format: '
                              '[starting page number]-[ending page number]\\nNo spaces, letters, commas or other symbols '
-                             'are allowed')
+                             'are allowed. For PDFs: actual page numbers. For Word/text files: logical pages based on content length')
 
     parser.add_argument('-a', '--abstract', dest='abstract', action='store_true',
                         help='The text has an abstract')
@@ -318,24 +318,52 @@ class CJKTranslator:
                         pages, abstract_text, page_nums, source_language, target_language, output_file, auto_save, progressive_save, file_path
                     )
             elif DocxProcessor.is_docx_file(file_path):
-                # For Word documents, page_nums parameter is not applicable
-                if page_nums:
-                    print("Note: Page number selection is not supported for Word documents. Processing entire document.")
-                
                 with open(file_path, 'rb') as f:
                     # Use the page-splitting version for better translation handling
                     pages = DocxProcessor.process_docx_with_pages(f, target_page_size=2000)
+                    
+                    # Handle page number selection for Word documents
+                    if page_nums:
+                        from .pdf_processor import extract_page_nums
+                        start_page, end_page = extract_page_nums(page_nums)
+                        
+                        # Ensure page range is valid
+                        if start_page >= len(pages):
+                            print(f"Error: Page {start_page + 1} does not exist. Document has {len(pages)} logical pages.")
+                            exit(1)
+                        
+                        # Limit end_page to available pages
+                        end_page = min(end_page, len(pages) - 1)
+                        
+                        # Select the requested page range
+                        pages = pages[start_page:end_page + 1]
+                        print(f"Processing pages {start_page + 1}-{end_page + 1} of Word document (logical pages based on content length)")
+                    
                     document_text = self.translation_service.translate_text_pages(
                         pages, abstract_text, source_language, target_language, output_file, auto_save, progressive_save, file_path
                     )
             elif TxtProcessor.is_txt_file(file_path):
-                # For text files, page_nums parameter is not applicable
-                if page_nums:
-                    print("Note: Page number selection is not supported for text files. Processing entire document.")
-                
                 with open(file_path, 'r', encoding='utf-8') as f:
                     # Use the page-splitting version for better translation handling
                     pages = TxtProcessor.process_txt_with_pages(f, target_page_size=2000)
+                    
+                    # Handle page number selection for text files
+                    if page_nums:
+                        from .pdf_processor import extract_page_nums
+                        start_page, end_page = extract_page_nums(page_nums)
+                        
+                        # Ensure page range is valid
+                        if start_page >= len(pages):
+                            print(f"Error: Page {start_page + 1} does not exist. Document has {len(pages)} logical pages.")
+                            exit(1)
+                        
+                        # Limit end_page to available pages
+                        end_page = min(end_page, len(pages) - 1)
+                        
+                        # Select the requested page range
+                        pages = pages[start_page:end_page + 1]
+                        print(f"Processing pages {start_page + 1}-{end_page + 1} of text file (logical pages based on content length)")
+                    
                     document_text = self.translation_service.translate_text_pages(
                         pages, abstract_text, source_language, target_language, output_file, auto_save, progressive_save, file_path
                     )
