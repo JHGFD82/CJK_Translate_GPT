@@ -164,6 +164,100 @@ class FileOutputHandler:
             FileOutputHandler.save_to_text_file(content, text_output_path)
     
     @staticmethod
+    def save_to_docx(content: str, output_path: str, custom_font: Optional[str] = None, target_lang: Optional[str] = None) -> None:
+        """Save content to a Word document using python-docx."""
+        try:
+            from docx import Document
+            from docx.shared import Inches, Pt
+            
+            # Create a new document
+            doc = Document()
+            
+            # Set up margins (similar to PDF margins)
+            sections = doc.sections
+            for section in sections:
+                section.top_margin = Inches(1.0)
+                section.bottom_margin = Inches(1.0)
+                section.left_margin = Inches(1.0)
+                section.right_margin = Inches(1.0)
+            
+            # Get font name for CJK support
+            if not custom_font and target_lang == 'English':
+                font_name = 'Times New Roman'
+                logging.info(f"Using Times New Roman for English translation (target_lang={target_lang})")
+            else:
+                font_name = FileOutputHandler._get_docx_font(custom_font)
+                logging.info(f"Using CJK font for Word: {font_name} (custom_font={custom_font}, target_lang={target_lang})")
+            
+            # Split content into paragraphs and add to document
+            paragraphs = content.split('\n\n')
+            for i, para in enumerate(paragraphs):
+                if para.strip():
+                    clean_text = para.strip()
+                    # Replace line breaks within paragraphs with spaces
+                    clean_text = clean_text.replace('\n', ' ')
+                    
+                    try:
+                        # Add paragraph to document
+                        p = doc.add_paragraph(clean_text)
+                        
+                        # Configure paragraph formatting
+                        paragraph_format = p.paragraph_format
+                        paragraph_format.space_after = Pt(12)
+                        paragraph_format.line_spacing = 1.5
+                        
+                        # Configure font
+                        for run in p.runs:
+                            run.font.name = font_name
+                            run.font.size = Pt(12)
+                        
+                        # If paragraph has no runs (empty), add one with the font
+                        if not p.runs:
+                            run = p.runs[0] if p.runs else p.add_run()
+                            run.font.name = font_name
+                            run.font.size = Pt(12)
+                        
+                        logging.debug(f"Successfully added paragraph {i+1} with font {font_name}")
+                        
+                    except Exception as e:
+                        logging.warning(f"Error processing paragraph {i+1} for Word document: {e}")
+                        # Try adding paragraph without special formatting
+                        try:
+                            p = doc.add_paragraph(clean_text)
+                            logging.info(f"Added paragraph {i+1} with basic formatting")
+                        except Exception as e2:
+                            logging.warning(f"Failed to add paragraph {i+1} to Word document: {e2}")
+                            continue
+            
+            # Save the document
+            if len(doc.paragraphs) > 0:
+                doc.save(output_path)
+                logging.info(f'Translation saved to Word document: {output_path}')
+                print(f"\nTranslation saved to Word document: {output_path}")
+                if font_name != 'Times New Roman':
+                    print(f"Used font: {font_name}")
+            else:
+                logging.error("No content could be processed for Word document generation")
+                print("Error: No content could be processed for Word document generation")
+                # Fallback to text file
+                text_output_path = output_path.replace('.docx', '.txt')
+                FileOutputHandler.save_to_text_file(content, text_output_path)
+            
+        except ImportError:
+            logging.warning('python-docx not installed. Falling back to text file.')
+            print("Warning: python-docx not installed. To enable Word document export, install it with:")
+            print("pip install python-docx")
+            print("Saving as text file instead.")
+            text_output_path = output_path.replace('.docx', '.txt')
+            FileOutputHandler.save_to_text_file(content, text_output_path)
+        except Exception as e:
+            logging.error(f'Error saving to Word document: {e}')
+            print(f"Error generating Word document: {e}")
+            print("Falling back to text file for reliable CJK character support...")
+            text_output_path = output_path.replace('.docx', '.txt')
+            FileOutputHandler.save_to_text_file(content, text_output_path)
+    
+    @staticmethod
     def save_translation_output(content: str, input_file: Optional[str], output_file: Optional[str], 
                               auto_save: bool, source_lang: str, target_lang: str, custom_font: Optional[str] = None) -> None:
         """Save translation output to file based on user preferences."""
@@ -187,6 +281,8 @@ class FileOutputHandler:
         # Determine file type and save accordingly
         if output_path.lower().endswith('.pdf'):
             FileOutputHandler.save_to_pdf(content, output_path, custom_font, target_lang)
+        elif output_path.lower().endswith('.docx'):
+            FileOutputHandler.save_to_docx(content, output_path, custom_font, target_lang)
         else:
             # Default to text file
             if not output_path.lower().endswith('.txt'):
@@ -216,10 +312,13 @@ class FileOutputHandler:
         output_dir.mkdir(parents=True, exist_ok=True)
         
         # For progressive saving, we currently only support text files
-        # PDF merging is complex and requires additional dependencies
+        # PDF and Word document merging is complex and requires additional dependencies
         if output_path.lower().endswith('.pdf'):
             print("Note: Progressive saving for PDF format not yet supported. Using text format.")
             output_path = output_path.replace('.pdf', '.txt')
+        elif output_path.lower().endswith('.docx'):
+            print("Note: Progressive saving for Word document format not yet supported. Using text format.")
+            output_path = output_path.replace('.docx', '.txt')
         
         # Default to text file
         if not output_path.lower().endswith('.txt'):
@@ -312,3 +411,47 @@ class FileOutputHandler:
         except Exception as e:
             logging.warning(f"Error checking CJK fonts: {e}")
             return 'Times-Roman'
+
+    @staticmethod
+    def _get_docx_font(custom_font: Optional[str] = None) -> str:
+        """Get an appropriate font for CJK characters for Word documents."""
+        try:
+            import os
+            
+            # Check fonts from the local fonts directory
+            fonts_dir = os.path.join(os.path.dirname(__file__), '..', 'fonts')
+            if os.path.exists(fonts_dir):
+                # If a custom font is specified, try it first
+                if custom_font:
+                    custom_font_path = os.path.join(fonts_dir, f"{custom_font}.ttf")
+                    if os.path.exists(custom_font_path):
+                        # For Word documents, we can use the font name directly
+                        # Since Word handles font loading differently than reportlab
+                        logging.info(f"Using custom CJK font for Word: {custom_font}")
+                        return custom_font
+                    else:
+                        logging.warning(f"Custom font file not found: {custom_font_path}")
+                        print(f"Warning: Custom font '{custom_font}.ttf' not found in fonts/ directory. Using default font selection.")
+                
+                # Preferred CJK fonts for Word documents (system font names)
+                preferred_word_fonts = [
+                    'Arial Unicode MS',      # Microsoft's Unicode font
+                    'AppleGothic',          # Apple Gothic (good for CJK)
+                    'AppleMyungjo',         # Apple Myungjo (good for CJK)
+                    'Arial',                # Fallback to Arial
+                    'Calibri',              # Default Word font
+                ]
+                
+                # For Word documents, we use system font names rather than file paths
+                # Word will handle font resolution internally
+                for font_name in preferred_word_fonts:
+                    logging.info(f"Using CJK font for Word: {font_name}")
+                    return font_name
+            
+            # Default fallback
+            logging.info("Using Times New Roman as fallback for Word document")
+            return 'Times New Roman'
+            
+        except Exception as e:
+            logging.warning(f"Error checking fonts for Word document: {e}")
+            return 'Times New Roman'

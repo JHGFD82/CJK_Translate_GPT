@@ -217,7 +217,7 @@ Output Options:
                         help='The text has an abstract')
 
     parser.add_argument('-o', '--output', dest='output_file', type=str,
-                        help='Output file path to save the translation (with .txt or .pdf extension)')
+                        help='Output file path to save the translation (with .txt, .pdf, or .docx extension)')
 
     parser.add_argument('--auto-save', dest='auto_save', action='store_true',
                         help='Automatically save output to a timestamped file in the same directory as input PDF')
@@ -226,7 +226,7 @@ Output Options:
                         help='Save each page to output file immediately after translation (useful for error recovery)')
 
     parser.add_argument('-f', '--font', dest='custom_font', type=str,
-                        help='Custom font name to use for PDF generation (font must be in fonts/ directory)')
+                        help='Custom font name to use for PDF and Word document generation (font must be in fonts/ directory)')
 
     # Token usage commands
     parser.add_argument('--usage-report', dest='usage_report', action='store_true',
