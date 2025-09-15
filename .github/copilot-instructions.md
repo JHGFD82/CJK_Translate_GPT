@@ -7,7 +7,7 @@ Academic translation tool for Princeton University faculty to translate between 
 **Multi-Professor Service Architecture**: Each professor has isolated API keys and token tracking through environment-based configuration.
 
 - **Entry Point**: `main.py` → `src/cli.py` → `CJKTranslator` class
-- **Core Services**: `TranslationService` (Azure OpenAI), `TokenTracker` (usage tracking), `PDFProcessor` (text extraction), `FileOutputHandler` (output formatting)
+- **Core Services**: `TranslationService` (Azure OpenAI), `TokenTracker` (usage tracking), `PDFProcessor` (text extraction), `DocxProcessor` (Word document text extraction), `FileOutputHandler` (output formatting)
 - **Configuration**: Environment variables (`.env`) for professor configs, `pricing_config.json` for model pricing
 
 ## Professor Configuration System
@@ -47,6 +47,8 @@ python -m src.cli professor_name --usage-report
 
 # Test with actual professor (requires .env)
 python -m src.cli conlan CE -c  # Custom text translation
+python -m src.cli conlan CE -i test.pdf  # PDF translation
+python -m src.cli conlan CE -i test.docx  # Word document translation
 ```
 
 ### Language Code Pattern
@@ -79,6 +81,12 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 - **Word Documents (.docx)**: Uses `python-docx` with CJK font selection via `_get_docx_font()`
 - **Path Resolution**: Input files converted to absolute paths in CLI for consistent output placement
 - **Progressive Save Limitation**: Only text format supports progressive saving; PDF/Word fall back to text
+
+### Input File Support
+- **PDF Files (.pdf)**: Full text extraction with page range support via `PDFProcessor`
+- **Word Documents (.docx)**: Text-only extraction via `DocxProcessor`, split into logical sections
+- **Legacy PDF Argument**: `--input_PDF` maintained for backward compatibility, use `-i/--input` for new code
+- **File Type Detection**: Automatic detection based on file extension, supports .pdf and .docx/.doc
 
 ### File Path Handling
 - **Input Path Resolution**: `os.path.abspath()` applied to input files in `translate_pdf()` method
