@@ -264,6 +264,10 @@ class CJKTranslator:
                      output_file: Optional[str] = None, auto_save: bool = False, progressive_save: bool = False, 
                      custom_font: Optional[str] = None) -> None:
         """Translate a PDF file."""
+        # Convert file_path to absolute path to ensure output is placed in the source file's directory
+        # regardless of where the script is executed from
+        file_path = os.path.abspath(file_path)
+        
         abstract_text = input('Enter abstract text: ') if abstract else None
         
         try:
@@ -301,6 +305,8 @@ class CJKTranslator:
         if output_file:
             if output_file.lower().endswith('.pdf'):
                 output_format = "pdf"
+            elif output_file.lower().endswith('.docx'):
+                output_format = "docx"
             elif output_file.lower().endswith('.txt'):
                 output_format = "txt"
             else:
@@ -392,14 +398,17 @@ class CJKTranslator:
         # Extract source and target languages from the language code
         source_language, target_language = args.language_code
         
+        # Convert output file to absolute path if provided
+        output_file = os.path.abspath(args.output_file) if args.output_file else None
+        
         if args.input_PDF:
             self.translate_pdf(
                 args.input_PDF, source_language, target_language,
-                args.page_nums, args.abstract, args.output_file, args.auto_save, args.progressive_save, args.custom_font
+                args.page_nums, args.abstract, output_file, args.auto_save, args.progressive_save, args.custom_font
             )
         elif args.custom_text:
             self.translate_custom_text(
-                source_language, target_language, args.output_file, args.auto_save, args.custom_font
+                source_language, target_language, output_file, args.auto_save, args.custom_font
             )
 
 
