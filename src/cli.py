@@ -14,6 +14,7 @@ from .config import LANGUAGE_MAP
 from .translation_service import TranslationService
 from .file_output import FileOutputHandler
 from .docx_processor import DocxProcessor
+from .txt_processor import TxtProcessor
 
 # Load environment variables
 load_dotenv()
@@ -204,7 +205,7 @@ Output Options:
     # Input source selection
     source_group = parser.add_mutually_exclusive_group()
     source_group.add_argument('-i', '--input', dest='input_file', type=str,
-                              help='The name of the input file (PDF or Word document)')
+                              help='The name of the input file (PDF, Word document, or text file)')
     source_group.add_argument('-c', '--custom_text', dest='custom_text', action='store_true',
                               help='Input custom text to be translated')
 
@@ -327,8 +328,19 @@ class CJKTranslator:
                     document_text = self.translation_service.translate_text_pages(
                         pages, abstract_text, source_language, target_language, output_file, auto_save, progressive_save, file_path
                     )
+            elif TxtProcessor.is_txt_file(file_path):
+                # For text files, page_nums parameter is not applicable
+                if page_nums:
+                    print("Note: Page number selection is not supported for text files. Processing entire document.")
+                
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    # Use the page-splitting version for better translation handling
+                    pages = TxtProcessor.process_txt_with_pages(f, target_page_size=2000)
+                    document_text = self.translation_service.translate_text_pages(
+                        pages, abstract_text, source_language, target_language, output_file, auto_save, progressive_save, file_path
+                    )
             else:
-                print(f"Error: Unsupported file format. Please provide a PDF (.pdf) or Word document (.docx) file.")
+                print(f"Error: Unsupported file format. Please provide a PDF (.pdf), Word document (.docx), or text file (.txt).")
                 exit(1)
             
             # Join all translated content
