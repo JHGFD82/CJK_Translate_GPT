@@ -302,21 +302,20 @@ class CJKTranslator:
         source_language, target_language = args.language_code
         
         # Handle output file path logic
+        output_file: Optional[str] = None
+        
         if args.output_file:
             # If output file is a relative path, make it relative to input file directory
-            if not os.path.isabs(args.output_file) and (args.input_file):
-                input_file = args.input_file
-                input_dir = os.path.dirname(os.path.abspath(input_file))
+            if not os.path.isabs(args.output_file) and args.input_file:
+                input_dir: str = os.path.dirname(os.path.abspath(args.input_file))
                 output_file = os.path.join(input_dir, args.output_file)
             else:
                 output_file = os.path.abspath(args.output_file)
         elif args.input_file:
-            input_file = args.input_file
-            input_dir = os.path.dirname(os.path.abspath(input_file))
-            input_name, _ = os.path.splitext(os.path.basename(input_file))
+            input_dir: str = os.path.dirname(os.path.abspath(args.input_file))
+            input_name: str
+            input_name, _ = os.path.splitext(os.path.basename(args.input_file))
             output_file = os.path.join(input_dir, f"{input_name}_translated.txt")
-        else:
-            output_file = None
         
         # Handle input files
         if args.input_file:
