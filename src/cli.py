@@ -127,7 +127,7 @@ class CJKTranslator:
         if not page_nums:
             return pages
             
-        from .pdf_processor import extract_page_nums
+        from .utils import extract_page_nums
         start_page, end_page = extract_page_nums(page_nums)
         
         # Ensure page range is valid

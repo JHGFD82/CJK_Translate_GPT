@@ -5,38 +5,12 @@ This module provides functionality to extract and process text from PDF files,
 including support for CJK (Chinese, Japanese, Korean) text extraction.
 """
 
-from typing import Iterator, BinaryIO, Optional, Tuple
+from typing import Iterator, BinaryIO
 from pdfminer.converter import PDFPageAggregator
 from pdfminer.layout import LAParams, LTTextContainer, LTTextBox, LTTextLine, LTFigure, LTChar, LTPage
 from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
 from pdfminer.pdfpage import PDFPage
 import re
-
-
-def extract_page_nums(page_nums_str: Optional[str]) -> Tuple[int, int]:
-    """
-    Extract the start and end page numbers from a given string.
-
-    Args:
-        page_nums_str: A string representing the page range (e.g., "1-5") or a single page (e.g., "3").
-
-    Returns:
-        A tuple containing the zero-based start and end page indices.
-
-    Raises:
-        ValueError: If the page number string is invalid.
-    """
-    if page_nums_str is None:
-        return 0, 0  # Process all pages
-    
-    if '-' in page_nums_str:
-        start_page, end_page = map(int, page_nums_str.split('-'))
-        return start_page - 1, end_page - 1
-    else:
-        page_num = int(page_nums_str)
-        if page_num <= 0:
-            raise ValueError(f"{page_nums_str} is not a valid page number.")
-        return page_num - 1, page_num - 1
 
 
 def generate_process_text(abstract_text: str, page_text: str, previous_page: str, context_percentage: float = 0.65) -> str:
