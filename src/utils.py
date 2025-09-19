@@ -5,9 +5,35 @@ Utility functions for the CJK Translation CLI.
 import argparse
 import os
 import re
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Optional
 
 from .config import LANGUAGE_MAP
+
+
+def extract_page_nums(page_nums_str: Optional[str]) -> Tuple[int, int]:
+    """
+    Extract the start and end page numbers from a given string.
+
+    Args:
+        page_nums_str: A string representing the page range (e.g., "1-5") or a single page (e.g., "3").
+
+    Returns:
+        A tuple containing the zero-based start and end page indices.
+
+    Raises:
+        ValueError: If the page number string is invalid.
+    """
+    if page_nums_str is None:
+        return 0, 0  # Process all pages
+    
+    if '-' in page_nums_str:
+        start_page, end_page = map(int, page_nums_str.split('-'))
+        return start_page - 1, end_page - 1
+    else:
+        page_num = int(page_nums_str)
+        if page_num <= 0:
+            raise ValueError(f"{page_nums_str} is not a valid page number.")
+        return page_num - 1, page_num - 1
 
 
 def make_safe_filename(name: str) -> str:

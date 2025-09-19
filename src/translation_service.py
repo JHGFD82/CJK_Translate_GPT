@@ -16,7 +16,8 @@ from .config import (
     TRANSLATION_TEMPERATURE, TRANSLATION_MAX_TOKENS, TRANSLATION_TOP_P, CONTEXT_PERCENTAGE,
     PAGE_DELAY_SECONDS, MAX_RETRIES, BASE_RETRY_DELAY
 )
-from .pdf_processor import PDFProcessor, extract_page_nums, generate_process_text
+from .pdf_processor import PDFProcessor, generate_process_text
+from .utils import extract_page_nums
 from .token_tracker import TokenTracker
 
 
