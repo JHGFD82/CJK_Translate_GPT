@@ -191,25 +191,80 @@ class TranslationService:
         """Generate translated text for a page, handling context length limits."""
         result: list[str] = []
         parts_to_translate = [page_text]
+        
+        # Debug logging
+        logging.info(f"Starting translation of page {page_num + 1}, original text length: {len(page_text)} chars")
+        
+        # Check for numbered citations in the original text
+        import re
+        citation_numbers = re.findall(r'（(\d+)）|[（\(](\d+)[）\)]', page_text)
+        if citation_numbers:
+            found_numbers = [num for group in citation_numbers for num in group if num]
+            logging.info(f"Page {page_num + 1} contains citation numbers: {found_numbers}")
 
         while parts_to_translate:
-            current_part = parts_to_translate.pop()
+            # Use pop(0) to ensure FIFO processing - translate parts in the correct order
+            current_part = parts_to_translate.pop(0)
+            logging.info(f"Translating part {len(result) + 1} of page {page_num + 1}, length: {len(current_part)} chars")
+            
             translated_text = self.translate_page_text(
                 abstract_text, current_part, previous_page, source_language, target_language, output_format
             )
 
             if translated_text == "context_length_exceeded":
-                # Split the text in half and try again
+                # Split the text in half and add to FRONT of queue to maintain order
                 middle_index = len(current_part) // 2
-                parts_to_translate.extend([current_part[:middle_index], current_part[middle_index:]])
+                # Find a good split point (try to split at paragraph breaks or sentences)
+                split_point = middle_index
+                
+                # Look for paragraph breaks near the middle
+                for offset in range(100):  # Look within 100 chars of middle
+                    if middle_index + offset < len(current_part) and current_part[middle_index + offset:middle_index + offset + 2] == '\n\n':
+                        split_point = middle_index + offset + 2
+                        break
+                    elif middle_index - offset > 0 and current_part[middle_index - offset:middle_index - offset + 2] == '\n\n':
+                        split_point = middle_index - offset + 2
+                        break
+                
+                # If no paragraph break found, look for sentence endings
+                if split_point == middle_index:
+                    for offset in range(50):  # Look within 50 chars for sentence endings
+                        if middle_index + offset < len(current_part) and current_part[middle_index + offset] in '.!?。':
+                            split_point = middle_index + offset + 1
+                            break
+                        elif middle_index - offset > 0 and current_part[middle_index - offset] in '.!?。':
+                            split_point = middle_index - offset + 1
+                            break
+                
+                first_half = current_part[:split_point].strip()
+                second_half = current_part[split_point:].strip()
+                
+                # Insert at the beginning to maintain order
+                if first_half:
+                    parts_to_translate.insert(0, first_half)
+                if second_half:
+                    parts_to_translate.insert(1 if first_half else 0, second_half)
+                    
+                logging.warning(f"Context length exceeded on page {page_num + 1}, split into {len([p for p in [first_half, second_half] if p])} parts")
+                
             elif translated_text == "content_filter_triggered":
                 result.append(f"\n***Content filter triggered on page {page_num + 1} - text skipped***\n")
+                logging.error(f"Content filter triggered on page {page_num + 1}")
             elif translated_text == '':
                 result.append(f"\n***Translation error on page {page_num + 1}.***\n")
+                logging.error(f"Translation returned empty result on page {page_num + 1}")
             else:
                 result.append(translated_text)
+                logging.info(f"Successfully translated part {len(result)} of page {page_num + 1}, output length: {len(translated_text)} chars")
+                
+                # Check if numbered citations were preserved in translation
+                translated_numbers = re.findall(r'[（\(](\d+)[）\)]', translated_text)
+                if translated_numbers:
+                    logging.info(f"Part {len(result)} of page {page_num + 1} contains translated numbers: {translated_numbers}")
 
-        return f"\n\n-- Page {page_num + 1} -- \n\n" + "\n".join(result)
+        final_result = f"\n\n-- Page {page_num + 1} -- \n\n" + "\n".join(result)
+        logging.info(f"Completed translation of page {page_num + 1}, final length: {len(final_result)} chars")
+        return final_result
 
     def translate_document(self, pages: Iterable[PDFPage], abstract_text: Optional[str], page_nums_str: Optional[str],
                            source_language: str, target_language: str, output_file: Optional[str] = None, 
