@@ -119,9 +119,9 @@ TRANSLATION_MAX_TOKENS: int = 1000
 TRANSLATION_TOP_P: float = 0.5
 
 # Rate limiting and retry configuration
-PAGE_DELAY_SECONDS: float = 2.0  # Delay between pages to prevent content filter triggers
-MAX_RETRIES: int = 3  # Maximum retries for content filter errors
-BASE_RETRY_DELAY: float = 1.0  # Base delay for exponential backoff
+PAGE_DELAY_SECONDS: float = 3.0  # Delay between pages to prevent content filter triggers
+MAX_RETRIES: int = 10  # Maximum retries for content filter errors
+BASE_RETRY_DELAY: float = 3.0  # Base delay for exponential backoff
 
 # PDF margins (in points)
 PDF_MARGINS = {
