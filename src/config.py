@@ -115,7 +115,7 @@ SANDBOX_ENDPOINT: str = "https://api-ai-sandbox.princeton.edu/"
 
 # Translation parameters
 TRANSLATION_TEMPERATURE: float = 0.5
-TRANSLATION_MAX_TOKENS: int = 1000
+TRANSLATION_MAX_TOKENS: int = 4000  # Increased from 1000 to handle academic content with footnotes
 TRANSLATION_TOP_P: float = 0.5
 
 # Rate limiting and retry configuration
