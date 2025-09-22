@@ -54,6 +54,21 @@ class TranslationService:
                 f'You can format and line break the output yourself using "\\n" for line breaks in console output.'
             )
         
+        # Enhanced instructions for numbered content
+        numbered_content_instruction = (
+            f'IMPORTANT: Pay special attention to numbered lists, citations, and footnotes. '
+            f'Preserve ALL numbering exactly as it appears in the source text. This includes: '
+            f'• Arabic numerals: 1, 2, 3... or 1), 2), 3)... '
+            f'• Numbers in brackets: [1], [2], [3]... or (1), (2), (3)... '
+            f'• Chinese numerals: 一、二、三... or （一）、（二）、（三）... '
+            f'• Japanese/Korean numbering: ①, ②, ③... or １、２、３... '
+            f'IMPORTANT DISTINCTION: Only add a "Footnotes:" section if there are actual footnotes - '
+            f'meaning separate explanatory text at the bottom of the page that corresponds to numbered markers. '
+            f'Do NOT add "Footnotes:" for simple in-text citation numbers like (38), (39) that appear within paragraphs '
+            f'without corresponding explanatory text at the bottom. These are just citations, not footnotes. '
+            f'Only use "Footnotes:" when there is clearly separate footnote text at the end of the content.'
+        )
+        
         system_prompt = (
             f'Follow the instructions carefully. Please act as a professional translator from {source_language} '
             f'to {target_language}. I will provide you with text from a PDF document, and your task is '
@@ -61,6 +76,7 @@ class TranslationService:
             f'output any irrelevant content. If there are garbled characters or other non-standard text '
             f'content, delete the garbled characters. '
             f'{formatting_instruction} '
+            f'{numbered_content_instruction} '
             f'You may be provided with "--Context: " and the text from either the document\'s abstract or '
             f'a sample of text from the previous page. You will also be provided with "--Current Page: " '
             f'which includes the OCR characters of the current page. Only output the {target_language} translation of '
@@ -70,8 +86,11 @@ class TranslationService:
         
         user_prompt_template = (
             f'Translate only the {source_language} text of the "--Current Page: " to {target_language}, without outputting any other '
-            f'content, and without outputting anything related to "--Context: ", if provided. Do not provide '
-            f'any prompts to the user, for example: "This is the translation of the current page.":\n'
+            f'content, and without outputting anything related to "--Context: ", if provided. '
+            f'CRITICAL: Preserve all numbering systems exactly (1, 2, 3... or [1], [2]... or ①, ②... etc.). '
+            f'IMPORTANT: Only add a "Footnotes:" section if there is actual explanatory footnote text at the bottom '
+            f'of the page. Do NOT add "Footnotes:" for simple citation numbers like (38), (39) within paragraphs. '
+            f'Do not provide any prompts to the user, for example: "This is the translation of the current page.":\n'
         )
         
         return system_prompt, user_prompt_template
