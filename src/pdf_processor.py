@@ -13,11 +13,63 @@ from pdfminer.pdfpage import PDFPage
 import re
 
 
-def generate_process_text(abstract_text: str, page_text: str, previous_page: str, context_percentage: float = 0.65) -> str:
-    """Generate text for processing with context."""
-    context = abstract_text if abstract_text else previous_page[int(len(previous_page) * context_percentage):]
-    if context:
-        context = f"--Context: \n{context}"
+def detect_numbered_content(text: str) -> bool:
+    """Detect if text contains numbered lists, references, or citations."""
+    import re
+    
+    # Look for various numbered patterns including Japanese/CJK formats
+    patterns = [
+        r'\d+\.\s+[^\d]',     # "1. Some text"
+        r'\d+　',             # "1　" (Japanese full-width space)
+        r'\d+\s+[^\d]',       # "1 Some text" (regular space)
+        r'\[\d+\]',           # "[1]"
+        r'\(\d+\)',           # "(1)"
+        r'（\d+）',            # "（1）"
+        r'\d+）',             # "1）"
+        r'①|②|③|④|⑤|⑥|⑦|⑧|⑨|⑩',  # Circled numbers
+        r'一、|二、|三、|四、|五、',     # Chinese numerals
+        r'^\d+$',             # Standalone numbers on their own line
+    ]
+    
+    for pattern in patterns:
+        if re.search(pattern, text, re.MULTILINE):
+            return True
+    return False
+
+
+def generate_process_text(abstract_text: str, page_text: str, previous_page: str, context_percentage: float = 0.65, 
+                         previous_translated: str = "", translated_context_percentage: float = 0.35) -> str:
+    """Generate text for processing with context from both source and translated text."""
+    # Use abstract if available, otherwise use source context
+    source_context = abstract_text if abstract_text else previous_page[int(len(previous_page) * context_percentage):]
+    
+    # For now, let's simplify - only use translated context if there's clear numbered content
+    # and only provide a hint about continuation rather than full context
+    context_parts: list[str] = []
+    if source_context:
+        context_parts.append(source_context)
+    
+    # Only add translated context hint if we detect numbered content that might continue
+    if previous_translated and detect_numbered_content(page_text):
+        # Extract just the last few lines of translated text that contain numbers
+        import re
+        translated_lines = previous_translated.strip().split('\n')[-5:]  # Last 5 lines only
+        # Look for various numbering patterns in translated text
+        numbered_patterns = [r'\d+\.', r'\d+\)', r'（\d+）', r'\[\d+\]', r'\d+　', r'^\d+\s']
+        numbered_lines: list[str] = []
+        for line in translated_lines:
+            for pattern in numbered_patterns:
+                if re.search(pattern, line):
+                    numbered_lines.append(line)
+                    break
+        if numbered_lines:
+            context_parts.append(f"Previous numbering ended with: {numbered_lines[-1]}")
+    
+    if context_parts:
+        context = f"--Context: \n" + "\n".join(context_parts)
+    else:
+        context = ""
+    
     return f"--Current Page: \n{page_text}\n{context}"
 
 
