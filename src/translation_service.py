@@ -43,57 +43,101 @@ class TranslationService:
     def _create_translation_prompt(self, source_language: str, target_language: str, output_format: str = "console") -> tuple[str, str]:
         """Create system and user prompt templates for translation."""
         
-        # Determine formatting instructions based on output format
-        if output_format.lower() in ["pdf", "txt", "file", "docx"]:
-            formatting_instruction = (
-                f'Use proper paragraph breaks and standard text formatting suitable for file output. '
-                f'Use actual line breaks (not \\n characters) to separate paragraphs and sections naturally.'
-            )
-        else:  # console output
-            formatting_instruction = (
-                f'You can format and line break the output yourself using "\\n" for line breaks in console output.'
-            )
+        formatting_instruction = self._get_formatting_instruction(output_format)
+        numbered_content_instruction = self._get_numbered_content_instruction()
         
-        # Enhanced instructions for numbered content
-        numbered_content_instruction = (
-            f'IMPORTANT: Pay special attention to numbered lists, citations, and footnotes. '
-            f'Preserve ALL numbering exactly as it appears in the source text. This includes: '
-            f'• Arabic numerals: 1, 2, 3... or 1), 2), 3)... '
-            f'• Numbers in brackets: [1], [2], [3]... or (1), (2), (3)... '
-            f'• Chinese numerals: 一、二、三... or （一）、（二）、（三）... '
-            f'• Japanese/Korean numbering: ①, ②, ③... or １、２、３... '
-            f'IMPORTANT DISTINCTION: Only add a "Footnotes:" section if there are actual footnotes - '
-            f'meaning separate explanatory text at the bottom of the page that corresponds to numbered markers. '
-            f'Do NOT add "Footnotes:" for simple in-text citation numbers like (38), (39) that appear within paragraphs '
-            f'without corresponding explanatory text at the bottom. These are just citations, not footnotes. '
-            f'Only use "Footnotes:" when there is clearly separate footnote text at the end of the content.'
+        system_prompt = self._build_system_prompt(
+            source_language, target_language, formatting_instruction, numbered_content_instruction
         )
         
-        system_prompt = (
-            f'Follow the instructions carefully. Please act as a professional translator from {source_language} '
-            f'to {target_language}. I will provide you with text from a PDF document, and your task is '
-            f'to translate it from {source_language} to {target_language}. Please only output the translation and do not '
-            f'output any irrelevant content. If there are garbled characters or other non-standard text '
-            f'content, delete the garbled characters. '
-            f'{formatting_instruction} '
-            f'{numbered_content_instruction} '
-            f'You may be provided with "--Context: " and the text from either the document\'s abstract or '
-            f'a sample of text from the previous page. You will also be provided with "--Current Page: " '
-            f'which includes the OCR characters of the current page. Only output the {target_language} translation of '
-            f'the "--Current Page: ". Do not output the context, nor the "--Context: " and "--Current Page: " '
-            f'labels.'
-        )
-        
-        user_prompt_template = (
-            f'Translate only the {source_language} text of the "--Current Page: " to {target_language}, without outputting any other '
-            f'content, and without outputting anything related to "--Context: ", if provided. '
-            f'CRITICAL: Preserve all numbering systems exactly (1, 2, 3... or [1], [2]... or ①, ②... etc.). '
-            f'IMPORTANT: Only add a "Footnotes:" section if there is actual explanatory footnote text at the bottom '
-            f'of the page. Do NOT add "Footnotes:" for simple citation numbers like (38), (39) within paragraphs. '
-            f'Do not provide any prompts to the user, for example: "This is the translation of the current page.":\n'
-        )
+        user_prompt_template = self._build_user_prompt_template(source_language, target_language)
         
         return system_prompt, user_prompt_template
+    
+    def _get_formatting_instruction(self, output_format: str) -> str:
+        """Get formatting instructions based on output format."""
+        if output_format.lower() in ["pdf", "txt", "file", "docx"]:
+            return (
+                "Use proper paragraph breaks and standard text formatting suitable for file output. "
+                "Use actual line breaks (not \\n characters) to separate paragraphs and sections naturally."
+            )
+        else:  # console output
+            return 'You can format and line break the output yourself using "\\n" for line breaks in console output.'
+    
+    def _get_numbered_content_instruction(self) -> str:
+        """Get comprehensive instructions for handling numbered content."""
+        return """IMPORTANT: Pay special attention to numbered lists, citations, and footnotes.
+Preserve ALL numbering exactly as it appears in the source text. This includes:
+• Arabic numerals: 1, 2, 3... or 1), 2), 3)...
+• Numbers in brackets: [1], [2], [3]... or (1), (2), (3)...
+• Chinese numerals: 一、二、三... or （一）、（二）、（三）...
+• Japanese/Korean numbering: ①, ②, ③... or １、２、３...
+• Japanese reference format: 14　author「title」→ should become "14. Author, 'Title'"
+
+CRITICAL DISTINCTION - DO NOT ADD NUMBERING:
+- If the source text has section headings WITHOUT numbers, do NOT add numbers to them
+- Only preserve numbering that already exists in the source
+- Section titles like "背景" or "結論" should remain as "Background" or "Conclusion" without numbers
+
+CRITICAL FOR BIBLIOGRAPHY/REFERENCES: If you encounter numbered reference lists or bibliography 
+(like "1. Author Title, Publisher" format), preserve the exact numbering format. Do NOT convert 
+numbered references into paragraph form. Keep each reference as a separate numbered item.
+
+CRITICAL: When you see Japanese reference format like "14　松下安雄監修樋垣元良「福岡藩」", 
+translate it to proper English reference format like "14. Supervised by Matsushita Yasuo, Higaki Motoyoshi, 'Fukuoka Domain'". 
+DO NOT output just the number "14" by itself - always include the full reference text with proper formatting.
+
+IMPORTANT DISTINCTION: Only add a "Footnotes:" section if there are actual footnotes - 
+meaning separate explanatory text at the bottom of the page that corresponds to numbered markers. 
+Do NOT add "Footnotes:" for simple in-text citation numbers like (38), (39) that appear within paragraphs 
+without corresponding explanatory text at the bottom. These are just citations, not footnotes. 
+Only use "Footnotes:" when there is clearly separate footnote text at the end of the content."""
+    
+    def _build_system_prompt(self, source_language: str, target_language: str, 
+                           formatting_instruction: str, numbered_content_instruction: str) -> str:
+        """Build the complete system prompt."""
+        return f"""Follow the instructions carefully. Please act as a professional translator from {source_language} 
+to {target_language}. I will provide you with text from a document, and your task is 
+to translate it from {source_language} to {target_language}. Please only output the translation and do not 
+output any irrelevant content. If there are garbled characters or other non-standard text 
+content, delete the garbled characters.
+
+{formatting_instruction}
+
+{numbered_content_instruction}
+
+You may be provided with "--Context: " which includes either the document's abstract or 
+text from the previous page for context. You will also be provided with "--Current Page: " 
+which includes the text of the current page. Only output the {target_language} translation of 
+the "--Current Page: ". Do not output the context, nor the "--Context: " and "--Current Page: " 
+labels."""
+    
+    def _build_user_prompt_template(self, source_language: str, target_language: str) -> str:
+        """Build the user prompt template."""
+        return f"""Translate only the {source_language} text of the "--Current Page: " to {target_language}, without outputting any other 
+content, and without outputting anything related to "--Context: ", if provided.
+
+CRITICAL: Preserve all numbering systems exactly as they appear in the source (1, 2, 3... or [1], [2]... or ①, ②... etc.).
+DO NOT ADD numbering to headings or sections that are not numbered in the source text.
+
+CRITICAL FOR REFERENCES: When translating Japanese reference entries like "14　松下安雄監修樋垣元良「福岡藩」", 
+translate the COMPLETE reference including author names, titles, and formatting. Output should be 
+"14. Author Name, 'Title'" NOT just the isolated number "14". Always translate the full reference text.
+
+NUMBERING CONTINUATION - VERY IMPORTANT: 
+- If the context shows "Previous numbering ended with: X. Reference", you MUST continue numbering from X+1 for any new numbered items on the current page.
+- Do NOT restart numbering from 1 - always continue the sequence from the previous page.
+- Example: If context shows "Previous numbering ended with: 25. Some Reference", and current page has more numbered items, they should be numbered 26, 27, 28, etc.
+- This applies ONLY to numbered reference lists, NOT to section headings.
+
+SECTION HEADINGS: If the source has section headings without numbers, translate them as headings without adding numbers.
+
+IMPORTANT: Only add a "Footnotes:" section if there is actual explanatory footnote text at the bottom 
+of the page. Do NOT add "Footnotes:" for simple citation numbers like (38), (39) within paragraphs.
+
+Do not provide any prompts to the user, for example: "This is the translation of the current page.":
+
+"""
     
     def translate_text(self, text: str, source_language: str, target_language: str, output_format: str = "console") -> str:
         """Translate text using the specified model with retry logic for content filters."""
@@ -200,13 +244,15 @@ class TranslationService:
             raise Exception(f'API call failed with {error_type}: {error_message}')
     
     def translate_page_text(self, abstract_text: str, page_text: str, previous_page: str, 
-                          source_language: str, target_language: str, output_format: str = "console") -> str:
+                          source_language: str, target_language: str, output_format: str = "console",
+                          previous_translated: str = "") -> str:
         """Translate page text with context."""
-        process_text = generate_process_text(abstract_text, page_text, previous_page, CONTEXT_PERCENTAGE)
+        process_text = generate_process_text(abstract_text, page_text, previous_page, CONTEXT_PERCENTAGE, previous_translated)
         return self.translate_text(process_text, source_language, target_language, output_format)
     
     def generate_text(self, abstract_text: str, page_text: str, previous_page: str, 
-                     page_num: int, source_language: str, target_language: str, output_format: str = "console") -> str:
+                     page_num: int, source_language: str, target_language: str, output_format: str = "console", 
+                     previous_translated: str = "") -> str:
         """Generate translated text for a page, handling context length limits."""
         result: list[str] = []
         parts_to_translate = [page_text]
@@ -227,7 +273,7 @@ class TranslationService:
             logging.info(f"Translating part {len(result) + 1} of page {page_num + 1}, length: {len(current_part)} chars")
             
             translated_text = self.translate_page_text(
-                abstract_text, current_part, previous_page, source_language, target_language, output_format
+                abstract_text, current_part, previous_page, source_language, target_language, output_format, previous_translated
             )
 
             if translated_text == "context_length_exceeded":
@@ -315,15 +361,19 @@ class TranslationService:
         progressive_output_path = None
 
         page_text = ""
+        previous_translated = ""
         for i, page in tqdm(enumerate(pages, start=start_page), desc="Translating... ", ascii=True):
             previous_page = page_text
             page_text = self.pdf_processor.process_page(page)
             
             try:
                 translated_text = self.generate_text(
-                    abstract_text or '', page_text, previous_page, i, source_language, target_language, output_format
+                    abstract_text or '', page_text, previous_page, i, source_language, target_language, output_format, previous_translated
                 )
                 document_text.append(translated_text)
+                
+                # Update translated context for next page
+                previous_translated = translated_text
                 
                 # Add delay between pages to prevent rate limiting and content filter triggers
                 # This helps avoid jailbreak detection issues
@@ -397,15 +447,17 @@ class TranslationService:
         progressive_output_path = None
 
         previous_page = ""
+        previous_translated = ""
         for i, page_text in tqdm(enumerate(text_pages), desc="Translating... ", ascii=True):
             try:
                 translated_text = self.generate_text(
-                    abstract_text or '', page_text, previous_page, i, source_language, target_language, output_format
+                    abstract_text or '', page_text, previous_page, i, source_language, target_language, output_format, previous_translated
                 )
                 document_text.append(translated_text)
                 
-                # Update previous page for context
+                # Update previous page and translated text for context
                 previous_page = page_text
+                previous_translated = translated_text
                 
                 # Add delay between API calls (except for first page)
                 if i > 0:  # Don't delay on the first page
