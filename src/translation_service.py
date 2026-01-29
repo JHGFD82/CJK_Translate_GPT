@@ -5,15 +5,15 @@ Translation service for the CJK Translation script.
 import logging
 import time
 from typing import List, Optional, Iterable, Dict, Any
+from collections.abc import Iterator as ABCIterator
 from itertools import islice
 from tqdm import tqdm
 
-from openai import AzureOpenAI
+from portkey_ai import Portkey
 from pdfminer.pdfpage import PDFPage
 
 from .config import (
-    get_available_models, DEFAULT_MODEL, SANDBOX_API_VERSION, SANDBOX_ENDPOINT,
-    TRANSLATION_TEMPERATURE, TRANSLATION_MAX_TOKENS, TRANSLATION_TOP_P, CONTEXT_PERCENTAGE,
+    get_available_models, DEFAULT_MODEL, TRANSLATION_TEMPERATURE, TRANSLATION_MAX_TOKENS, TRANSLATION_TOP_P, CONTEXT_PERCENTAGE,
     PAGE_DELAY_SECONDS, MAX_RETRIES, BASE_RETRY_DELAY
 )
 from .pdf_processor import PDFProcessor, generate_process_text
@@ -27,10 +27,8 @@ class TranslationService:
     def __init__(self, api_key: str, professor: Optional[str] = None, token_tracker_file: Optional[str] = None):
         self.api_key = api_key
         self.professor = professor
-        self.client = AzureOpenAI(
-            api_key=api_key,
-            azure_endpoint=SANDBOX_ENDPOINT,
-            api_version=SANDBOX_API_VERSION
+        self.client = Portkey(
+            api_key=api_key
         )
         self.pdf_processor = PDFProcessor()
         self.token_tracker = TokenTracker(professor=professor, data_file=token_tracker_file)
@@ -158,26 +156,31 @@ Do not provide any prompts to the user, for example: "This is the translation of
                     time.sleep(delay)
                 
                 logging.info(f'Making API call to model: {model}')
-                response = self.client.chat.completions.create(
+                response = self.client.chat.completions.create( # type: ignore[misc]
                     model=model,
                     temperature=TRANSLATION_TEMPERATURE,
                     max_tokens=TRANSLATION_MAX_TOKENS,
                     top_p=TRANSLATION_TOP_P,
+                    stream=False,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ]
                 )
+
+                assert not isinstance(response, ABCIterator), "Unexpected stream response received."
                 
                 # Log response details
-                logging.info(f'API call successful. Response ID: {response.id}')
-                logging.info(f'Model used: {response.model}')
+                if response.id:
+                    logging.info(f'API call successful. Response ID: {response.id}')
+                if response.model:
+                    logging.info(f'Model used: {response.model}')
                 
                 # Log token usage if available
-                if response.usage:
+                if response.usage and response.usage.prompt_tokens is not None and response.usage.completion_tokens is not None and response.usage.total_tokens is not None:
                     # Record token usage
                     usage = self.token_tracker.record_usage(
-                        model=response.model,
+                        model=response.model or model,
                         prompt_tokens=response.usage.prompt_tokens,
                         completion_tokens=response.usage.completion_tokens,
                         total_tokens=response.usage.total_tokens,
@@ -191,11 +194,12 @@ Do not provide any prompts to the user, for example: "This is the translation of
                 else:
                     logging.warning('No token usage information available in response.')
                 
-                content = response.choices[0].message.content
-                if content is not None:
-                    print("\n" + content)
-                    logging.info('Translation completed successfully.')
-                    return content
+                if response.choices and len(response.choices) > 0 and response.choices[0].message:
+                    content = response.choices[0].message.content
+                    if content is not None and isinstance(content, str):
+                        print("\n" + content)
+                        logging.info('Translation completed successfully.')
+                        return content
                 else:
                     print("\n[No content returned by the model]")
                     logging.warning('No content returned by the model.')
