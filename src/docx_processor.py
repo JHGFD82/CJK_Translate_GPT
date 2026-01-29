@@ -100,8 +100,9 @@ class DocxProcessor(BaseTextProcessor):
     
     @staticmethod
     def is_docx_file(file_path: str) -> bool:
-        """Check if a file is a Word document based on its extension."""
-        return file_path.lower().endswith(('.docx', '.doc'))
+        """Check if a file is a .docx Word document based on its extension.
+        Note: .doc files (older Word format) are not supported."""
+        return file_path.lower().endswith('.docx')
     
     @staticmethod
     def validate_docx_file(file_path: str) -> bool:
