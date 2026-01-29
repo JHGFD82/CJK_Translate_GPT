@@ -4,6 +4,10 @@
     "monthly_limit": 250.0
   },
   "models": {
+    "gpt-5": {
+      "input": 1.38,
+      "output": 11.0
+    },
     "o3-mini": {
       "input": 1.21,
       "output": 4.84
@@ -16,21 +20,29 @@
       "input": 2.75,
       "output": 11.0
     },
-    "gpt-35-turbo-16k": {
-      "input": 3.0,
-      "output": 4.0
+    "gpt-4-turbo": {
+      "input": 11.0,
+      "output": 11.0
     },
-    "Mistral-Small": {
-      "input": 1.0,
-      "output": 3.0
+    "gpt-35-turbo-16k": {
+      "input": 0.55,
+      "output": 1.65
+    },
+    "mistral-small-2503": {
+      "input": 0.10,
+      "output": 0.30
+    },
+    "Mistral-Large-2411": {
+      "input": 2.0,
+      "output": 6.0
     },
     "Meta-Llama-3-1-8B-Instruct": {
       "input": 3.0,
       "output": 0.61
     },
-    "Meta-Llama-3-1-70B-Instruct": {
-      "input": 2.68,
-      "output": 3.54
+    "Llama-3.3-70B-Instruct": {
+      "input": 0.78,
+      "output": 0.78
     }
   }
 }
