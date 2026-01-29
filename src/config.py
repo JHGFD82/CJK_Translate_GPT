@@ -109,10 +109,6 @@ def save_pricing_config(config: Dict[str, Any]) -> None:
 # Default model
 DEFAULT_MODEL: str = "gpt-4o"
 
-# API configuration
-SANDBOX_API_VERSION: str = "2025-03-01-preview"
-SANDBOX_ENDPOINT: str = "https://api-ai-sandbox.princeton.edu/"
-
 # Translation parameters
 TRANSLATION_TEMPERATURE: float = 0.5
 TRANSLATION_MAX_TOKENS: int = 4000  # Increased from 1000 to handle academic content with footnotes
