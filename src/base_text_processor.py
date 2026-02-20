@@ -4,8 +4,8 @@ Contains shared functionality for processing text-based documents.
 """
 
 import logging
-from typing import List, Any
-from abc import ABC, abstractmethod
+from typing import List
+from abc import ABC
 
 
 class BaseTextProcessor(ABC):
@@ -80,27 +80,3 @@ class BaseTextProcessor(ABC):
             return [content.strip()]
         
         return paragraphs
-    
-    @abstractmethod
-    def extract_raw_content(self, file_obj: Any) -> str:
-        """
-        Extract raw text content from the file object.
-        This method must be implemented by subclasses.
-        
-        Args:
-            file_obj: File object (type varies by processor)
-            
-        Returns:
-            Raw text content as a string
-        """
-        pass
-    
-    @abstractmethod
-    def get_file_type_name(self) -> str:
-        """
-        Get a human-readable name for the file type this processor handles.
-        
-        Returns:
-            String description of the file type
-        """
-        pass
