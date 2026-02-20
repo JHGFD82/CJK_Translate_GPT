@@ -1,4 +1,5 @@
 python-dotenv
+portkey-ai
 openai
 requests
 pdfminer.six
