@@ -348,107 +348,130 @@ class SandboxProcessor:
             print(f"  Output: ${pricing['output']:.3f} per {pricing_unit:,} tokens")
             print()
 
-    def run(self, args: argparse.Namespace) -> None:
-        """Run the translation application with the given arguments."""
-        # Handle non-translation commands first
+    def _handle_info_commands(self, args: argparse.Namespace) -> bool:
+        """Handle information/reporting commands.
+        
+        Args:
+            args: Command-line arguments
+            
+        Returns:
+            True if an info command was handled, False otherwise
+        """
         if args.list_models:
             self.list_models()
-            return
+            return True
         
         if args.usage_report:
             self.show_usage_report()
-            return
+            return True
         
         if args.daily_usage is not None:
             self.show_daily_usage(args.daily_usage)
-            return
+            return True
         
         if args.update_pricing:
             model, input_price, output_price = args.update_pricing
             self.update_pricing(model, input_price, output_price)
+            return True
+        
+        return False
+
+    def _extract_language_pair(self, args: argparse.Namespace, is_image: bool) -> tuple[str, str]:
+        """Extract and validate source and target languages.
+        
+        Args:
+            args: Command-line arguments
+            is_image: Whether processing an image file (OCR)
+            
+        Returns:
+            Tuple of (source_language, target_language)
+        """
+        if not args.language_code:
+            if is_image:
+                print("Error: Target language code is required for OCR (e.g., 'E' for English, 'C' for Chinese)")
+            else:
+                print("Error: Language code is required for translation")
+            exit(1)
+        
+        if is_image:
+            # For OCR, extract target language from either single code or translation pair
+            if isinstance(args.language_code, tuple):
+                target_language = str(args.language_code[1])
+            else:
+                target_language = str(args.language_code)
+            return ("", target_language)  # Source language not needed for OCR
+        else:
+            # For translation, require a language pair
+            if not isinstance(args.language_code, tuple):
+                print("Error: Translation requires a 2-character language code (e.g., CE, JE, KE)")
+                exit(1)
+            source_language = str(args.language_code[0])
+            target_language = str(args.language_code[1])
+            return (source_language, target_language)
+
+    def _resolve_output_path(self, args: argparse.Namespace) -> Optional[str]:
+        """Resolve the output file path based on arguments.
+        
+        Args:
+            args: Command-line arguments
+            
+        Returns:
+            Absolute path to output file or None
+        """
+        if args.output_file:
+            # If output file is a relative path, make it relative to input file directory
+            if not os.path.isabs(args.output_file) and args.input_file:
+                input_dir = os.path.dirname(os.path.abspath(args.input_file))
+                return os.path.join(input_dir, args.output_file)
+            else:
+                return os.path.abspath(args.output_file)
+        elif args.input_file:
+            input_dir = os.path.dirname(os.path.abspath(args.input_file))
+            input_name, _ = os.path.splitext(os.path.basename(args.input_file))
+            return os.path.join(input_dir, f"{input_name}_translated.txt")
+        
+        return None
+
+    def run(self, args: argparse.Namespace) -> None:
+        """Run the translation application with the given arguments."""
+        # Handle info commands first (usage reports, model lists, etc.)
+        if self._handle_info_commands(args):
             return
         
-        # Check if an input file is provided
+        # Validate that some input method is specified
+        if not args.input_file and not args.custom_text:
+            print("Error: Please specify a command (translation, usage report, etc.)")
+            exit(1)
+        
+        # Handle input file processing (OCR or translation)
         if args.input_file:
             input_file_abs = os.path.abspath(args.input_file)
             
-            # Determine if this is an image file (image processing) or other file (translation)
+            # Route to image processing (OCR) if it's an image file
             if self.image_processor.is_image_file(input_file_abs):
-                # Image processing path
                 if not self.image_processor.validate_image_file(input_file_abs):
                     print(f"Error: Image file '{input_file_abs}' is not valid.")
                     exit(1)
                 
-                # For OCR, language_code should be a single language (target language)
-                if not args.language_code:
-                    print("Error: Target language code is required for OCR (e.g., 'E' for English, 'C' for Chinese)")
-                    exit(1)
-                
-                # Extract target language - for OCR, we expect single language code
-                target_language: str
-                if isinstance(args.language_code, tuple):
-                    # If it's a translation pair, use the target (second) language
-                    target_language = str(args.language_code[1])  # type: ignore[index]
-                else:
-                    # Single language code
-                    target_language = str(args.language_code)  # type: ignore[arg-type]
-                
+                _, target_language = self._extract_language_pair(args, is_image=True)
                 self.process_image(input_file_abs, target_language, args.output_file)
                 return
-            else:
-                # Translation path - language code is required for translation
-                if not args.language_code:
-                    print("Error: Language code is required for document translation")
-                    exit(1)
-                
-                # Ensure language_code is a tuple for translation
-                if not isinstance(args.language_code, tuple):
-                    print("Error: Translation requires a 2-character language code (e.g., CE, JE, KE)")
-                    exit(1)
-        elif args.custom_text:
-            # Custom text translation - language code is required
-            if not args.language_code:
-                print("Error: Language code is required for text translation")
-                exit(1)
             
-            # Ensure language_code is a tuple for translation
-            if not isinstance(args.language_code, tuple):
-                print("Error: Translation requires a 2-character language code (e.g., CE, JE, KE)")
-                exit(1)
-        else:
-            # No input specified
-            print("Error: Please specify a command (translation, usage report, etc.)")
-            exit(1)
-        
-        # Extract source and target languages from the language code
-        # At this point we know it's a tuple from the validation above
-        assert isinstance(args.language_code, tuple), "Language code should be a tuple for translation"  # type: ignore[misc]
-        source_language: str = str(args.language_code[0])  # type: ignore[index]
-        target_language: str = str(args.language_code[1])  # type: ignore[index]
-        
-        # Handle output file path logic
-        output_file: Optional[str] = None
-        
-        if args.output_file:
-            # If output file is a relative path, make it relative to input file directory
-            if not os.path.isabs(args.output_file) and args.input_file:
-                input_dir: str = os.path.dirname(os.path.abspath(args.input_file))
-                output_file = os.path.join(input_dir, args.output_file)
-            else:
-                output_file = os.path.abspath(args.output_file)
-        elif args.input_file:
-            input_dir: str = os.path.dirname(os.path.abspath(args.input_file))
-            input_name: str
-            input_name, _ = os.path.splitext(os.path.basename(args.input_file))
-            output_file = os.path.join(input_dir, f"{input_name}_translated.txt")
-        
-        # Handle input files (translation)
-        if args.input_file:
+            # Otherwise, route to document translation
+            source_language, target_language = self._extract_language_pair(args, is_image=False)
+            output_file = self._resolve_output_path(args)
+            
             self.translate_document(
                 args.input_file, source_language, target_language,
-                args.page_nums, args.abstract, output_file, args.auto_save, args.progressive_save, args.custom_font
+                args.page_nums, args.abstract, output_file, args.auto_save, 
+                args.progressive_save, args.custom_font
             )
+        
+        # Handle custom text translation
         elif args.custom_text:
+            source_language, target_language = self._extract_language_pair(args, is_image=False)
+            output_file = self._resolve_output_path(args)
+            
             self.translate_custom_text(
                 source_language, target_language, output_file, args.auto_save, args.custom_font
             )
