@@ -27,10 +27,10 @@ Features:
 from .cli import main, SandboxProcessor
 from .translation_service import TranslationService
 from .file_output import FileOutputHandler
-from .pdf_processor import PDFProcessor
-from .docx_processor import DocxProcessor
-from .txt_processor import TxtProcessor
-from .base_text_processor import BaseTextProcessor
+from .processors.pdf_processor import PDFProcessor
+from .processors.docx_processor import DocxProcessor
+from .processors.txt_processor import TxtProcessor
+from .processors.base_text_processor import BaseTextProcessor
 from .token_tracker import TokenTracker
 from .utils import (
     parse_language_code,

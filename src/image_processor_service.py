@@ -14,7 +14,7 @@ from .config import (
     OCR_FREQUENCY_PENALTY, OCR_PRESENCE_PENALTY,
     MAX_RETRIES, BASE_RETRY_DELAY, model_supports_vision, get_vision_capable_models, resolve_model
 )
-from .image_processor import ImageProcessor
+from .processors.image_processor import ImageProcessor
 from .token_tracker import TokenTracker
 
 
