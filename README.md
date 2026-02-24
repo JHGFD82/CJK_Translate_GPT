@@ -1,4 +1,4 @@
-# CJK_Translate_GPT
+# PU_AISandbox
 Translate text interchangably between Chinese, Japanese, Korean, and English from either source PDFs or inputted text.
 
 ## Important Note
