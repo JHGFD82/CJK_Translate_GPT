@@ -126,10 +126,20 @@ def save_pricing_config(config: Dict[str, Any]) -> None:
 # Default model
 DEFAULT_MODEL: str = "gpt-4o"
 
+# OCR-specific model (can override DEFAULT_MODEL for image processing)
+OCR_MODEL: str = "gpt-4o-mini"  # More cost-effective for text extraction
+
 # Translation parameters
 TRANSLATION_TEMPERATURE: float = 0.5
 TRANSLATION_MAX_TOKENS: int = 4000  # Increased from 1000 to handle academic content with footnotes
 TRANSLATION_TOP_P: float = 0.5
+
+# OCR parameters (more conservative to reduce hallucination)
+OCR_TEMPERATURE: float = 0.0  # Deterministic output
+OCR_MAX_TOKENS: int = 4000  # Same as translation for long documents
+OCR_TOP_P: float = 0.1  # Very low to prevent creativity
+OCR_FREQUENCY_PENALTY: float = 0.5  # Penalize repetition of tokens
+OCR_PRESENCE_PENALTY: float = 0.3  # Encourage diversity
 
 # Rate limiting and retry configuration
 PAGE_DELAY_SECONDS: float = 3.0  # Delay between pages to prevent content filter triggers
