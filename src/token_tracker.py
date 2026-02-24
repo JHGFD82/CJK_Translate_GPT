@@ -10,8 +10,8 @@ from typing import Dict, Any, Optional
 from dataclasses import dataclass, asdict
 
 from .config import (
-    load_pricing_config, get_model_pricing, get_pricing_unit, 
-    get_monthly_limit, save_pricing_config
+    load_model_catalog, get_model_pricing, get_pricing_unit,
+    get_monthly_limit, save_model_catalog
 )
 
 
@@ -335,23 +335,23 @@ class TokenTracker:
     def update_pricing(self, model: str, input_price: float, output_price: float):
         """Update pricing for a specific model."""
         # Load current config
-        config = load_pricing_config()
+        config = load_model_catalog()
         
         # Ensure models section exists
         config.setdefault("models", {})[model] = {"input": input_price, "output": output_price}
         
         # Save updated config
-        save_pricing_config(config)
+        save_model_catalog(config)
         logging.info(f"Updated pricing for {model}: input=${input_price}, output=${output_price}")
     
     def update_pricing_unit(self, new_unit: int):
         """Update the pricing unit (e.g., change from per 1M tokens to per 1K tokens)."""
         # Load current config
-        config = load_pricing_config()
+        config = load_model_catalog()
         
         # Ensure config section exists
         config.setdefault("config", {})["pricing_unit"] = new_unit
         
         # Save updated config
-        save_pricing_config(config)
+        save_model_catalog(config)
         logging.info(f"Updated pricing unit to {new_unit:,} tokens")
