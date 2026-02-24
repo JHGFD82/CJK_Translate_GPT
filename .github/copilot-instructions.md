@@ -100,7 +100,16 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 - **Vision Model Validation**: Automatically selects and validates vision-capable models from `pricing_config.json`
 - **Token Tracking**: OCR usage tracked in same file as translation via shared `TokenTracker`
 - **Output**: Extracted text printed to console and optionally saved to file with `-o` flag
-- **Example**: `python main.py professor E -i image.jpg -o extracted.txt`
+- **Model Selection**: Use `-m/--model` to specify which model to use (e.g., `gpt-4o`, `gpt-4o-mini`, `gpt-5`)
+- **Example**: `python main.py professor E -i image.jpg -o extracted.txt -m gpt-4o-mini`
+
+### Model Selection and Configuration
+- **Default Models**: `OCR_MODEL=gpt-4o-mini` for OCR, `DEFAULT_MODEL=gpt-4o` for translation
+- **Custom Model**: Use `-m/--model MODEL_NAME` flag to override defaults for both translation and OCR
+- **List Models**: `python main.py professor --list-models` shows all available models with pricing and vision support
+- **Vision Validation**: ImageProcessorService automatically validates model supports vision, falls back to defaults if not
+- **Model Priority**: Custom model → OCR_MODEL/DEFAULT_MODEL → first available vision-capable model
+- **Configuration**: Models and pricing defined in `src/pricing_config.json` with `supports_vision` boolean flag
 
 ### File Path Handling
 - **Input Path Resolution**: `os.path.abspath()` applied to input files in `translate_pdf()` method
