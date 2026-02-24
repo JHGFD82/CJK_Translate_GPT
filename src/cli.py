@@ -208,6 +208,41 @@ class SandboxProcessor:
         
         return selected_pages
 
+    def _process_text_based_file(self, file_path: str, file_type: str, page_nums: Optional[str],
+                                 abstract_text: Optional[str], source_language: str, target_language: str,
+                                 output_file: Optional[str], auto_save: bool, progressive_save: bool) -> List[str]:
+        """Process text-based files (DOCX, TXT) with common logic.
+        
+        Args:
+            file_path: Absolute path to the file
+            file_type: Either 'docx' or 'txt'
+            page_nums: Page range string (optional)
+            abstract_text: Abstract text for context (optional)
+            source_language: Source language
+            target_language: Target language
+            output_file: Output file path (optional)
+            auto_save: Whether to auto-save
+            progressive_save: Whether to save progressively
+            
+        Returns:
+            List of translated text pages
+        """
+        if file_type == 'docx':
+            with open(file_path, 'rb') as f:
+                pages = DocxProcessor.process_docx_with_pages(f, target_page_size=2000)
+                pages = self._handle_page_range(pages, page_nums, "Word document")
+        elif file_type == 'txt':
+            with open(file_path, 'r', encoding='utf-8') as f:
+                pages = TxtProcessor.process_txt_with_pages(f, target_page_size=2000)
+                pages = self._handle_page_range(pages, page_nums, "text file")
+        else:
+            raise ValueError(f"Unsupported text file type: {file_type}")
+        
+        return self.translation_service.translate_text_pages(
+            pages, abstract_text, source_language, target_language, 
+            output_file, auto_save, progressive_save, file_path
+        )
+
     def translate_document(self, file_path: str, source_language: str, target_language: str,
                           page_nums: Optional[str] = None, abstract: bool = False,
                           output_file: Optional[str] = None, auto_save: bool = False, progressive_save: bool = False, 
@@ -217,6 +252,7 @@ class SandboxProcessor:
         file_path = os.path.abspath(file_path)
         file_type = self._detect_and_validate_file(file_path)
         
+        # Get abstract text once if needed
         abstract_text = input('Enter abstract text: ') if abstract else None
         
         try:
@@ -225,22 +261,14 @@ class SandboxProcessor:
                 with open(file_path, 'rb') as f:
                     pages = self.translation_service.pdf_processor.process_pdf(f)
                     document_text = self.translation_service.translate_document(
-                        pages, abstract_text, page_nums, source_language, target_language, output_file, auto_save, progressive_save, file_path
+                        pages, abstract_text, page_nums, source_language, target_language, 
+                        output_file, auto_save, progressive_save, file_path
                     )
-            elif file_type == 'docx':
-                with open(file_path, 'rb') as f:
-                    pages = DocxProcessor.process_docx_with_pages(f, target_page_size=2000)
-                    pages = self._handle_page_range(pages, page_nums, "Word document")
-                    document_text = self.translation_service.translate_text_pages(
-                        pages, abstract_text, source_language, target_language, output_file, auto_save, progressive_save, file_path
-                    )
-            elif file_type == 'txt':
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    pages = TxtProcessor.process_txt_with_pages(f, target_page_size=2000)
-                    pages = self._handle_page_range(pages, page_nums, "text file")
-                    document_text = self.translation_service.translate_text_pages(
-                        pages, abstract_text, source_language, target_language, output_file, auto_save, progressive_save, file_path
-                    )
+            elif file_type in ('docx', 'txt'):
+                document_text = self._process_text_based_file(
+                    file_path, file_type, page_nums, abstract_text, source_language, target_language,
+                    output_file, auto_save, progressive_save
+                )
             else:
                 # This shouldn't happen due to earlier validation, but handle it gracefully
                 print(f"Error: Cannot translate file type '{file_type}'.")
