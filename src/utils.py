@@ -5,7 +5,7 @@ Utility functions for the CJK Translation CLI.
 import argparse
 import os
 import re
-from typing import Tuple, Dict, Optional
+from typing import Tuple, Dict, Optional, Union
 
 from .config import LANGUAGE_MAP
 
@@ -54,22 +54,38 @@ def validate_page_nums(value: str) -> str:
     return value
 
 
-def parse_language_code(value: str) -> Tuple[str, str]:
-    """Parse language code like 'CE' into source and target languages."""
-    if len(value) != 2:
-        raise argparse.ArgumentTypeError("Language code must be exactly 2 characters (e.g., CE, JK, etc.)")
+def parse_language_code(value: str) -> Union[str, Tuple[str, str]]:
+    """Parse language code into source and target languages.
     
-    source_char = value[0].upper()
-    target_char = value[1].upper()
+    Accepts:
+    - Single character (C, J, K, E) for image OCR - returns single language string
+    - Two characters (CE, JK, etc.) for translation - returns tuple of (source, target)
+    """
+    if len(value) == 1:
+        # Single language code for OCR
+        lang_char = value.upper()
+        if lang_char not in LANGUAGE_MAP:
+            raise argparse.ArgumentTypeError(f"Invalid language code '{lang_char}'. Use C, J, K, or E.")
+        return LANGUAGE_MAP[lang_char]
     
-    if source_char not in LANGUAGE_MAP:
-        raise argparse.ArgumentTypeError(f"Invalid source language code '{source_char}'. Use C, J, K, or E.")
-    if target_char not in LANGUAGE_MAP:
-        raise argparse.ArgumentTypeError(f"Invalid target language code '{target_char}'. Use C, J, K, or E.")
-    if source_char == target_char:
-        raise argparse.ArgumentTypeError("Source and target languages cannot be the same.")
+    elif len(value) == 2:
+        # Two character code for translation
+        source_char = value[0].upper()
+        target_char = value[1].upper()
+        
+        if source_char not in LANGUAGE_MAP:
+            raise argparse.ArgumentTypeError(f"Invalid source language code '{source_char}'. Use C, J, K, or E.")
+        if target_char not in LANGUAGE_MAP:
+            raise argparse.ArgumentTypeError(f"Invalid target language code '{target_char}'. Use C, J, K, or E.")
+        if source_char == target_char:
+            raise argparse.ArgumentTypeError("Source and target languages cannot be the same.")
+        
+        return LANGUAGE_MAP[source_char], LANGUAGE_MAP[target_char]
     
-    return LANGUAGE_MAP[source_char], LANGUAGE_MAP[target_char]
+    else:
+        raise argparse.ArgumentTypeError(
+            "Language code must be 1 character (C, J, K, E for OCR) or 2 characters (CE, JK, etc. for translation)"
+        )
 
 
 def load_professor_config() -> Dict[str, Dict[str, str]]:
