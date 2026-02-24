@@ -10,7 +10,7 @@ from typing import Optional, List
 
 from dotenv import load_dotenv
 
-from .utils import parse_language_code, get_api_key, validate_page_nums
+from .config import parse_language_code, get_api_key, validate_page_nums, extract_page_nums
 from .services.translation_service import TranslationService
 from .output.file_output import FileOutputHandler
 from .processors.docx_processor import DocxProcessor
@@ -291,7 +291,6 @@ class SandboxProcessor:
         if not page_nums:
             return pages
             
-        from .utils import extract_page_nums
         start_page, end_page = extract_page_nums(page_nums)
         
         # Ensure page range is valid

@@ -32,7 +32,7 @@ from .processors.docx_processor import DocxProcessor
 from .processors.txt_processor import TxtProcessor
 from .processors.base_text_processor import BaseTextProcessor
 from .tracking.token_tracker import TokenTracker
-from .utils import (
+from .config import (
     parse_language_code,
     load_professor_config,
     get_api_key,
