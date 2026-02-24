@@ -111,6 +111,9 @@ class SandboxProcessor:
             
             # Create shared token tracker for both services
             self.token_tracker = TokenTracker(professor=professor_name)
+            
+            # Initialize services with shared token tracker
+            self.translation_service = TranslationService(api_key, professor_name, token_tracker=self.token_tracker)
             self.image_processor_service = ImageProcessorService(api_key, professor_name, token_tracker=self.token_tracker)
             
             self.image_processor = ImageProcessor()
