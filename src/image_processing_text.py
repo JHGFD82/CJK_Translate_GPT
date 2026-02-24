@@ -39,7 +39,7 @@ def local_image_to_data_url(image_path: str):
 
 # This function will submit a simple prompt and image file to the chosen model
 def image_prompt_example(model_to_be_used: str, image_file: str):
-    # Establish a connection to your Azure OpenAI instance
+    # Establish a connection to your PortKey instance
     
     try:
         response = client.chat.completions.create( # type: ignore[misc]
