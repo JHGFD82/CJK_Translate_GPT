@@ -25,45 +25,45 @@ def get_model_catalog_path() -> Path:
 
 def load_model_catalog() -> Dict[str, Any]:
     """Load model catalog from file with comprehensive validation."""
-    pricing_file = get_model_catalog_path()
+    catalog_file = get_model_catalog_path()
     
-    if not pricing_file.exists():
+    if not catalog_file.exists():
         error_msg = (
-            f"Pricing configuration file not found at {pricing_file}. "
+            f"Model catalog file not found at {catalog_file}. "
             "This file is required for the application to function. "
-            "Please create the pricing configuration file with your model pricing information."
+            "Please create the model catalog file with model pricing and capability information."
         )
         logging.error(error_msg)
         raise FileNotFoundError(error_msg)
     
     try:
-        with open(pricing_file, 'r') as f:
+        with open(catalog_file, 'r') as f:
             config = json.load(f)
     except json.JSONDecodeError as e:
-        error_msg = f"Invalid JSON in pricing configuration file {pricing_file}: {e}"
+        error_msg = f"Invalid JSON in model catalog file {catalog_file}: {e}"
         logging.error(error_msg)
         raise ValueError(error_msg)
     
     # Validate required sections
     if "config" not in config:
-        error_msg = f"Pricing configuration file {pricing_file} missing required 'config' section."
+        error_msg = f"Model catalog file {catalog_file} missing required 'config' section."
         logging.error(error_msg)
         raise ValueError(error_msg)
     
     if "models" not in config:
-        error_msg = f"Pricing configuration file {pricing_file} missing required 'models' section."
+        error_msg = f"Model catalog file {catalog_file} missing required 'models' section."
         logging.error(error_msg)
         raise ValueError(error_msg)
     
     if not config["models"]:
-        error_msg = f"Pricing configuration file {pricing_file} has no models configured."
+        error_msg = f"Model catalog file {catalog_file} has no models configured."
         logging.error(error_msg)
         raise ValueError(error_msg)
     
     return config
 
 def get_available_models() -> List[str]:
-    """Get available models from pricing configuration."""
+    """Get available models from the model catalog."""
     config = load_model_catalog()
     return list(config["models"].keys())
 
@@ -81,9 +81,9 @@ def get_model_pricing(model: str) -> Dict[str, float]:
             # No fallback available - this is a configuration error
             available_models = list(models.keys())
             error_msg = (
-                f"Model '{model}' not found in pricing configuration and no fallback model '{DEFAULT_FALLBACK_MODEL}' available. "
+                f"Model '{model}' not found in model catalog and no fallback model '{DEFAULT_FALLBACK_MODEL}' available. "
                 f"Available models: {available_models}. "
-                f"Please update your pricing configuration file."
+                f"Please update your model catalog file."
             )
             logging.error(error_msg)
             raise ValueError(error_msg)
@@ -91,12 +91,12 @@ def get_model_pricing(model: str) -> Dict[str, float]:
     return models[model]
 
 def get_pricing_unit() -> int:
-    """Get the pricing unit from configuration."""
+    """Get the pricing unit from the model catalog config."""
     config = load_model_catalog()
     return config["config"]["pricing_unit"]
 
 def get_monthly_limit() -> float:
-    """Get the monthly spending limit from configuration."""
+    """Get the monthly spending limit from the model catalog config."""
     config = load_model_catalog()
     return config["config"]["monthly_limit"]
 
@@ -191,8 +191,8 @@ def resolve_model(
 
 def save_model_catalog(config: Dict[str, Any]) -> None:
     """Save model catalog to file."""
-    pricing_file = get_model_catalog_path()
-    with open(pricing_file, 'w') as f:
+    catalog_file = get_model_catalog_path()
+    with open(catalog_file, 'w') as f:
         json.dump(config, f, indent=2)
 
 # Default model
