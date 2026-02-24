@@ -34,21 +34,21 @@ The CJK Translation script includes comprehensive token usage tracking to help y
 
 ### View Overall Usage Report
 ```bash
-python main.py --usage-report
+python main.py heller --usage-report
 ```
 
 ### View Daily Usage
 ```bash
 # Today's usage
-python main.py --daily-usage
+python main.py heller --daily-usage
 
 # Specific date usage
-python main.py --daily-usage 2025-07-11
+python main.py heller --daily-usage 2025-07-11
 ```
 
 ### Update Model Pricing
 ```bash
-python main.py --update-pricing gpt-4o 2.75 11.00
+python main.py heller --update-pricing gpt-4o 2.75 11.00
 ```
 
 ## Current Pricing (as of July 2025)
@@ -69,17 +69,17 @@ Based on the Princeton KB article: https://princeton.service-now.com/service?id=
 
 ### Required Files:
 - `src/model_catalog.json` - **REQUIRED** - Central pricing configuration and model definitions
-- `src/token_tracker.py` - Core token tracking functionality
+- `src/tracking/token_tracker.py` - Core token tracking functionality
 - `src/config.py` - Centralized configuration management
 
 ### Auto-Generated Files:
 - `token_usage.json` - Usage data (created automatically)
 
 ### Updated Files:
-- `src/translation_service.py` - Integrated token tracking
+- `src/services/translation_service.py` - Integrated token tracking
 - `src/cli.py` - Added usage commands
-- `src/pdf_processor.py` - Added PDF processing utilities
-- `src/file_output.py` - Added file naming utilities
+- `src/processors/pdf_processor.py` - Added PDF processing utilities
+- `src/output/file_output.py` - Added file naming utilities
 
 ## Data Storage
 
@@ -140,22 +140,22 @@ This file stores all usage data and includes:
 ### Normal Usage:
 1. **Translate a document:**
    ```bash
-   python main.py CE -i document.pdf -o translation.txt
+  python main.py heller CE -i document.pdf -o translation.txt
    ```
 
 2. **Check usage after translation:**
    ```bash
-   python main.py --usage-report
+  python main.py heller --usage-report
    ```
 
 3. **Update pricing when Princeton changes rates:**
    ```bash
-   python main.py --update-pricing gpt-4o 3.00 12.00
+  python main.py heller --update-pricing gpt-4o 3.00 12.00
    ```
 
 4. **Check daily usage:**
    ```bash
-   python main.py --daily-usage
+  python main.py heller --daily-usage
    ```
 
 ## Sample Output
@@ -215,7 +215,7 @@ If you encounter issues:
 3. Ensure monthly_limit is set in model_catalog.json
 
 ### Common error messages:
-- "Pricing configuration file not found" - Create `src/model_catalog.json`
-- "Invalid JSON in pricing configuration" - Fix JSON syntax errors
+- "Model catalog file not found" - Create `src/model_catalog.json`
+- "Invalid JSON in model catalog file" - Fix JSON syntax errors
 - "Missing required 'models' section" - Add models section to config
 - "No models configured" - Add at least one model to the models section
