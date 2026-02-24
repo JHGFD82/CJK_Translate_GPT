@@ -14,6 +14,9 @@ from .translation_service import TranslationService
 from .file_output import FileOutputHandler
 from .docx_processor import DocxProcessor
 from .txt_processor import TxtProcessor
+from .image_processor import ImageProcessor
+from .image_processor_service import ImageProcessorService
+from .token_tracker import TokenTracker
 
 # Load environment variables
 load_dotenv()
@@ -105,7 +108,9 @@ class SandboxProcessor:
         try:
             api_key, self.professor_display_name = get_api_key(professor_name)
             self.professor_name = professor_name
-            self.translation_service = TranslationService(api_key, professor_name)
+            
+            # Create shared token tracker for both services
+            self.token_tracker = TokenTracker(professor=professor_name)
             self.file_output = FileOutputHandler()
             self.setup_logging()
         except ValueError as e:
@@ -244,15 +249,15 @@ class SandboxProcessor:
 
     def show_usage_report(self) -> None:
         """Display token usage report."""
-        self.translation_service.print_usage_report()
+        self.token_tracker.print_usage_report()
 
     def show_daily_usage(self, date: Optional[str] = None) -> None:
         """Display daily usage report."""
         if date == 'today':
-            usage = self.translation_service.get_daily_usage()
-            print(f"\\nToday's usage for {self.professor_display_name}:")
+            usage = self.token_tracker.get_daily_usage()
+            print(f"\nToday's usage for {self.professor_display_name}:")
         else:
-            usage = self.translation_service.get_daily_usage(date)
+            usage = self.token_tracker.get_daily_usage(date)
             print(f"\\nUsage for {date} for {self.professor_display_name}:")
         
         if not usage.get('models'):
@@ -270,7 +275,7 @@ class SandboxProcessor:
         try:
             input_price_float = float(input_price)
             output_price_float = float(output_price)
-            self.translation_service.update_model_pricing(model, input_price_float, output_price_float)
+            self.token_tracker.update_pricing(model, input_price_float, output_price_float)
             print(f"Updated pricing for {model}: Input=${input_price_float}, Output=${output_price_float}")
         except ValueError:
             print("Error: Prices must be valid numbers")
