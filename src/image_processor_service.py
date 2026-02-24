@@ -154,7 +154,8 @@ preserving the layout and structure. Do not translate - only extract. Target lan
                                f'Total: {response.usage.total_tokens}, '
                                f'Cost: ${usage.total_cost:.4f}')
                 else:
-                    logging.warning('No token usage information available in response.')
+                    logging.error('CRITICAL: No token usage information available in response. Token tracking failed!')
+                    logging.error('This OCR operation will not be billed/tracked. Please check API configuration.')
                 
                 if response.choices and len(response.choices) > 0 and response.choices[0].message:
                     content = response.choices[0].message.content
