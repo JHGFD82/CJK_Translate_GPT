@@ -44,12 +44,15 @@ PROF_[ID]_BACKUP_KEY=backup_key   # Fallback key
 # Test basic functionality
 python -m src.cli professor_name --help
 python -m src.cli professor_name --usage-report
+python -m src.cli professor_name --list-models
 
 # Test with actual professor (requires .env)
 python -m src.cli conlan CE -c  # Custom text translation
 python -m src.cli conlan CE -i test.pdf  # PDF translation
 python -m src.cli conlan CE -i test.docx  # Word document translation
 python -m src.cli conlan CE -i test.txt  # Text file translation
+python -m src.cli conlan E -i test.jpg -o output.txt  # Image OCR (auto-detected by extension)
+python -m src.cli conlan E -i test.jpg -o output.txt -m gpt-4o-mini  # OCR with specific model
 ```
 
 ### Language Code Pattern
@@ -87,8 +90,26 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 - **PDF Files (.pdf)**: Full text extraction with page range support via `PDFProcessor`
 - **Word Documents (.docx)**: Text-only extraction via `DocxProcessor`, split into logical sections
 - **Text Files (.txt)**: Direct UTF-8 processing via `TxtProcessor`, automatic paragraph detection
+- **Image Files (.jpg, .jpeg, .png, .gif, .bmp, .webp)**: OCR via `ImageProcessorService` with vision-capable models
 - **Legacy PDF Argument**: `--input_PDF` maintained for backward compatibility, use `-i/--input` for new code
-- **File Type Detection**: Automatic detection based on file extension, supports .pdf, .docx/.doc, and .txt
+- **File Type Detection**: Automatic detection based on file extension; images automatically trigger OCR instead of translation
+
+### Image OCR Processing
+- **Automatic Detection**: Image files are detected by extension and routed to OCR automatically
+- **Language Code**: Use single character (E, C, J, K) for target language, not translation pairs (CE, JE)
+- **Vision Model Validation**: Automatically selects and validates vision-capable models from `pricing_config.json`
+- **Token Tracking**: OCR usage tracked in same file as translation via shared `TokenTracker`
+- **Output**: Extracted text printed to console and optionally saved to file with `-o` flag
+- **Model Selection**: Use `-m/--model` to specify which model to use (e.g., `gpt-4o`, `gpt-4o-mini`, `gpt-5`)
+- **Example**: `python main.py professor E -i image.jpg -o extracted.txt -m gpt-4o-mini`
+
+### Model Selection and Configuration
+- **Default Models**: `OCR_MODEL=gpt-4o-mini` for OCR, `DEFAULT_MODEL=gpt-4o` for translation
+- **Custom Model**: Use `-m/--model MODEL_NAME` flag to override defaults for both translation and OCR
+- **List Models**: `python main.py professor --list-models` shows all available models with pricing and vision support
+- **Vision Validation**: ImageProcessorService automatically validates model supports vision, falls back to defaults if not
+- **Model Priority**: Custom model → OCR_MODEL/DEFAULT_MODEL → first available vision-capable model
+- **Configuration**: Models and pricing defined in `src/pricing_config.json` with `supports_vision` boolean flag
 
 ### File Path Handling
 - **Input Path Resolution**: `os.path.abspath()` applied to input files in `translate_pdf()` method
@@ -96,9 +117,10 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 - **Directory Placement**: Output files placed in same directory as source file via `generate_output_filename()`
 
 ## External Dependencies
-- **Azure OpenAI**: Uses `SANDBOX_ENDPOINT` and `SANDBOX_API_VERSION` from config
+- **PortKey**: Uses `SANDBOX_ENDPOINT` and `SANDBOX_API_VERSION` from config
 - **Font Management**: Custom fonts in `fonts/` directory for PDF and Word output
 - **Document Generation**: `reportlab` for PDF, `python-docx` for Word documents
+- **Image Processing**: `ImageProcessor` for image-to-data-url conversion, `ImageProcessorService` for OCR
 - **Princeton-Specific**: API keys from Princeton's AI Sandbox service
 
 ## Common Patterns to Follow
