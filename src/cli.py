@@ -111,6 +111,9 @@ class SandboxProcessor:
             
             # Create shared token tracker for both services
             self.token_tracker = TokenTracker(professor=professor_name)
+            self.image_processor_service = ImageProcessorService(api_key, professor_name, token_tracker=self.token_tracker)
+            
+            self.image_processor = ImageProcessor()
             self.file_output = FileOutputHandler()
             self.setup_logging()
         except ValueError as e:
@@ -246,6 +249,35 @@ class SandboxProcessor:
             print("\nTranslation cancelled.")
         except Exception as e:
             print(f"Error during translation: {e}")
+
+    def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None) -> None:
+        """Process an image file with OCR."""
+        try:
+            print(f"Processing image with OCR: {file_path}")
+            print(f"Target language: {target_language}")
+            
+            # Perform OCR
+            extracted_text = self.image_processor_service.process_image_ocr(
+                file_path, target_language, output_format="console"
+            )
+            
+            print("\n=== Extracted Text ===")
+            print(extracted_text)
+            print("======================\n")
+            
+            # Save to file if output_file is specified
+            if output_file:
+                output_path = os.path.abspath(output_file)
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(extracted_text)
+                print(f"Extracted text saved to: {output_path}")
+                
+        except FileNotFoundError:
+            print(f"Error: Image file '{file_path}' not found.")
+            exit(1)
+        except Exception as e:
+            print(f"Error processing image: {e}")
+            exit(1)
 
     def show_usage_report(self) -> None:
         """Display token usage report."""
