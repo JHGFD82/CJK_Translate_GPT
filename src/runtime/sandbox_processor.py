@@ -4,7 +4,7 @@ import argparse
 import logging
 import os
 import sys
-from typing import Optional, List
+from typing import Optional, List, Union
 
 from ..config import get_api_key, extract_page_nums
 from ..errors import CLIError
@@ -284,7 +284,7 @@ class SandboxProcessor:
 
     def _get_ocr_target_language(self, args: argparse.Namespace) -> str:
         """Extract target language for OCR processing."""
-        language_code = getattr(args, 'language_code', None)
+        language_code: Union[str, tuple[str, str], None] = getattr(args, 'language_code', None)
 
         if not language_code:
             raise CLIError("Target language code is required for OCR (e.g., 'E' for English, 'C' for Chinese)")
@@ -297,7 +297,7 @@ class SandboxProcessor:
 
     def _get_translation_languages(self, args: argparse.Namespace) -> tuple[str, str]:
         """Extract source and target languages for translation."""
-        language_code = getattr(args, 'language_code', None)
+        language_code: Union[str, tuple[str, str], None] = getattr(args, 'language_code', None)
 
         if not language_code:
             raise CLIError("Language code is required for translation")
