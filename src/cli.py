@@ -97,11 +97,11 @@ Examples:
     return parser
 
 
-class CJKTranslator:
-    """Main application class for CJK translation."""
+class SandboxProcessor:
+    """Main application class for processing inputs to the Princeton AI Sandbox."""
     
     def __init__(self, professor_name: str):
-        """Initialize the translator for the specified professor."""
+        """Initialize the processor for the specified professor."""
         try:
             api_key, self.professor_display_name = get_api_key(professor_name)
             self.professor_name = professor_name
@@ -320,7 +320,7 @@ class CJKTranslator:
             input_name, _ = os.path.splitext(os.path.basename(args.input_file))
             output_file = os.path.join(input_dir, f"{input_name}_translated.txt")
         
-        # Handle input files
+        # Handle input files (translation)
         if args.input_file:
             self.translate_document(
                 args.input_file, source_language, target_language,
@@ -337,8 +337,8 @@ def main() -> None:
     parser = create_argument_parser()
     args = parser.parse_args()
     
-    translator = CJKTranslator(args.professor)
-    translator.run(args)
+    sandbox = SandboxProcessor(args.professor)
+    sandbox.run(args)
 
 
 if __name__ == '__main__':
