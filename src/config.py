@@ -5,7 +5,7 @@ Configuration constants for the CJK Translation script.
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 # Language mapping
 LANGUAGE_MAP: Dict[str, str] = {
@@ -116,6 +116,78 @@ def get_vision_capable_models() -> List[str]:
     config = load_pricing_config()
     return [model for model, details in config["models"].items() 
             if details.get("supports_vision", False)]
+
+def resolve_model(
+    requested_model: Optional[str] = None,
+    *,
+    prefer_model: Optional[str] = None,
+    require_vision: bool = False,
+) -> str:
+    """Resolve a model name from config using deterministic fallback rules.
+
+    Resolution order:
+    1) requested_model (if provided and valid)
+    2) prefer_model (if provided and valid)
+    3) DEFAULT_MODEL (if valid)
+    4) first available compatible model from pricing config
+
+    Args:
+        requested_model: Optional user-specified model
+        prefer_model: Optional mode-specific preferred model (e.g., OCR_MODEL)
+        require_vision: Whether selected model must support vision
+
+    Returns:
+        Resolved model name
+
+    Raises:
+        ValueError: If requested model is invalid/incompatible or no compatible model exists
+    """
+    available_models = get_available_models()
+    compatibility_label = "vision-capable" if require_vision else "configured"
+    suggestion = (
+        "Use --list-models to see which models support vision."
+        if require_vision
+        else "Use --list-models to see available options."
+    )
+
+    def is_compatible(model_name: str) -> bool:
+        return model_supports_vision(model_name) if require_vision else True
+
+    def resolve_candidate(model_name: Optional[str]) -> Optional[str]:
+        if model_name and model_name in available_models and is_compatible(model_name):
+            return model_name
+        return None
+
+    if requested_model:
+        # 1) requested_model (if provided and valid)
+        if requested_model not in available_models:
+            raise ValueError(f"Custom model '{requested_model}' is not configured. {suggestion}")
+        if not is_compatible(requested_model):
+            raise ValueError(
+                f"Custom model '{requested_model}' is not {compatibility_label} for this operation. {suggestion}"
+            )
+        return requested_model
+
+    # 2) prefer_model (if provided and valid)
+    # 3) DEFAULT_MODEL (if valid)
+    priority_candidates = [candidate for candidate in (prefer_model, DEFAULT_MODEL) if candidate]
+    for candidate in priority_candidates:
+        resolved = resolve_candidate(candidate)
+        if resolved:
+            return resolved
+
+    # 4) first available compatible model from pricing config
+    for model in available_models:
+        if model in priority_candidates:
+            continue
+        resolved = resolve_candidate(model)
+        if resolved:
+            return resolved
+
+    raise ValueError(
+        f"No {compatibility_label} models available. Available models: {available_models}. "
+        "Please update pricing_config.json."
+    )
 
 def save_pricing_config(config: Dict[str, Any]) -> None:
     """Save pricing configuration to file."""

@@ -10,9 +10,9 @@ from collections.abc import Iterator as ABCIterator
 from portkey_ai import Portkey
 
 from .config import (
-    get_available_models, DEFAULT_MODEL, OCR_MODEL, OCR_TEMPERATURE, OCR_MAX_TOKENS, OCR_TOP_P,
+    DEFAULT_MODEL, OCR_MODEL, OCR_TEMPERATURE, OCR_MAX_TOKENS, OCR_TOP_P,
     OCR_FREQUENCY_PENALTY, OCR_PRESENCE_PENALTY,
-    MAX_RETRIES, BASE_RETRY_DELAY, model_supports_vision, get_vision_capable_models
+    MAX_RETRIES, BASE_RETRY_DELAY, model_supports_vision, get_vision_capable_models, resolve_model
 )
 from .image_processor import ImageProcessor
 from .token_tracker import TokenTracker
@@ -43,38 +43,18 @@ class ImageProcessorService:
     
     def _get_model(self) -> str:
         """Get the model to use for OCR, preferring custom model if specified and supports vision."""
-        available_models = get_available_models()
-        
-        # If custom model specified, validate it supports vision
-        if self.custom_model:
-            if self.custom_model not in available_models:
-                raise ValueError(f"Custom model '{self.custom_model}' not found in available models. Use --list-models to see available options.")
-            elif not model_supports_vision(self.custom_model):
-                raise ValueError(f"Custom model '{self.custom_model}' does not support vision. OCR requires a vision-capable model. Use --list-models to see which models support vision.")
-            else:
-                return self.custom_model
-        
-        # Prefer OCR_MODEL for image processing
-        if OCR_MODEL in available_models and model_supports_vision(OCR_MODEL):
-            return OCR_MODEL
-        
-        # Fall back to DEFAULT_MODEL
-        if DEFAULT_MODEL in available_models and model_supports_vision(DEFAULT_MODEL):
-            logging.warning(f"OCR model {OCR_MODEL} not available. Using {DEFAULT_MODEL} instead.")
-            return DEFAULT_MODEL
-        
-        # Find first available model that supports vision
-        vision_models = get_vision_capable_models()
-        for model in vision_models:
-            if model in available_models:
-                logging.warning(f"Neither OCR model {OCR_MODEL} nor default {DEFAULT_MODEL} available. Using {model} instead.")
-                return model
-        
-        # No vision-capable models found
-        raise ValueError(
-            f"No vision-capable models available. Available models: {available_models}. "
-            f"Please configure at least one model with 'supports_vision': true in pricing_config.json"
+        model = resolve_model(
+            requested_model=self.custom_model,
+            prefer_model=OCR_MODEL,
+            require_vision=True,
         )
+
+        if not self.custom_model and model == DEFAULT_MODEL and OCR_MODEL != DEFAULT_MODEL:
+            logging.warning(f"OCR model {OCR_MODEL} not available. Using {DEFAULT_MODEL} instead.")
+        elif not self.custom_model and model not in (OCR_MODEL, DEFAULT_MODEL):
+            logging.warning(f"Neither OCR model {OCR_MODEL} nor default {DEFAULT_MODEL} available. Using {model} instead.")
+
+        return model
     
     def _create_ocr_prompt(self, target_language: str) -> tuple[str, str]:
         """Create system and user prompt templates for OCR."""
