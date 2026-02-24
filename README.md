@@ -7,12 +7,16 @@ This application is designed exclusively for Princeton University faculty member
 ## Features
 - Translate between Chinese, Japanese, Korean, and English in any direction
 - Extract text from PDF files, Word documents (.docx), and plain text files (.txt) and translate
+- Optical Character Recognition (OCR) from image files (.jpg, .png, .gif, .bmp, .webp)
 - Support for custom text input
+- Model selection for cost optimization and quality control
+- List available models with pricing and capabilities
 - Save translations to text files, PDF files, or Word documents (.docx)
 - Auto-save functionality with timestamped filenames
 - Page range selection for PDF processing
 - Abstract context support for better translations
 - CJK font support for PDF and Word document generation
+- Per-professor token usage tracking and budget monitoring
 
 ## Requirements
 - Python 3.7+
@@ -61,6 +65,46 @@ python main.py heller JE -i document.txt -o translation.docx -f AppleGothic
 
 # Use custom font for PDF/Word output
 python main.py smith CE -i document.pdf -o translation.pdf -f AppleGothic
+```
+
+### Model Selection
+```bash
+# List all available models with pricing and vision support
+python main.py heller --list-models
+
+# Use specific model for translation
+python main.py heller CE -i document.pdf -m gpt-4o-mini
+
+# Use specific model for OCR
+python main.py smith E -i image.jpg -o extracted.txt -m gpt-4o
+
+# Use different models for cost optimization
+python main.py heller JE -i document.txt -m gpt-4o-mini  # Lower cost
+python main.py smith CE -i complex.pdf -m gpt-4o        # Higher quality
+```
+
+**Available Models:**
+- `gpt-4o-mini` - Most cost-effective, supports vision (recommended for OCR)
+- `gpt-4o` - Balanced performance and cost, supports vision (default for translation)
+- `gpt-4-turbo` - High quality, supports vision
+- `gpt-5` - Latest model, supports vision
+- Plus various non-vision models (see `--list-models` for full list)
+
+**Note:** OCR requires vision-capable models. If you specify a model that doesn't support vision for OCR operations, you'll receive an error.
+
+### Image OCR Processing
+```bash
+# Extract text from image to console
+python main.py heller E -i document_scan.jpg
+
+# Extract text and save to file
+python main.py smith J -i photo.png -o output.txt
+
+# Use specific model for better accuracy
+python main.py heller C -i scan.jpg -o chinese_text.txt -m gpt-4o
+
+# Extract English text using cost-effective model
+python main.py smith E -i receipt.jpg -o receipt.txt -m gpt-4o-mini
 ```
 
 ### Token Usage Tracking
@@ -116,9 +160,18 @@ This ensures that temporary API issues or problematic pages don't stop the entir
 - Preserves original text structure and formatting
 - Page number selection not supported (entire file is processed)
 
+### Image Files (.jpg, .jpeg, .png, .gif, .bmp, .webp)
+- Optical Character Recognition (OCR) using vision-capable models
+- Extracts text from images containing CJK or English text
+- Requires vision-capable models (gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-5)
+- Use single-character language code for target language (E, C, J, K)
+- Example: `python main.py heller E -i photo.jpg -o extracted.txt`
+
 **Note:** For Word document input, only .docx format is supported. Legacy .doc files are not supported.
 
 ## Language Codes
+
+### For Translation (two-character codes)
 - `C` = Chinese
 - `J` = Japanese
 - `K` = Korean
@@ -129,6 +182,14 @@ Examples:
 - `JK` = Japanese to Korean
 - `EJ` = English to Japanese
 - `KC` = Korean to Chinese
+
+### For OCR (single-character codes)
+- `E` = Extract as English
+- `C` = Extract as Chinese
+- `J` = Extract as Japanese
+- `K` = Extract as Korean
+
+**Note:** OCR uses single-character codes to specify the target language, while translation uses two-character codes to specify source and target.
 
 ## Installation
 
