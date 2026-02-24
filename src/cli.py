@@ -30,7 +30,7 @@ def setup_logging() -> None:
 def create_argument_parser() -> argparse.ArgumentParser:
     """Create and configure the command-line argument parser."""
     parser = argparse.ArgumentParser(
-        description='Translate documents between Chinese, Japanese, Korean, and English using OpenAI API',
+        description='Translate documents between Chinese, Japanese, Korean, and English using PortKey API',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Language codes:
