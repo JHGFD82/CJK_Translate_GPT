@@ -376,41 +376,51 @@ class SandboxProcessor:
         
         return False
 
-    def _extract_language_pair(self, args: argparse.Namespace, is_image: bool) -> tuple[str, str]:
-        """Extract and validate source and target languages.
+    def _get_ocr_target_language(self, args: argparse.Namespace) -> str:
+        """Extract target language for OCR processing.
         
         Args:
             args: Command-line arguments
-            is_image: Whether processing an image file (OCR)
+            
+        Returns:
+            Target language string
+        """
+        language_code = getattr(args, 'language_code', None)
+        
+        if not language_code:
+            print("Error: Target language code is required for OCR (e.g., 'E' for English, 'C' for Chinese)")
+            exit(1)
+        
+        # Accept either single language code or translation pair (use target language)
+        if isinstance(language_code, tuple):
+            lang_tuple: tuple[str, str] = language_code  # type: ignore[assignment]
+            return lang_tuple[1]
+        else:
+            # Single language string
+            return language_code  # type: ignore[return-value]
+    
+    def _get_translation_languages(self, args: argparse.Namespace) -> tuple[str, str]:
+        """Extract source and target languages for translation.
+        
+        Args:
+            args: Command-line arguments
             
         Returns:
             Tuple of (source_language, target_language)
         """
-        if not args.language_code:
-            if is_image:
-                print("Error: Target language code is required for OCR (e.g., 'E' for English, 'C' for Chinese)")
-            else:
-                print("Error: Language code is required for translation")
+        language_code = getattr(args, 'language_code', None)
+        
+        if not language_code:
+            print("Error: Language code is required for translation")
             exit(1)
         
-        if is_image:
-            # For OCR, extract target language from either single code or translation pair
-            if isinstance(args.language_code, tuple):
-                # Type narrowing: we know it's a tuple here
-                lang_tuple: tuple[str, str] = args.language_code  # type: ignore[assignment]
-                target_language = lang_tuple[1]
-            else:
-                # Single language string
-                target_language = args.language_code  # type: ignore[assignment]
-            return ("", target_language)  # Source language not needed for OCR
-        else:
-            # For translation, require a language pair
-            if not isinstance(args.language_code, tuple):
-                print("Error: Translation requires a 2-character language code (e.g., CE, JE, KE)")
-                exit(1)
-            # Type narrowing: we know it's a tuple here
-            lang_tuple: tuple[str, str] = args.language_code  # type: ignore[assignment]
-            return (lang_tuple[0], lang_tuple[1])
+        if not isinstance(language_code, tuple):
+            print("Error: Translation requires a 2-character language code (e.g., CE, JE, KE)")
+            exit(1)
+        
+        # Type narrowing: we know it's a tuple here
+        lang_tuple: tuple[str, str] = language_code  # type: ignore[assignment]
+        return (lang_tuple[0], lang_tuple[1])
 
     def _resolve_output_path(self, args: argparse.Namespace) -> Optional[str]:
         """Resolve the output file path based on arguments.
@@ -459,12 +469,12 @@ class SandboxProcessor:
                     print(f"Error: Image file '{input_file_abs}' is not valid.")
                     exit(1)
                 
-                _, target_language = self._extract_language_pair(args, is_image=True)
+                target_language = self._get_ocr_target_language(args)
                 self.process_image(input_file_abs, target_language, args.output_file)
                 return
             
             # Otherwise, route to document translation
-            source_language, target_language = self._extract_language_pair(args, is_image=False)
+            source_language, target_language = self._get_translation_languages(args)
             output_file = self._resolve_output_path(args)
             
             self.translate_document(
@@ -475,7 +485,7 @@ class SandboxProcessor:
         
         # Handle custom text translation
         elif args.custom_text:
-            source_language, target_language = self._extract_language_pair(args, is_image=False)
+            source_language, target_language = self._get_translation_languages(args)
             output_file = self._resolve_output_path(args)
             
             self.translate_custom_text(
