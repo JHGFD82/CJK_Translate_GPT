@@ -24,7 +24,8 @@ Features:
 - Multi-format document processing
 """
 
-from .cli import main, SandboxProcessor
+from .cli import main
+from .runtime import SandboxProcessor
 from .services.translation_service import TranslationService
 from .output.file_output import FileOutputHandler
 from .processors.pdf_processor import PDFProcessor
@@ -32,6 +33,7 @@ from .processors.docx_processor import DocxProcessor
 from .processors.txt_processor import TxtProcessor
 from .processors.base_text_processor import BaseTextProcessor
 from .tracking.token_tracker import TokenTracker
+from .errors import CLIError
 from .config import (
     parse_language_code,
     load_professor_config,
