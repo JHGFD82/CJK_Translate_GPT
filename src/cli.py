@@ -116,9 +116,9 @@ Examples:
 
 def list_available_models() -> None:
     """List all available models and their capabilities without initializing services."""
-    from .config import load_pricing_config, get_pricing_unit
+    from .config import load_model_catalog, get_pricing_unit
 
-    config = load_pricing_config()
+    config = load_model_catalog()
     models = config["models"]
     pricing_unit = get_pricing_unit()
 

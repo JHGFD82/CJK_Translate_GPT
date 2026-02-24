@@ -8,7 +8,7 @@ Academic translation tool for Princeton University faculty to translate between 
 
 - **Entry Point**: `main.py` → `src/cli.py` → `CJKTranslator` class
 - **Core Services**: `TranslationService` (Azure OpenAI), `TokenTracker` (usage tracking), `PDFProcessor` (text extraction), `DocxProcessor` (Word document text extraction), `TxtProcessor` (text file processing), `FileOutputHandler` (output formatting)
-- **Configuration**: Environment variables (`.env`) for professor configs, `pricing_config.json` for model pricing
+- **Configuration**: Environment variables (`.env`) for professor configs, `model_catalog.json` for model pricing
 
 ## Professor Configuration System
 The system uses a specific environment variable pattern:
@@ -27,7 +27,7 @@ PROF_[ID]_BACKUP_KEY=backup_key   # Fallback key
 **Per-Professor Isolation**: Each professor gets separate token usage tracking:
 - Files: `data/token_usage_{safe_name}.json`
 - Structure: `{total_usage, model_usage, daily_usage, session_history}`
-- Pricing: Loaded from `src/pricing_config.json` with configurable units (default: per 1M tokens)
+- Pricing: Loaded from `src/model_catalog.json` with configurable units (default: per 1M tokens)
 - Budget tracking: Monthly limits with percentage warnings
 
 **Migration Pattern**: Legacy `token_usage.json` is automatically migrated to professor-specific files on first run.
@@ -97,7 +97,7 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 ### Image OCR Processing
 - **Automatic Detection**: Image files are detected by extension and routed to OCR automatically
 - **Language Code**: Use single character (E, C, J, K) for target language, not translation pairs (CE, JE)
-- **Vision Model Validation**: Automatically selects and validates vision-capable models from `pricing_config.json`
+- **Vision Model Validation**: Automatically selects and validates vision-capable models from `model_catalog.json`
 - **Token Tracking**: OCR usage tracked in same file as translation via shared `TokenTracker`
 - **Output**: Extracted text printed to console and optionally saved to file with `-o` flag
 - **Model Selection**: Use `-m/--model` to specify which model to use (e.g., `gpt-4o`, `gpt-4o-mini`, `gpt-5`)
@@ -109,7 +109,7 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 - **List Models**: `python main.py professor --list-models` shows all available models with pricing and vision support
 - **Vision Validation**: ImageProcessorService automatically validates model supports vision, falls back to defaults if not
 - **Model Priority**: Custom model → OCR_MODEL/DEFAULT_MODEL → first available vision-capable model
-- **Configuration**: Models and pricing defined in `src/pricing_config.json` with `supports_vision` boolean flag
+- **Configuration**: Models and pricing defined in `src/model_catalog.json` with `supports_vision` boolean flag
 
 ### File Path Handling
 - **Input Path Resolution**: `os.path.abspath()` applied to input files in `translate_pdf()` method

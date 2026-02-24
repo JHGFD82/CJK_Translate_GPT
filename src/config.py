@@ -16,16 +16,16 @@ LANGUAGE_MAP: Dict[str, str] = {
 }
 
 # Constants
-PRICING_CONFIG_FILE = "pricing_config.json"
+MODEL_CATALOG_FILE = "model_catalog.json"
 DEFAULT_FALLBACK_MODEL = "gpt-4o-mini"
 
-def get_pricing_config_path() -> Path:
-    """Get the path to the pricing configuration file."""
-    return Path(__file__).parent / PRICING_CONFIG_FILE
+def get_model_catalog_path() -> Path:
+    """Get the path to the model catalog file."""
+    return Path(__file__).parent / MODEL_CATALOG_FILE
 
-def load_pricing_config() -> Dict[str, Any]:
-    """Load pricing configuration from file with comprehensive validation."""
-    pricing_file = get_pricing_config_path()
+def load_model_catalog() -> Dict[str, Any]:
+    """Load model catalog from file with comprehensive validation."""
+    pricing_file = get_model_catalog_path()
     
     if not pricing_file.exists():
         error_msg = (
@@ -64,12 +64,12 @@ def load_pricing_config() -> Dict[str, Any]:
 
 def get_available_models() -> List[str]:
     """Get available models from pricing configuration."""
-    config = load_pricing_config()
+    config = load_model_catalog()
     return list(config["models"].keys())
 
 def get_model_pricing(model: str) -> Dict[str, float]:
     """Get pricing for a specific model."""
-    config = load_pricing_config()
+    config = load_model_catalog()
     models = config["models"]
     
     if model not in models:
@@ -92,17 +92,17 @@ def get_model_pricing(model: str) -> Dict[str, float]:
 
 def get_pricing_unit() -> int:
     """Get the pricing unit from configuration."""
-    config = load_pricing_config()
+    config = load_model_catalog()
     return config["config"]["pricing_unit"]
 
 def get_monthly_limit() -> float:
     """Get the monthly spending limit from configuration."""
-    config = load_pricing_config()
+    config = load_model_catalog()
     return config["config"]["monthly_limit"]
 
 def model_supports_vision(model: str) -> bool:
     """Check if a model supports vision/image processing."""
-    config = load_pricing_config()
+    config = load_model_catalog()
     models = config["models"]
     
     if model not in models:
@@ -113,7 +113,7 @@ def model_supports_vision(model: str) -> bool:
 
 def get_vision_capable_models() -> List[str]:
     """Get list of models that support vision/image processing."""
-    config = load_pricing_config()
+    config = load_model_catalog()
     return [model for model, details in config["models"].items() 
             if details.get("supports_vision", False)]
 
@@ -186,12 +186,12 @@ def resolve_model(
 
     raise ValueError(
         f"No {compatibility_label} models available. Available models: {available_models}. "
-        "Please update pricing_config.json."
+        "Please update model_catalog.json."
     )
 
-def save_pricing_config(config: Dict[str, Any]) -> None:
-    """Save pricing configuration to file."""
-    pricing_file = get_pricing_config_path()
+def save_model_catalog(config: Dict[str, Any]) -> None:
+    """Save model catalog to file."""
+    pricing_file = get_model_catalog_path()
     with open(pricing_file, 'w') as f:
         json.dump(config, f, indent=2)
 

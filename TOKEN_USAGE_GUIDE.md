@@ -4,18 +4,18 @@
 
 The CJK Translation script includes comprehensive token usage tracking to help you monitor your API usage and costs. This feature tracks token consumption across all API calls and provides detailed reports on usage patterns and costs.
 
-**Important:** The script now requires a `pricing_config.json` file to function. This file serves as the single source of truth for all model pricing and configuration data.
+**Important:** The script now requires a `model_catalog.json` file to function. This file serves as the single source of truth for all model pricing and configuration data.
 
 ## Features
 
 ### 1. Automatic Token Tracking
 - All API calls are automatically tracked
 - Records input tokens, output tokens, and total tokens
-- Calculates costs based on current pricing from `pricing_config.json`
+- Calculates costs based on current pricing from `model_catalog.json`
 - Stores usage data persistently in `token_usage.json`
 
 ### 2. Centralized Configuration
-- All model pricing stored in `pricing_config.json`
+- All model pricing stored in `model_catalog.json`
 - Script will not run without valid pricing configuration
 - Automatic model discovery from pricing configuration
 - Consistent pricing across all modules
@@ -68,7 +68,7 @@ Based on the Princeton KB article: https://princeton.service-now.com/service?id=
 ## File Structure
 
 ### Required Files:
-- `src/pricing_config.json` - **REQUIRED** - Central pricing configuration and model definitions
+- `src/model_catalog.json` - **REQUIRED** - Central pricing configuration and model definitions
 - `src/token_tracker.py` - Core token tracking functionality
 - `src/config.py` - Centralized configuration management
 
@@ -83,7 +83,7 @@ Based on the Princeton KB article: https://princeton.service-now.com/service?id=
 
 ## Data Storage
 
-### pricing_config.json (Required)
+### model_catalog.json (Required)
 This file is **required** for the script to function and contains:
 - Model pricing information (input/output costs per 1M tokens)
 - Configuration settings (pricing unit, monthly limits)
@@ -123,7 +123,7 @@ This file stores all usage data and includes:
 ## Example Usage Workflow
 
 ### First Time Setup:
-1. **Ensure `src/pricing_config.json` exists** (required):
+1. **Ensure `src/model_catalog.json` exists** (required):
    ```json
    {
      "config": {
@@ -190,9 +190,9 @@ Cost: $0.0505
 
 ## Important Notes
 
-1. **pricing_config.json is required** - The script will not run without this file
+1. **model_catalog.json is required** - The script will not run without this file
 2. **Token tracking is automatic** - No need to manually track usage
-3. **Pricing updates persist** - Updated pricing is saved to `pricing_config.json`
+3. **Pricing updates persist** - Updated pricing is saved to `model_catalog.json`
 4. **Historical data preserved** - All usage history is maintained in `token_usage.json`
 5. **Cost calculations** - Automatically calculates costs based on current pricing
 6. **Multiple models supported** - Tracks usage across all available models
@@ -204,18 +204,18 @@ Cost: $0.0505
 If you encounter issues:
 
 ### Script won't start:
-1. **Check that `src/pricing_config.json` exists** - This file is required
-2. **Verify pricing_config.json has valid JSON** - Check for syntax errors
-3. **Ensure pricing_config.json has required sections** - Must have "config" and "models" sections
+1. **Check that `src/model_catalog.json` exists** - This file is required
+2. **Verify model_catalog.json has valid JSON** - Check for syntax errors
+3. **Ensure model_catalog.json has required sections** - Must have "config" and "models" sections
 4. **Check that models section is not empty** - At least one model must be defined
 
 ### Usage tracking issues:
 1. Check that `token_usage.json` has write permissions
 2. Verify the model name in pricing matches the actual model used by the API
-3. Ensure monthly_limit is set in pricing_config.json
+3. Ensure monthly_limit is set in model_catalog.json
 
 ### Common error messages:
-- "Pricing configuration file not found" - Create `src/pricing_config.json`
+- "Pricing configuration file not found" - Create `src/model_catalog.json`
 - "Invalid JSON in pricing configuration" - Fix JSON syntax errors
 - "Missing required 'models' section" - Add models section to config
 - "No models configured" - Add at least one model to the models section
