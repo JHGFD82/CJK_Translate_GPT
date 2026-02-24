@@ -84,9 +84,6 @@ Examples:
     parser.add_argument('-f', '--font', dest='custom_font', type=str,
                         help='Custom font name to use for PDF and Word document generation (font must be in fonts/ directory)')
 
-    parser.add_argument('--ocr', dest='ocr', action='store_true',
-                        help='Perform OCR on image file (requires single language code for target language only)')
-
     # Token usage commands
     parser.add_argument('--usage-report', dest='usage_report', action='store_true',
                         help='Display token usage and cost report')
