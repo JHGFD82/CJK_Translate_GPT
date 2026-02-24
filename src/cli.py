@@ -14,6 +14,9 @@ from .translation_service import TranslationService
 from .file_output import FileOutputHandler
 from .docx_processor import DocxProcessor
 from .txt_processor import TxtProcessor
+from .image_processor import ImageProcessor
+from .image_processor_service import ImageProcessorService
+from .token_tracker import TokenTracker
 
 # Load environment variables
 load_dotenv()
@@ -27,7 +30,7 @@ def setup_logging() -> None:
 def create_argument_parser() -> argparse.ArgumentParser:
     """Create and configure the command-line argument parser."""
     parser = argparse.ArgumentParser(
-        description='Translate documents between Chinese, Japanese, Korean, and English using OpenAI API',
+        description='Translate documents between Chinese, Japanese, Korean, and English using PortKey API',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Language codes:
@@ -81,6 +84,13 @@ Examples:
     parser.add_argument('-f', '--font', dest='custom_font', type=str,
                         help='Custom font name to use for PDF and Word document generation (font must be in fonts/ directory)')
 
+    parser.add_argument('-m', '--model', dest='model', type=str,
+                        help='Specify which model to use (e.g., gpt-4o, gpt-4o-mini, gpt-5)')
+
+    # Information commands
+    parser.add_argument('--list-models', dest='list_models', action='store_true',
+                        help='List all available models and their capabilities')
+
     # Token usage commands
     parser.add_argument('--usage-report', dest='usage_report', action='store_true',
                         help='Display token usage and cost report')
@@ -94,15 +104,32 @@ Examples:
     return parser
 
 
-class CJKTranslator:
-    """Main application class for CJK translation."""
+class SandboxProcessor:
+    """Main application class for processing inputs to the Princeton AI Sandbox."""
     
-    def __init__(self, professor_name: str):
-        """Initialize the translator for the specified professor."""
+    def __init__(self, professor_name: str, model: Optional[str] = None):
+        """Initialize the processor for the specified professor.
+        
+        Args:
+            professor_name: Name of the professor
+            model: Optional model name to use instead of defaults
+        """
         try:
             api_key, self.professor_display_name = get_api_key(professor_name)
             self.professor_name = professor_name
-            self.translation_service = TranslationService(api_key, professor_name)
+            
+            # Create shared token tracker for both services
+            self.token_tracker = TokenTracker(professor=professor_name)
+            
+            # Initialize services with shared token tracker and optional model
+            self.translation_service = TranslationService(
+                api_key, professor_name, token_tracker=self.token_tracker, model=model
+            )
+            self.image_processor_service = ImageProcessorService(
+                api_key, professor_name, token_tracker=self.token_tracker, model=model
+            )
+            
+            self.image_processor = ImageProcessor()
             self.file_output = FileOutputHandler()
             self.setup_logging()
         except ValueError as e:
@@ -239,17 +266,46 @@ class CJKTranslator:
         except Exception as e:
             print(f"Error during translation: {e}")
 
+    def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None) -> None:
+        """Process an image file with OCR."""
+        try:
+            print(f"Processing image with OCR: {file_path}")
+            print(f"Target language: {target_language}")
+            
+            # Perform OCR
+            extracted_text = self.image_processor_service.process_image_ocr(
+                file_path, target_language, output_format="console"
+            )
+            
+            print("\n=== Extracted Text ===")
+            print(extracted_text)
+            print("======================\n")
+            
+            # Save to file if output_file is specified
+            if output_file:
+                output_path = os.path.abspath(output_file)
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(extracted_text)
+                print(f"Extracted text saved to: {output_path}")
+                
+        except FileNotFoundError:
+            print(f"Error: Image file '{file_path}' not found.")
+            exit(1)
+        except Exception as e:
+            print(f"Error processing image: {e}")
+            exit(1)
+
     def show_usage_report(self) -> None:
         """Display token usage report."""
-        self.translation_service.print_usage_report()
+        self.token_tracker.print_usage_report()
 
     def show_daily_usage(self, date: Optional[str] = None) -> None:
         """Display daily usage report."""
         if date == 'today':
-            usage = self.translation_service.get_daily_usage()
-            print(f"\\nToday's usage for {self.professor_display_name}:")
+            usage = self.token_tracker.get_daily_usage()
+            print(f"\nToday's usage for {self.professor_display_name}:")
         else:
-            usage = self.translation_service.get_daily_usage(date)
+            usage = self.token_tracker.get_daily_usage(date)
             print(f"\\nUsage for {date} for {self.professor_display_name}:")
         
         if not usage.get('models'):
@@ -267,15 +323,38 @@ class CJKTranslator:
         try:
             input_price_float = float(input_price)
             output_price_float = float(output_price)
-            self.translation_service.update_model_pricing(model, input_price_float, output_price_float)
+            self.token_tracker.update_pricing(model, input_price_float, output_price_float)
             print(f"Updated pricing for {model}: Input=${input_price_float}, Output=${output_price_float}")
         except ValueError:
             print("Error: Prices must be valid numbers")
             exit(1)
 
+    def list_models(self) -> None:
+        """List all available models and their capabilities."""
+        from .config import load_pricing_config, get_pricing_unit, model_supports_vision
+        
+        config = load_pricing_config()
+        models = config["models"]
+        pricing_unit = get_pricing_unit()
+        
+        print("\n=== Available Models ===")
+        print(f"Pricing is per {pricing_unit:,} tokens\n")
+        
+        for model_name, pricing in sorted(models.items()):
+            vision = "✓" if model_supports_vision(model_name) else "✗"
+            print(f"{model_name}")
+            print(f"  Vision Support: {vision}")
+            print(f"  Input:  ${pricing['input']:.3f} per {pricing_unit:,} tokens")
+            print(f"  Output: ${pricing['output']:.3f} per {pricing_unit:,} tokens")
+            print()
+
     def run(self, args: argparse.Namespace) -> None:
         """Run the translation application with the given arguments."""
         # Handle non-translation commands first
+        if args.list_models:
+            self.list_models()
+            return
+        
         if args.usage_report:
             self.show_usage_report()
             return
@@ -289,17 +368,63 @@ class CJKTranslator:
             self.update_pricing(model, input_price, output_price)
             return
         
-        # Check if language_code is provided for translation commands
-        if not args.language_code:
-            if args.input_file or args.custom_text:
-                print("Error: Language code is required for translation commands")
-                exit(1)
+        # Check if an input file is provided
+        if args.input_file:
+            input_file_abs = os.path.abspath(args.input_file)
+            
+            # Determine if this is an image file (image processing) or other file (translation)
+            if self.image_processor.is_image_file(input_file_abs):
+                # Image processing path
+                if not self.image_processor.validate_image_file(input_file_abs):
+                    print(f"Error: Image file '{input_file_abs}' is not valid.")
+                    exit(1)
+                
+                # For OCR, language_code should be a single language (target language)
+                if not args.language_code:
+                    print("Error: Target language code is required for OCR (e.g., 'E' for English, 'C' for Chinese)")
+                    exit(1)
+                
+                # Extract target language - for OCR, we expect single language code
+                target_language: str
+                if isinstance(args.language_code, tuple):
+                    # If it's a translation pair, use the target (second) language
+                    target_language = str(args.language_code[1])  # type: ignore[index]
+                else:
+                    # Single language code
+                    target_language = str(args.language_code)  # type: ignore[arg-type]
+                
+                self.process_image(input_file_abs, target_language, args.output_file)
+                return
             else:
-                print("Error: Please specify a command (translation, usage report, etc.)")
+                # Translation path - language code is required for translation
+                if not args.language_code:
+                    print("Error: Language code is required for document translation")
+                    exit(1)
+                
+                # Ensure language_code is a tuple for translation
+                if not isinstance(args.language_code, tuple):
+                    print("Error: Translation requires a 2-character language code (e.g., CE, JE, KE)")
+                    exit(1)
+        elif args.custom_text:
+            # Custom text translation - language code is required
+            if not args.language_code:
+                print("Error: Language code is required for text translation")
                 exit(1)
+            
+            # Ensure language_code is a tuple for translation
+            if not isinstance(args.language_code, tuple):
+                print("Error: Translation requires a 2-character language code (e.g., CE, JE, KE)")
+                exit(1)
+        else:
+            # No input specified
+            print("Error: Please specify a command (translation, usage report, etc.)")
+            exit(1)
         
         # Extract source and target languages from the language code
-        source_language, target_language = args.language_code
+        # At this point we know it's a tuple from the validation above
+        assert isinstance(args.language_code, tuple), "Language code should be a tuple for translation"  # type: ignore[misc]
+        source_language: str = str(args.language_code[0])  # type: ignore[index]
+        target_language: str = str(args.language_code[1])  # type: ignore[index]
         
         # Handle output file path logic
         output_file: Optional[str] = None
@@ -317,7 +442,7 @@ class CJKTranslator:
             input_name, _ = os.path.splitext(os.path.basename(args.input_file))
             output_file = os.path.join(input_dir, f"{input_name}_translated.txt")
         
-        # Handle input files
+        # Handle input files (translation)
         if args.input_file:
             self.translate_document(
                 args.input_file, source_language, target_language,
@@ -334,8 +459,8 @@ def main() -> None:
     parser = create_argument_parser()
     args = parser.parse_args()
     
-    translator = CJKTranslator(args.professor)
-    translator.run(args)
+    sandbox = SandboxProcessor(args.professor, model=args.model)
+    sandbox.run(args)
 
 
 if __name__ == '__main__':
