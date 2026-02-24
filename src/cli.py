@@ -59,8 +59,8 @@ Examples:
     )
     
     # Positional arguments
-    parser.add_argument('professor', type=str,
-                        help='Professor name for API key lookup')
+    parser.add_argument('professor', type=str, nargs='?',
+                        help='Professor name for API key lookup (required for translation, OCR, and usage reports)')
     
     parser.add_argument('language_code', type=parse_language_code, nargs='?',
                         help='Translation direction (CE, JE, KE, etc.)')
@@ -112,6 +112,83 @@ Examples:
                         help='Update pricing for a specific model (e.g., --update-pricing gpt-4 0.03 0.06)')
 
     return parser
+
+
+def list_available_models() -> None:
+    """List all available models and their capabilities without initializing services."""
+    from .config import load_pricing_config, get_pricing_unit
+
+    config = load_pricing_config()
+    models = config["models"]
+    pricing_unit = get_pricing_unit()
+
+    print("\n=== Available Models ===")
+    print(f"Pricing is per {pricing_unit:,} tokens\n")
+
+    for model_name, pricing in sorted(models.items()):
+        vision = "✓" if pricing.get("supports_vision", False) else "✗"
+        print(f"{model_name}")
+        print(f"  Vision Support: {vision}")
+        print(f"  Input:  ${pricing['input']:.3f} per {pricing_unit:,} tokens")
+        print(f"  Output: ${pricing['output']:.3f} per {pricing_unit:,} tokens")
+        print()
+
+
+def _print_daily_usage(token_tracker: TokenTracker, professor_name: str, date: Optional[str] = None) -> None:
+    """Display daily usage report for info-only command path."""
+    if date == 'today':
+        usage = token_tracker.get_daily_usage()
+        print(f"\nToday's usage for {professor_name}:")
+    else:
+        usage = token_tracker.get_daily_usage(date)
+        print(f"\nUsage for {date} for {professor_name}:")
+
+    if not usage.get('models'):
+        print("No usage recorded for this date.")
+        return
+
+    print(f"Total tokens: {usage['total_tokens']:,}")
+    print(f"Total cost: ${usage['total_cost']:.4f}")
+    print("\nBy model:")
+    for model, model_usage in usage['models'].items():
+        print(f"  {model}: {model_usage['total_tokens']:,} tokens, ${model_usage['total_cost']:.4f}")
+
+
+def handle_info_commands_without_processor(args: argparse.Namespace) -> bool:
+    """Handle info/reporting commands without API-key dependent service initialization."""
+    if args.list_models:
+        list_available_models()
+        return True
+
+    if args.usage_report or args.daily_usage is not None:
+        if not args.professor:
+            raise CLIError("Professor name is required for usage commands.")
+
+        token_tracker = TokenTracker(professor=args.professor)
+
+        if args.usage_report:
+            token_tracker.print_usage_report()
+            return True
+
+        if args.daily_usage is not None:
+            _print_daily_usage(token_tracker, args.professor, args.daily_usage)
+            return True
+
+    if args.update_pricing:
+        model, input_price, output_price = args.update_pricing
+        try:
+            input_price_float = float(input_price)
+            output_price_float = float(output_price)
+        except ValueError as e:
+            raise CLIError("Prices must be valid numbers") from e
+
+        token_tracker = TokenTracker(professor=args.professor)
+        token_tracker.update_pricing(model, input_price_float, output_price_float)
+        logger.info(f"Updated pricing for {model}: Input=${input_price_float}, Output=${output_price_float}")
+        print(f"Updated pricing for {model}: Input=${input_price_float}, Output=${output_price_float}")
+        return True
+
+    return False
 
 
 class SandboxProcessor:
@@ -410,91 +487,6 @@ class SandboxProcessor:
             logger.error(f"Error processing image: {e}", exc_info=True)
             raise CLIError(f"Error processing image: {e}") from e
 
-    def show_usage_report(self) -> None:
-        """Display token usage report."""
-        self.token_tracker.print_usage_report()
-
-    def show_daily_usage(self, date: Optional[str] = None) -> None:
-        """Display daily usage report."""
-        if date == 'today':
-            usage = self.token_tracker.get_daily_usage()
-            print(f"\nToday's usage for {self.professor_display_name}:")
-        else:
-            usage = self.token_tracker.get_daily_usage(date)
-            print(f"\\nUsage for {date} for {self.professor_display_name}:")
-        
-        if not usage.get('models'):
-            print("No usage recorded for this date.")
-            return
-            
-        print(f"Total tokens: {usage['total_tokens']:,}")
-        print(f"Total cost: ${usage['total_cost']:.4f}")
-        print("\\nBy model:")
-        for model, model_usage in usage['models'].items():
-            print(f"  {model}: {model_usage['total_tokens']:,} tokens, ${model_usage['total_cost']:.4f}")
-
-    def update_pricing(self, model: str, input_price: str, output_price: str) -> None:
-        """Update pricing for a specific model.
-        
-        Raises:
-            CLIError: If pricing values are invalid
-        """
-        try:
-            input_price_float = float(input_price)
-            output_price_float = float(output_price)
-            self.token_tracker.update_pricing(model, input_price_float, output_price_float)
-            logger.info(f"Updated pricing for {model}: Input=${input_price_float}, Output=${output_price_float}")
-            print(f"Updated pricing for {model}: Input=${input_price_float}, Output=${output_price_float}")
-        except ValueError as e:
-            raise CLIError("Prices must be valid numbers") from e
-
-    def list_models(self) -> None:
-        """List all available models and their capabilities."""
-        from .config import load_pricing_config, get_pricing_unit, model_supports_vision
-        
-        config = load_pricing_config()
-        models = config["models"]
-        pricing_unit = get_pricing_unit()
-        
-        print("\n=== Available Models ===")
-        print(f"Pricing is per {pricing_unit:,} tokens\n")
-        
-        for model_name, pricing in sorted(models.items()):
-            vision = "✓" if model_supports_vision(model_name) else "✗"
-            print(f"{model_name}")
-            print(f"  Vision Support: {vision}")
-            print(f"  Input:  ${pricing['input']:.3f} per {pricing_unit:,} tokens")
-            print(f"  Output: ${pricing['output']:.3f} per {pricing_unit:,} tokens")
-            print()
-
-    def _handle_info_commands(self, args: argparse.Namespace) -> bool:
-        """Handle information/reporting commands.
-        
-        Args:
-            args: Command-line arguments
-            
-        Returns:
-            True if an info command was handled, False otherwise
-        """
-        if args.list_models:
-            self.list_models()
-            return True
-        
-        if args.usage_report:
-            self.show_usage_report()
-            return True
-        
-        if args.daily_usage is not None:
-            self.show_daily_usage(args.daily_usage)
-            return True
-        
-        if args.update_pricing:
-            model, input_price, output_price = args.update_pricing
-            self.update_pricing(model, input_price, output_price)
-            return True
-        
-        return False
-
     def _get_ocr_target_language(self, args: argparse.Namespace) -> str:
         """Extract target language for OCR processing.
         
@@ -577,10 +569,6 @@ class SandboxProcessor:
     def run(self, args: argparse.Namespace) -> None:
         """Run the translation application with the given arguments."""
         try:
-            # Handle info commands first (usage reports, model lists, etc.)
-            if self._handle_info_commands(args):
-                return
-            
             # Validate that some input method is specified
             if not args.input_file and not args.custom_text:
                 raise CLIError("Please specify a command (translation, usage report, etc.)")
@@ -633,6 +621,14 @@ def main() -> None:
     try:
         parser = create_argument_parser()
         args = parser.parse_args()
+
+        # Handle info commands first without API initialization
+        if handle_info_commands_without_processor(args):
+            return
+
+        # Professor is required for translation/OCR commands
+        if not args.professor:
+            raise CLIError("Professor name is required for translation and OCR commands.")
         
         # Initialize processor (may raise CLIError)
         sandbox = SandboxProcessor(args.professor, model=args.model)
@@ -641,8 +637,7 @@ def main() -> None:
         sandbox.run(args)
     
     except CLIError as e:
-        # Only for initialization errors before run() is called
-        logger.error(f"Initialization error: {e}")
+        logger.error(f"Error: {e}")
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
