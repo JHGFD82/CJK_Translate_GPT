@@ -6,8 +6,8 @@ Academic translation tool for Princeton University faculty to translate between 
 ## Architecture Pattern
 **Multi-Professor Service Architecture**: Each professor has isolated API keys and token tracking through environment-based configuration.
 
-- **Entry Point**: `main.py` → `src/cli.py` → `CJKTranslator` class
-- **Core Services**: `TranslationService` (Azure OpenAI), `TokenTracker` (usage tracking), `PDFProcessor` (text extraction), `DocxProcessor` (Word document text extraction), `TxtProcessor` (text file processing), `FileOutputHandler` (output formatting)
+- **Entry Point**: `main.py` → `src/cli.py` (controller/parser) → runtime handlers in `src/runtime/`
+- **Core Services**: `TranslationService` and `ImageProcessorService` in `src/services/`, `TokenTracker` in `src/tracking/`, processors in `src/processors/`, `FileOutputHandler` in `src/output/`
 - **Configuration**: Environment variables (`.env`) for professor configs, `model_catalog.json` for model pricing
 
 ## Professor Configuration System
@@ -57,7 +57,7 @@ python -m src.cli conlan E -i test.jpg -o output.txt -m gpt-4o-mini  # OCR with 
 
 ### Language Code Pattern
 Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
-- Parsed in `parse_language_code()` using `LANGUAGE_MAP` from `config.py`
+- Parsed in `parse_language_code()` using `LANGUAGE_MAP` from `src/config.py`
 - Validation ensures source ≠ target, valid language codes only
 
 ## Critical Implementation Details
@@ -112,7 +112,7 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 - **Configuration**: Models and pricing defined in `src/model_catalog.json` with `supports_vision` boolean flag
 
 ### File Path Handling
-- **Input Path Resolution**: `os.path.abspath()` applied to input files in `translate_pdf()` method
+- **Input Path Resolution**: `os.path.abspath()` applied to input files in runtime processing methods
 - **Output Path Resolution**: User-specified output paths converted to absolute paths in CLI `run()` method
 - **Directory Placement**: Output files placed in same directory as source file via `generate_output_filename()`
 

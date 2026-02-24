@@ -18,6 +18,18 @@ This application is designed exclusively for Princeton University faculty member
 - CJK font support for PDF and Word document generation
 - Per-professor token usage tracking and budget monitoring
 
+## Project Structure
+
+The codebase is organized by responsibility:
+
+- `src/cli.py` - CLI controller and argument parser
+- `src/runtime/` - runtime command orchestration (`SandboxProcessor`, info commands)
+- `src/services/` - API-facing translation and OCR services
+- `src/processors/` - PDF/DOCX/TXT/image preprocessing helpers
+- `src/output/` - output writers/formatting (`FileOutputHandler`)
+- `src/tracking/` - token usage and pricing tracking
+- `src/config.py` - shared config, model catalog loading, CLI parsing helpers
+
 ## Requirements
 - Python 3.7+
 - Princeton University AI Sandbox access
@@ -237,7 +249,7 @@ pip install -r requirements.txt
 
 Each professor has separate token usage tracking and monthly budgets:
 - Usage data is stored in `data/token_usage_[professor_name].json` files
-- Monthly limits are configurable in the pricing configuration
+- Monthly limits are configurable in `src/model_catalog.json`
 - View reports using `--usage-report` and `--daily-usage` options
 
 ## Output File Formats
