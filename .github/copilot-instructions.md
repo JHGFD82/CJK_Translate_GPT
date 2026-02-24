@@ -44,6 +44,7 @@ PROF_[ID]_BACKUP_KEY=backup_key   # Fallback key
 # Test basic functionality
 python -m src.cli professor_name --help
 python -m src.cli professor_name --usage-report
+python -m src.cli professor_name --list-models
 
 # Test with actual professor (requires .env)
 python -m src.cli conlan CE -c  # Custom text translation
