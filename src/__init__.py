@@ -24,7 +24,7 @@ Features:
 - Multi-format document processing
 """
 
-from .cli import main, CJKTranslator
+from .cli import main, SandboxProcessor
 from .translation_service import TranslationService
 from .file_output import FileOutputHandler
 from .pdf_processor import PDFProcessor
@@ -47,7 +47,7 @@ __email__ = "jsheller@princeton.edu"
 __all__ = [
     # Main entry points
     "main",
-    "CJKTranslator",
+    "SandboxProcessor",
     
     # Core services
     "TranslationService",
