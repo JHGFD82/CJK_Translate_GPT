@@ -100,6 +100,23 @@ def get_monthly_limit() -> float:
     config = load_pricing_config()
     return config["config"]["monthly_limit"]
 
+def model_supports_vision(model: str) -> bool:
+    """Check if a model supports vision/image processing."""
+    config = load_pricing_config()
+    models = config["models"]
+    
+    if model not in models:
+        logging.warning(f"Model {model} not found in pricing config. Assuming no vision support.")
+        return False
+    
+    return models[model].get("supports_vision", False)
+
+def get_vision_capable_models() -> List[str]:
+    """Get list of models that support vision/image processing."""
+    config = load_pricing_config()
+    return [model for model, details in config["models"].items() 
+            if details.get("supports_vision", False)]
+
 def save_pricing_config(config: Dict[str, Any]) -> None:
     """Save pricing configuration to file."""
     pricing_file = get_pricing_config_path()
