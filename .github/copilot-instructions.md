@@ -51,6 +51,7 @@ python -m src.cli conlan CE -i test.pdf  # PDF translation
 python -m src.cli conlan CE -i test.docx  # Word document translation
 python -m src.cli conlan CE -i test.txt  # Text file translation
 python -m src.cli conlan E -i test.jpg -o output.txt  # Image OCR (auto-detected by extension)
+python -m src.cli conlan E -i test.jpg -o output.txt -m gpt-4o-mini  # OCR with specific model
 ```
 
 ### Language Code Pattern

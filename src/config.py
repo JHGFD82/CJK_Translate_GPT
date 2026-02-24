@@ -127,7 +127,7 @@ def save_pricing_config(config: Dict[str, Any]) -> None:
 DEFAULT_MODEL: str = "gpt-4o"
 
 # OCR-specific model (can override DEFAULT_MODEL for image processing)
-OCR_MODEL: str = "gpt-4o-mini"  # More cost-effective for text extraction
+OCR_MODEL: str = "gpt-4o"  # More cost-effective for text extraction
 
 # Translation parameters
 TRANSLATION_TEMPERATURE: float = 0.5

@@ -21,9 +21,19 @@ from .token_tracker import TokenTracker
 class ImageProcessorService:
     """Handles OCR operations using PortKey API."""
     
-    def __init__(self, api_key: str, professor: Optional[str] = None, token_tracker: Optional[TokenTracker] = None, token_tracker_file: Optional[str] = None):
+    def __init__(self, api_key: str, professor: Optional[str] = None, token_tracker: Optional[TokenTracker] = None, token_tracker_file: Optional[str] = None, model: Optional[str] = None):
+        """Initialize image processor service.
+        
+        Args:
+            api_key: PortKey API key
+            professor: Professor name for token tracking
+            token_tracker: Shared TokenTracker instance
+            token_tracker_file: Custom token tracker file path
+            model: Optional model name to use instead of defaults
+        """
         self.api_key = api_key
         self.professor = professor
+        self.custom_model = model  # Store custom model if provided
         self.client = Portkey(
             api_key=api_key
         )
@@ -32,8 +42,17 @@ class ImageProcessorService:
         self.token_tracker = token_tracker if token_tracker is not None else TokenTracker(professor=professor, data_file=token_tracker_file)
     
     def _get_model(self) -> str:
-        """Get the OCR-specific model, with fallback if not available and supports vision."""
+        """Get the model to use for OCR, preferring custom model if specified and supports vision."""
         available_models = get_available_models()
+        
+        # If custom model specified, validate it supports vision
+        if self.custom_model:
+            if self.custom_model not in available_models:
+                raise ValueError(f"Custom model '{self.custom_model}' not found in available models. Use --list-models to see available options.")
+            elif not model_supports_vision(self.custom_model):
+                raise ValueError(f"Custom model '{self.custom_model}' does not support vision. OCR requires a vision-capable model. Use --list-models to see which models support vision.")
+            else:
+                return self.custom_model
         
         # Prefer OCR_MODEL for image processing
         if OCR_MODEL in available_models and model_supports_vision(OCR_MODEL):

@@ -84,6 +84,8 @@ Examples:
     parser.add_argument('-f', '--font', dest='custom_font', type=str,
                         help='Custom font name to use for PDF and Word document generation (font must be in fonts/ directory)')
 
+    parser.add_argument('-m', '--model', dest='model', type=str,
+                        help='Specify which model to use (e.g., gpt-4o, gpt-4o-mini, gpt-5)')
     # Token usage commands
     parser.add_argument('--usage-report', dest='usage_report', action='store_true',
                         help='Display token usage and cost report')
@@ -100,8 +102,13 @@ Examples:
 class SandboxProcessor:
     """Main application class for processing inputs to the Princeton AI Sandbox."""
     
-    def __init__(self, professor_name: str):
-        """Initialize the processor for the specified professor."""
+    def __init__(self, professor_name: str, model: Optional[str] = None):
+        """Initialize the processor for the specified professor.
+        
+        Args:
+            professor_name: Name of the professor
+            model: Optional model name to use instead of defaults
+        """
         try:
             api_key, self.professor_display_name = get_api_key(professor_name)
             self.professor_name = professor_name
@@ -109,9 +116,13 @@ class SandboxProcessor:
             # Create shared token tracker for both services
             self.token_tracker = TokenTracker(professor=professor_name)
             
-            # Initialize services with shared token tracker
-            self.translation_service = TranslationService(api_key, professor_name, token_tracker=self.token_tracker)
-            self.image_processor_service = ImageProcessorService(api_key, professor_name, token_tracker=self.token_tracker)
+            # Initialize services with shared token tracker and optional model
+            self.translation_service = TranslationService(
+                api_key, professor_name, token_tracker=self.token_tracker, model=model
+            )
+            self.image_processor_service = ImageProcessorService(
+                api_key, professor_name, token_tracker=self.token_tracker, model=model
+            )
             
             self.image_processor = ImageProcessor()
             self.file_output = FileOutputHandler()
@@ -420,7 +431,7 @@ def main() -> None:
     parser = create_argument_parser()
     args = parser.parse_args()
     
-    sandbox = SandboxProcessor(args.professor)
+    sandbox = SandboxProcessor(args.professor, model=args.model)
     sandbox.run(args)
 
 
