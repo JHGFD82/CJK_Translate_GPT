@@ -1,0 +1,184 @@
+"""
+Image processing service for OCR operations using the Princeton AI Sandbox.
+"""
+
+import logging
+import time
+from typing import Optional
+from collections.abc import Iterator as ABCIterator
+
+from portkey_ai import Portkey
+
+from .config import (
+    get_available_models, DEFAULT_MODEL, TRANSLATION_TEMPERATURE, TRANSLATION_MAX_TOKENS, TRANSLATION_TOP_P,
+    MAX_RETRIES, BASE_RETRY_DELAY, model_supports_vision, get_vision_capable_models
+)
+from .image_processor import ImageProcessor
+from .token_tracker import TokenTracker
+
+
+class ImageProcessorService:
+    """Handles OCR operations using PortKey API."""
+    
+    def __init__(self, api_key: str, professor: Optional[str] = None, token_tracker: Optional[TokenTracker] = None, token_tracker_file: Optional[str] = None):
+        self.api_key = api_key
+        self.professor = professor
+        self.client = Portkey(
+            api_key=api_key
+        )
+        self.image_processor = ImageProcessor()
+        # Use provided token tracker or create new one
+        self.token_tracker = token_tracker if token_tracker is not None else TokenTracker(professor=professor, data_file=token_tracker_file)
+    
+    def _get_model(self) -> str:
+        """Get the default model, with fallback if not available and supports vision."""
+        available_models = get_available_models()
+        
+        # Check if default model supports vision
+        if DEFAULT_MODEL in available_models and model_supports_vision(DEFAULT_MODEL):
+            return DEFAULT_MODEL
+        
+        # Find first available model that supports vision
+        vision_models = get_vision_capable_models()
+        for model in vision_models:
+            if model in available_models:
+                logging.warning(f"Default model {DEFAULT_MODEL} doesn't support vision. Using {model} instead.")
+                return model
+        
+        # No vision-capable models found
+        raise ValueError(
+            f"No vision-capable models available. Available models: {available_models}. "
+            f"Please configure at least one model with 'supports_vision': true in pricing_config.json"
+        )
+    
+    def _create_ocr_prompt(self, target_language: str) -> tuple[str, str]:
+        """Create system and user prompt templates for OCR."""
+        system_prompt = self._build_system_prompt(target_language)
+        user_prompt = self._build_user_prompt(target_language)
+        return system_prompt, user_prompt
+    
+    def _build_system_prompt(self, target_language: str) -> str:
+        """Build the system prompt for OCR operations."""
+        return f"""You are an expert OCR assistant specializing in extracting text from images, 
+particularly those containing {target_language} text, Chinese, Japanese, Korean, and English.
+
+Your task is to extract and output ALL visible text from the provided image exactly as it appears.
+The text may be in vertical or horizontal orientation. Preserve the layout and structure as much as possible.
+
+Output requirements:
+- Extract ONLY the text content from the image
+- Preserve the original formatting, spacing, and line breaks
+- Do not add commentary, notes, disclaimers, or assumptions about content
+- If text is partially visible or unclear, do your best to extract it accurately
+- Maintain any numbering, symbols, or special characters exactly as shown
+- Do not translate the text - only extract and preserve it as-is
+
+If you cannot reliably extract certain text due to image quality or obscuring elements, 
+note this briefly at the end of the output."""
+    
+    def _build_user_prompt(self, target_language: str) -> str:
+        """Build the user prompt template for OCR."""
+        return f"""Extract all visible text from this image. Output the text exactly as it appears, 
+preserving the layout and structure. Do not translate - only extract. Target language context: {target_language}."""
+    
+    def process_image_ocr(self, file_path: str, target_language: str, output_format: str = "console") -> str:
+        """Perform OCR on an image file using the specified model with retry logic."""
+        model = self._get_model()
+        
+        # Verify model supports vision
+        if not model_supports_vision(model):
+            vision_models = get_vision_capable_models()
+            raise ValueError(
+                f"Model '{model}' does not support image processing. "
+                f"Please use one of the following vision-capable models: {vision_models}"
+            )
+        
+        system_prompt, user_prompt = self._create_ocr_prompt(target_language)
+        
+        # Convert image to data URL
+        try:
+            data_url = self.image_processor.local_image_to_data_url(file_path)
+        except Exception as e:
+            logging.error(f"Failed to process image {file_path}: {e}")
+            raise
+        
+        # Retry logic for content filter issues
+        max_retries = MAX_RETRIES
+        base_delay = BASE_RETRY_DELAY
+        
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    # Exponential backoff with jitter
+                    delay = base_delay * (2 ** attempt) + (0.1 * attempt)
+                    logging.info(f'Retrying API call (attempt {attempt + 1}/{max_retries}) after {delay:.1f}s delay...')
+                    time.sleep(delay)
+                
+                logging.info(f'Making OCR API call to model: {model}')
+                response = self.client.chat.completions.create( # type: ignore[misc]
+                    model=model,
+                    temperature=TRANSLATION_TEMPERATURE,
+                    max_tokens=TRANSLATION_MAX_TOKENS,
+                    top_p=TRANSLATION_TOP_P,
+                    stream=False,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": [
+                            {"type": "text", "text": user_prompt},
+                            {"type": "image_url", "image_url": {"url": data_url}}
+                        ]},
+                    ]
+                )
+
+                assert not isinstance(response, ABCIterator), "Unexpected stream response received."
+                
+                # Log response details
+                if response.id:
+                    logging.info(f'API call successful. Response ID: {response.id}')
+                if response.model:
+                    logging.info(f'Model used: {response.model}')
+                
+                # Log token usage if available
+                if response.usage and response.usage.prompt_tokens is not None and response.usage.completion_tokens is not None and response.usage.total_tokens is not None:
+                    # Record token usage
+                    usage = self.token_tracker.record_usage(
+                        model=response.model or model,
+                        prompt_tokens=response.usage.prompt_tokens,
+                        completion_tokens=response.usage.completion_tokens,
+                        total_tokens=response.usage.total_tokens,
+                        requested_model=model
+                    )
+                    
+                    logging.info(f'Tokens used - Prompt: {response.usage.prompt_tokens}, '
+                               f'Completion: {response.usage.completion_tokens}, '
+                               f'Total: {response.usage.total_tokens}, '
+                               f'Cost: ${usage.total_cost:.4f}')
+                else:
+                    logging.warning('No token usage information available in response.')
+                
+                if response.choices and len(response.choices) > 0 and response.choices[0].message:
+                    content = response.choices[0].message.content
+                    if content is not None and isinstance(content, str):
+                        return content
+                else:
+                    logging.warning('No content in API response.')
+                    return ""
+                    
+            except Exception as e:
+                # Check for content filter (error code 400 or message contains 'content_filter')
+                error_str = str(e).lower()
+                
+                if ('content_filter' in error_str or '400' in error_str or 'filter' in error_str):
+                    if attempt < max_retries - 1:
+                        logging.warning(f'Content filter triggered (attempt {attempt + 1}/{max_retries}). Retrying...')
+                        continue
+                    else:
+                        logging.error(f'Content filter triggered on final attempt. Giving up.')
+                        raise
+                else:
+                    # For non-content-filter errors, fail immediately
+                    logging.error(f'API error (non-filter): {e}')
+                    raise
+        
+        logging.error('Failed to get OCR response after all retries.')
+        raise RuntimeError("Failed to process image after maximum retries")
