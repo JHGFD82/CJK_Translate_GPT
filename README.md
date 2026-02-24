@@ -18,17 +18,33 @@ This application is designed exclusively for Princeton University faculty member
 - CJK font support for PDF and Word document generation
 - Per-professor token usage tracking and budget monitoring
 
-## Project Structure
+## Architecture
 
-The codebase is organized by responsibility:
+Execution flow with package roles inline:
 
-- `src/cli.py` - CLI controller and argument parser
-- `src/runtime/` - runtime command orchestration (`SandboxProcessor`, info commands)
-- `src/services/` - API-facing translation and OCR services
-- `src/processors/` - PDF/DOCX/TXT/image preprocessing helpers
-- `src/output/` - output writers/formatting (`FileOutputHandler`)
-- `src/tracking/` - token usage and pricing tracking
-- `src/config.py` - shared config, model catalog loading, CLI parsing helpers
+```text
+main.py
+  -> src/cli.py
+     (controller + argument parser; validates command shape and routes execution)
+     ↳ uses src/config.py
+       (shared config, model catalog loading, language/page/professor parsing helpers)
+  -> src/runtime/
+     (runtime orchestration)
+     - info_commands.py: list-models, usage-report, update-pricing
+     - sandbox_processor.py: translation/OCR command orchestration
+  -> src/services/
+     (API-facing operations)
+     - translation_service.py
+     - image_processor_service.py
+  -> src/processors/
+     (PDF/DOCX/TXT/image preprocessing)
+  -> src/tracking/token_tracker.py
+     (token usage accounting + pricing lookup from src/model_catalog.json)
+  -> src/output/file_output.py
+     (text/pdf/docx output handling)
+```
+
+In short: `src/cli.py` decides *what* to run; `src/runtime/` and below decide *how* to run it.
 
 ## Requirements
 - Python 3.7+
