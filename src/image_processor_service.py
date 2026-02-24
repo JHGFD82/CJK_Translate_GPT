@@ -71,13 +71,16 @@ particularly those containing {target_language} text, Chinese, Japanese, Korean,
 Your task is to extract and output ALL visible text from the provided image exactly as it appears.
 The text may be in vertical or horizontal orientation. Preserve the layout and structure as much as possible.
 
-Output requirements:
-- Extract ONLY the text content from the image
+CRITICAL RULES:
+- Extract ONLY the text that is actually visible in the image
+- Do NOT add, invent, or hallucinate any text that is not present
+- Do NOT repeat text unless it actually appears multiple times in the image
 - Preserve the original formatting, spacing, and line breaks
 - Do not add commentary, notes, disclaimers, or assumptions about content
 - If text is partially visible or unclear, do your best to extract it accurately
 - Maintain any numbering, symbols, or special characters exactly as shown
 - Do not translate the text - only extract and preserve it as-is
+- Stop output when all visible text has been transcribed
 
 If you cannot reliably extract certain text due to image quality or obscuring elements, 
 note this briefly at the end of the output."""
@@ -85,7 +88,11 @@ note this briefly at the end of the output."""
     def _build_user_prompt(self, target_language: str) -> str:
         """Build the user prompt template for OCR."""
         return f"""Extract all visible text from this image. Output the text exactly as it appears, 
-preserving the layout and structure. Do not translate - only extract. Target language context: {target_language}."""
+preserving the layout and structure. Do not translate - only extract. 
+
+IMPORTANT: Stop immediately after transcribing all visible text. Do not repeat or continue beyond what is shown.
+
+Target language context: {target_language}."""
     
     def process_image_ocr(self, file_path: str, target_language: str, output_format: str = "console") -> str:
         """Perform OCR on an image file using the specified model with retry logic."""
