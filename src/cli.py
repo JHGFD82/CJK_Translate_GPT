@@ -12,12 +12,12 @@ from dotenv import load_dotenv
 
 from .utils import parse_language_code, get_api_key, validate_page_nums
 from .services.translation_service import TranslationService
-from .file_output import FileOutputHandler
+from .output.file_output import FileOutputHandler
 from .processors.docx_processor import DocxProcessor
 from .processors.txt_processor import TxtProcessor
 from .processors.image_processor import ImageProcessor
 from .services.image_processor_service import ImageProcessorService
-from .token_tracker import TokenTracker
+from .tracking.token_tracker import TokenTracker
 
 # Load environment variables
 load_dotenv()

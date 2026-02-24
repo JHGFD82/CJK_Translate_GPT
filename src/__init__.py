@@ -26,12 +26,12 @@ Features:
 
 from .cli import main, SandboxProcessor
 from .services.translation_service import TranslationService
-from .file_output import FileOutputHandler
+from .output.file_output import FileOutputHandler
 from .processors.pdf_processor import PDFProcessor
 from .processors.docx_processor import DocxProcessor
 from .processors.txt_processor import TxtProcessor
 from .processors.base_text_processor import BaseTextProcessor
-from .token_tracker import TokenTracker
+from .tracking.token_tracker import TokenTracker
 from .utils import (
     parse_language_code,
     load_professor_config,
