@@ -10,7 +10,8 @@ from collections.abc import Iterator as ABCIterator
 from portkey_ai import Portkey
 
 from .config import (
-    get_available_models, DEFAULT_MODEL, TRANSLATION_TEMPERATURE, TRANSLATION_MAX_TOKENS, TRANSLATION_TOP_P,
+    get_available_models, DEFAULT_MODEL, OCR_MODEL, OCR_TEMPERATURE, OCR_MAX_TOKENS, OCR_TOP_P,
+    OCR_FREQUENCY_PENALTY, OCR_PRESENCE_PENALTY,
     MAX_RETRIES, BASE_RETRY_DELAY, model_supports_vision, get_vision_capable_models
 )
 from .image_processor import ImageProcessor
@@ -31,18 +32,23 @@ class ImageProcessorService:
         self.token_tracker = token_tracker if token_tracker is not None else TokenTracker(professor=professor, data_file=token_tracker_file)
     
     def _get_model(self) -> str:
-        """Get the default model, with fallback if not available and supports vision."""
+        """Get the OCR-specific model, with fallback if not available and supports vision."""
         available_models = get_available_models()
         
-        # Check if default model supports vision
+        # Prefer OCR_MODEL for image processing
+        if OCR_MODEL in available_models and model_supports_vision(OCR_MODEL):
+            return OCR_MODEL
+        
+        # Fall back to DEFAULT_MODEL
         if DEFAULT_MODEL in available_models and model_supports_vision(DEFAULT_MODEL):
+            logging.warning(f"OCR model {OCR_MODEL} not available. Using {DEFAULT_MODEL} instead.")
             return DEFAULT_MODEL
         
         # Find first available model that supports vision
         vision_models = get_vision_capable_models()
         for model in vision_models:
             if model in available_models:
-                logging.warning(f"Default model {DEFAULT_MODEL} doesn't support vision. Using {model} instead.")
+                logging.warning(f"Neither OCR model {OCR_MODEL} nor default {DEFAULT_MODEL} available. Using {model} instead.")
                 return model
         
         # No vision-capable models found
@@ -117,9 +123,11 @@ preserving the layout and structure. Do not translate - only extract. Target lan
                 logging.info(f'Making OCR API call to model: {model}')
                 response = self.client.chat.completions.create( # type: ignore[misc]
                     model=model,
-                    temperature=TRANSLATION_TEMPERATURE,
-                    max_tokens=TRANSLATION_MAX_TOKENS,
-                    top_p=TRANSLATION_TOP_P,
+                    temperature=OCR_TEMPERATURE,
+                    max_tokens=OCR_MAX_TOKENS,
+                    top_p=OCR_TOP_P,
+                    frequency_penalty=OCR_FREQUENCY_PENALTY,
+                    presence_penalty=OCR_PRESENCE_PENALTY,
                     stream=False,
                     messages=[
                         {"role": "system", "content": system_prompt},
