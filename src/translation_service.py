@@ -13,7 +13,7 @@ from portkey_ai import Portkey
 from pdfminer.pdfpage import PDFPage
 
 from .config import (
-    get_available_models, DEFAULT_MODEL, TRANSLATION_TEMPERATURE, TRANSLATION_MAX_TOKENS, TRANSLATION_TOP_P, CONTEXT_PERCENTAGE,
+    resolve_model, TRANSLATION_TEMPERATURE, TRANSLATION_MAX_TOKENS, TRANSLATION_TOP_P, CONTEXT_PERCENTAGE,
     PAGE_DELAY_SECONDS, MAX_RETRIES, BASE_RETRY_DELAY
 )
 from .pdf_processor import PDFProcessor, generate_process_text
@@ -46,16 +46,7 @@ class TranslationService:
     
     def _get_model(self) -> str:
         """Get the model to use, preferring custom model if specified."""
-        if self.custom_model:
-            # Validate custom model exists in config
-            available_models = get_available_models()
-            if self.custom_model not in available_models:
-                raise ValueError(f"Custom model '{self.custom_model}' not found in available models. Use --list-models to see available options.")
-            else:
-                return self.custom_model
-        
-        available_models = get_available_models()
-        return DEFAULT_MODEL if DEFAULT_MODEL in available_models else available_models[0]
+        return resolve_model(requested_model=self.custom_model)
     
     def _create_translation_prompt(self, source_language: str, target_language: str, output_format: str = "console") -> tuple[str, str]:
         """Create system and user prompt templates for translation."""
