@@ -78,14 +78,9 @@ class TxtProcessor(BaseTextProcessor):
             raise Exception(f"Failed to process text file: {e}")
     
     @staticmethod
-    def is_txt_file(file_path: str) -> bool:
-        """Check if a file is a text file based on its extension."""
-        return file_path.lower().endswith('.txt')
-    
-    @staticmethod
     def validate_txt_file(file_path: str) -> bool:
         """Validate that a file is a readable text file."""
-        if not TxtProcessor.is_txt_file(file_path):
+        if not file_path.lower().endswith('.txt'):
             return False
         
         if not os.path.exists(file_path):
