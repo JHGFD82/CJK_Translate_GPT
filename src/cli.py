@@ -332,17 +332,63 @@ class SandboxProcessor:
             self.update_pricing(model, input_price, output_price)
             return
         
-        # Check if language_code is provided for translation commands
-        if not args.language_code:
-            if args.input_file or args.custom_text:
-                print("Error: Language code is required for translation commands")
-                exit(1)
+        # Check if an input file is provided
+        if args.input_file:
+            input_file_abs = os.path.abspath(args.input_file)
+            
+            # Determine if this is an image file (image processing) or other file (translation)
+            if self.image_processor.is_image_file(input_file_abs):
+                # Image processing path
+                if not self.image_processor.validate_image_file(input_file_abs):
+                    print(f"Error: Image file '{input_file_abs}' is not valid.")
+                    exit(1)
+                
+                # For OCR, language_code should be a single language (target language)
+                if not args.language_code:
+                    print("Error: Target language code is required for OCR (e.g., 'E' for English, 'C' for Chinese)")
+                    exit(1)
+                
+                # Extract target language - for OCR, we expect single language code
+                target_language: str
+                if isinstance(args.language_code, tuple):
+                    # If it's a translation pair, use the target (second) language
+                    target_language = str(args.language_code[1])  # type: ignore[index]
+                else:
+                    # Single language code
+                    target_language = str(args.language_code)  # type: ignore[arg-type]
+                
+                self.process_image(input_file_abs, target_language, args.output_file)
+                return
             else:
-                print("Error: Please specify a command (translation, usage report, etc.)")
+                # Translation path - language code is required for translation
+                if not args.language_code:
+                    print("Error: Language code is required for document translation")
+                    exit(1)
+                
+                # Ensure language_code is a tuple for translation
+                if not isinstance(args.language_code, tuple):
+                    print("Error: Translation requires a 2-character language code (e.g., CE, JE, KE)")
+                    exit(1)
+        elif args.custom_text:
+            # Custom text translation - language code is required
+            if not args.language_code:
+                print("Error: Language code is required for text translation")
                 exit(1)
+            
+            # Ensure language_code is a tuple for translation
+            if not isinstance(args.language_code, tuple):
+                print("Error: Translation requires a 2-character language code (e.g., CE, JE, KE)")
+                exit(1)
+        else:
+            # No input specified
+            print("Error: Please specify a command (translation, usage report, etc.)")
+            exit(1)
         
         # Extract source and target languages from the language code
-        source_language, target_language = args.language_code
+        # At this point we know it's a tuple from the validation above
+        assert isinstance(args.language_code, tuple), "Language code should be a tuple for translation"  # type: ignore[misc]
+        source_language: str = str(args.language_code[0])  # type: ignore[index]
+        target_language: str = str(args.language_code[1])  # type: ignore[index]
         
         # Handle output file path logic
         output_file: Optional[str] = None
