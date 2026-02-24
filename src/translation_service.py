@@ -4,7 +4,7 @@ Translation service for the CJK Translation script.
 
 import logging
 import time
-from typing import List, Optional, Iterable, Dict, Any
+from typing import List, Optional, Iterable
 from collections.abc import Iterator as ABCIterator
 from itertools import islice
 from tqdm import tqdm
@@ -22,16 +22,17 @@ from .token_tracker import TokenTracker
 
 
 class TranslationService:
-    """Handles translation operations using OpenAI API."""
+    """Handles translation operations using PortKey API."""
     
-    def __init__(self, api_key: str, professor: Optional[str] = None, token_tracker_file: Optional[str] = None):
+    def __init__(self, api_key: str, professor: Optional[str] = None, token_tracker: Optional[TokenTracker] = None, token_tracker_file: Optional[str] = None):
         self.api_key = api_key
         self.professor = professor
         self.client = Portkey(
             api_key=api_key
         )
         self.pdf_processor = PDFProcessor()
-        self.token_tracker = TokenTracker(professor=professor, data_file=token_tracker_file)
+        # Use provided token tracker or create new one
+        self.token_tracker = token_tracker if token_tracker is not None else TokenTracker(professor=professor, data_file=token_tracker_file)
     
     def _get_model(self) -> str:
         """Get the default model, with fallback if not available."""
@@ -227,7 +228,7 @@ Do not provide any prompts to the user, for example: "This is the translation of
         error_type = type(error).__name__
         error_message = str(error)
         
-        # Check for specific OpenAI error types
+        # Check for specific PortKey error types
         if "context_length_exceeded" in error_message.lower() or "maximum context length" in error_message.lower():
             logging.error(f'Context length exceeded: {error_message}')
             return "context_length_exceeded"
@@ -503,19 +504,3 @@ Do not provide any prompts to the user, for example: "This is the translation of
             print(f"\nProgressive saving completed. Final output: {progressive_output_path}")
 
         return document_text
-    
-    def get_token_usage_summary(self) -> Dict[str, Any]:
-        """Get a summary of token usage."""
-        return self.token_tracker.get_usage_summary()
-    
-    def print_usage_report(self):
-        """Print a formatted usage report."""
-        self.token_tracker.print_usage_report()
-    
-    def get_daily_usage(self, date: Optional[str] = None) -> Dict[str, Any]:
-        """Get usage for a specific date or today."""
-        return self.token_tracker.get_daily_usage(date)
-    
-    def update_model_pricing(self, model: str, input_price: float, output_price: float):
-        """Update pricing for a specific model."""
-        self.token_tracker.update_pricing(model, input_price, output_price)
