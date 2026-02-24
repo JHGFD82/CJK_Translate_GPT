@@ -86,6 +86,11 @@ Examples:
 
     parser.add_argument('-m', '--model', dest='model', type=str,
                         help='Specify which model to use (e.g., gpt-4o, gpt-4o-mini, gpt-5)')
+
+    # Information commands
+    parser.add_argument('--list-models', dest='list_models', action='store_true',
+                        help='List all available models and their capabilities')
+
     # Token usage commands
     parser.add_argument('--usage-report', dest='usage_report', action='store_true',
                         help='Display token usage and cost report')
@@ -324,9 +329,32 @@ class SandboxProcessor:
             print("Error: Prices must be valid numbers")
             exit(1)
 
+    def list_models(self) -> None:
+        """List all available models and their capabilities."""
+        from .config import load_pricing_config, get_pricing_unit, model_supports_vision
+        
+        config = load_pricing_config()
+        models = config["models"]
+        pricing_unit = get_pricing_unit()
+        
+        print("\n=== Available Models ===")
+        print(f"Pricing is per {pricing_unit:,} tokens\n")
+        
+        for model_name, pricing in sorted(models.items()):
+            vision = "✓" if model_supports_vision(model_name) else "✗"
+            print(f"{model_name}")
+            print(f"  Vision Support: {vision}")
+            print(f"  Input:  ${pricing['input']:.3f} per {pricing_unit:,} tokens")
+            print(f"  Output: ${pricing['output']:.3f} per {pricing_unit:,} tokens")
+            print()
+
     def run(self, args: argparse.Namespace) -> None:
         """Run the translation application with the given arguments."""
         # Handle non-translation commands first
+        if args.list_models:
+            self.list_models()
+            return
+        
         if args.usage_report:
             self.show_usage_report()
             return
