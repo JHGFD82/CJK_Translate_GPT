@@ -5,6 +5,7 @@ Command-line interface for the CJK Translation script.
 import argparse
 import logging
 import os
+import sys
 from typing import Optional, List
 
 from dotenv import load_dotenv
@@ -20,6 +21,15 @@ from .token_tracker import TokenTracker
 
 # Load environment variables
 load_dotenv()
+
+# Set up module logger
+logger = logging.getLogger(__name__)
+
+
+# Custom exception for CLI errors
+class CLIError(Exception):
+    """Raised for user-facing CLI errors."""
+    pass
 
 
 def setup_logging() -> None:
@@ -113,10 +123,15 @@ class SandboxProcessor:
         Args:
             professor_name: Name of the professor
             model: Optional model name to use instead of defaults
+            
+        Raises:
+            CLIError: If configuration is invalid
         """
         try:
             api_key, self.professor_display_name = get_api_key(professor_name)
             self.professor_name = professor_name
+            
+            logger.info(f"Initializing processor for professor: {self.professor_display_name}")
             
             # Create shared token tracker for both services
             self.token_tracker = TokenTracker(professor=professor_name)
@@ -133,8 +148,8 @@ class SandboxProcessor:
             self.file_output = FileOutputHandler()
             self.setup_logging()
         except ValueError as e:
-            print(f"Configuration error: {e}")
-            exit(1)
+            logger.error(f"Configuration error: {e}")
+            raise CLIError(f"Configuration error: {e}") from e
     
     def setup_logging(self) -> None:
         """Set up logging for this session."""
@@ -150,32 +165,37 @@ class SandboxProcessor:
             File type as string: 'image', 'pdf', 'docx', 'txt'
             
         Raises:
-            SystemExit on validation failure
+            CLIError: If file doesn't exist, is invalid, or has unsupported format
         """
         abs_path = os.path.abspath(file_path)
         
         # Check if file exists
         if not os.path.exists(abs_path):
-            print(f"Error: File '{file_path}' not found.")
-            exit(1)
+            raise CLIError(f"File '{file_path}' not found.")
+        
+        logger.debug(f"Validating file: {file_path}")
         
         # Detect file type - check extensions directly
         lower_path = abs_path.lower()
         
         if self.image_processor.is_image_file(abs_path):
             if not self.image_processor.validate_image_file(abs_path):
-                print(f"Error: Image file '{file_path}' is not valid.")
-                exit(1)
+                raise CLIError(f"Image file '{file_path}' is not valid.")
+            logger.info(f"Detected image file: {file_path}")
             return 'image'
         elif lower_path.endswith('.pdf'):
+            logger.info(f"Detected PDF file: {file_path}")
             return 'pdf'
         elif lower_path.endswith('.docx'):
+            logger.info(f"Detected Word document: {file_path}")
             return 'docx'
         elif lower_path.endswith('.txt'):
+            logger.info(f"Detected text file: {file_path}")
             return 'txt'
         else:
-            print(f"Error: Unsupported file format. Supported formats: PDF, DOCX, TXT, or image files (JPG, PNG, etc.)")
-            exit(1)
+            raise CLIError(
+                f"Unsupported file format. Supported formats: PDF, DOCX, TXT, or image files (JPG, PNG, etc.)"
+            )
 
     def _handle_page_range(self, pages: List[str], page_nums: Optional[str], file_type: str) -> List[str]:
         """Handle page range selection for text-based documents.
@@ -187,6 +207,9 @@ class SandboxProcessor:
             
         Returns:
             Filtered list of pages based on page range
+            
+        Raises:
+            CLIError: If page range is invalid
         """
         if not page_nums:
             return pages
@@ -196,15 +219,19 @@ class SandboxProcessor:
         
         # Ensure page range is valid
         if start_page >= len(pages):
-            print(f"Error: Page {start_page + 1} does not exist. Document has {len(pages)} logical pages.")
-            exit(1)
+            raise CLIError(
+                f"Page {start_page + 1} does not exist. Document has {len(pages)} logical pages."
+            )
         
         # Limit end_page to available pages
         end_page = min(end_page, len(pages) - 1)
         
         # Select the requested page range
         selected_pages = pages[start_page:end_page + 1]
-        print(f"Processing pages {start_page + 1}-{end_page + 1} of {file_type} (logical pages based on content length)")
+        logger.info(
+            f"Processing pages {start_page + 1}-{end_page + 1} of {file_type} "
+            f"(logical pages based on content length)"
+        )
         
         return selected_pages
 
@@ -227,6 +254,8 @@ class SandboxProcessor:
         Returns:
             List of translated text pages
         """
+        logger.info(f"Processing {file_type.upper()} file: {file_path}")
+        
         if file_type == 'docx':
             with open(file_path, 'rb') as f:
                 pages = DocxProcessor.process_docx_with_pages(f, target_page_size=2000)
@@ -237,6 +266,8 @@ class SandboxProcessor:
                 pages = self._handle_page_range(pages, page_nums, "text file")
         else:
             raise ValueError(f"Unsupported text file type: {file_type}")
+        
+        logger.info(f"Translating {len(pages)} page(s) from {source_language} to {target_language}")
         
         return self.translation_service.translate_text_pages(
             pages, abstract_text, source_language, target_language, 
@@ -255,11 +286,15 @@ class SandboxProcessor:
         # Get abstract text once if needed
         abstract_text = input('Enter abstract text: ') if abstract else None
         
+        logger.info(f"Starting translation: {source_language} → {target_language}")
+        
         try:
             # Process based on file type
             if file_type == 'pdf':
+                logger.info(f"Processing PDF file: {file_path}")
                 with open(file_path, 'rb') as f:
                     pages = self.translation_service.pdf_processor.process_pdf(f)
+                    logger.info("Translating PDF pages")
                     document_text = self.translation_service.translate_document(
                         pages, abstract_text, page_nums, source_language, target_language, 
                         output_file, auto_save, progressive_save, file_path
@@ -271,8 +306,7 @@ class SandboxProcessor:
                 )
             else:
                 # This shouldn't happen due to earlier validation, but handle it gracefully
-                print(f"Error: Cannot translate file type '{file_type}'.")
-                exit(1)
+                raise CLIError(f"Cannot translate file type '{file_type}'.")
             
             # Join all translated content
             full_translation = "".join(document_text)
@@ -282,26 +316,34 @@ class SandboxProcessor:
             
             # Save the translation if requested (skip if progressive saving was used)
             if not progressive_save and (output_file or auto_save):
+                logger.info(f"Saving translation output")
                 self.file_output.save_translation_output(
                     full_translation, file_path, output_file, auto_save, source_language, target_language, custom_font
                 )
+            
+            logger.info("Translation completed successfully")
                 
         except ImportError as e:
             if "python-docx" in str(e):
-                print("Error: python-docx is required to process Word documents.")
-                print("Install it with: pip install python-docx")
+                logger.error("python-docx library not found")
+                raise CLIError(
+                    "python-docx is required to process Word documents. "
+                    "Install it with: pip install python-docx"
+                ) from e
             else:
-                print(f"Import error: {e}")
-            exit(1)
+                logger.error(f"Import error: {e}")
+                raise CLIError(f"Import error: {e}") from e
         except Exception as e:
-            print(f"Error processing document: {e}")
-            exit(1)
+            logger.error(f"Error processing document: {e}", exc_info=True)
+            raise CLIError(f"Error processing document: {e}") from e
     
     def translate_custom_text(self, source_language: str, target_language: str,
                             output_file: Optional[str] = None, auto_save: bool = False, custom_font: Optional[str] = None) -> None:
         """Translate custom text input by the user."""
         print(f"Enter the {source_language} text you want to translate to {target_language}:")
         print("(Press Ctrl+D on Unix/Linux/Mac or Ctrl+Z followed by Enter on Windows to finish)")
+        
+        logger.info(f"Starting custom text translation: {source_language} -> {target_language}")
         
         try:
             custom_text = ""
@@ -313,6 +355,7 @@ class SandboxProcessor:
                     break
             
             if not custom_text.strip():
+                logger.warning("No text provided for translation")
                 print("No text provided.")
                 return
             
@@ -322,20 +365,28 @@ class SandboxProcessor:
             # Save the translation if requested
             if output_file or auto_save:
                 input_filename = f"custom_text_{source_language}to{target_language}.txt"
+                logger.info("Saving custom text translation")
                 self.file_output.save_translation_output(
                     translated_text, input_filename, output_file, auto_save, source_language, target_language, custom_font
                 )
+            
+            logger.info("Custom text translation completed successfully")
         except KeyboardInterrupt:
+            logger.info("Translation cancelled by user")
             print("\nTranslation cancelled.")
         except Exception as e:
-            print(f"Error during translation: {e}")
+            logger.error(f"Error during translation: {e}", exc_info=True)
+            raise CLIError(f"Error during translation: {e}") from e
 
     def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None) -> None:
-        """Process an image file with OCR."""
+        """Process an image file with OCR.
+        
+        Raises:
+            CLIError: If image processing fails
+        """
+        logger.info(f"Starting OCR processing: {file_path} → {target_language}")
+        
         try:
-            print(f"Processing image with OCR: {file_path}")
-            print(f"Target language: {target_language}")
-            
             # Perform OCR
             extracted_text = self.image_processor_service.process_image_ocr(
                 file_path, target_language, output_format="console"
@@ -350,14 +401,14 @@ class SandboxProcessor:
                 output_path = os.path.abspath(output_file)
                 with open(output_path, 'w', encoding='utf-8') as f:
                     f.write(extracted_text)
+                logger.info(f"Extracted text saved to: {output_path}")
                 print(f"Extracted text saved to: {output_path}")
+            
+            logger.info("OCR processing completed successfully")
                 
-        except FileNotFoundError:
-            print(f"Error: Image file '{file_path}' not found.")
-            exit(1)
         except Exception as e:
-            print(f"Error processing image: {e}")
-            exit(1)
+            logger.error(f"Error processing image: {e}", exc_info=True)
+            raise CLIError(f"Error processing image: {e}") from e
 
     def show_usage_report(self) -> None:
         """Display token usage report."""
@@ -383,15 +434,19 @@ class SandboxProcessor:
             print(f"  {model}: {model_usage['total_tokens']:,} tokens, ${model_usage['total_cost']:.4f}")
 
     def update_pricing(self, model: str, input_price: str, output_price: str) -> None:
-        """Update pricing for a specific model."""
+        """Update pricing for a specific model.
+        
+        Raises:
+            CLIError: If pricing values are invalid
+        """
         try:
             input_price_float = float(input_price)
             output_price_float = float(output_price)
             self.token_tracker.update_pricing(model, input_price_float, output_price_float)
+            logger.info(f"Updated pricing for {model}: Input=${input_price_float}, Output=${output_price_float}")
             print(f"Updated pricing for {model}: Input=${input_price_float}, Output=${output_price_float}")
-        except ValueError:
-            print("Error: Prices must be valid numbers")
-            exit(1)
+        except ValueError as e:
+            raise CLIError("Prices must be valid numbers") from e
 
     def list_models(self) -> None:
         """List all available models and their capabilities."""
@@ -448,12 +503,16 @@ class SandboxProcessor:
             
         Returns:
             Target language string
+            
+        Raises:
+            CLIError: If language code is missing or invalid
         """
         language_code = getattr(args, 'language_code', None)
         
         if not language_code:
-            print("Error: Target language code is required for OCR (e.g., 'E' for English, 'C' for Chinese)")
-            exit(1)
+            raise CLIError(
+                "Target language code is required for OCR (e.g., 'E' for English, 'C' for Chinese)"
+            )
         
         # Accept either single language code or translation pair (use target language)
         if isinstance(language_code, tuple):
@@ -471,16 +530,19 @@ class SandboxProcessor:
             
         Returns:
             Tuple of (source_language, target_language)
+            
+        Raises:
+            CLIError: If language code is missing or invalid
         """
         language_code = getattr(args, 'language_code', None)
         
         if not language_code:
-            print("Error: Language code is required for translation")
-            exit(1)
+            raise CLIError("Language code is required for translation")
         
         if not isinstance(language_code, tuple):
-            print("Error: Translation requires a 2-character language code (e.g., CE, JE, KE)")
-            exit(1)
+            raise CLIError(
+                "Translation requires a 2-character language code (e.g., CE, JE, KE)"
+            )
         
         # Type narrowing: we know it's a tuple here
         lang_tuple: tuple[str, str] = language_code  # type: ignore[assignment]
@@ -514,52 +576,75 @@ class SandboxProcessor:
 
     def run(self, args: argparse.Namespace) -> None:
         """Run the translation application with the given arguments."""
-        # Handle info commands first (usage reports, model lists, etc.)
-        if self._handle_info_commands(args):
-            return
-        
-        # Validate that some input method is specified
-        if not args.input_file and not args.custom_text:
-            print("Error: Please specify a command (translation, usage report, etc.)")
-            exit(1)
-        
-        # Handle input file processing (OCR or translation)
-        if args.input_file:
-            file_type = self._detect_and_validate_file(args.input_file)
+        try:
+            # Handle info commands first (usage reports, model lists, etc.)
+            if self._handle_info_commands(args):
+                return
             
-            # Route based on file type
-            if file_type == 'image':
-                target_language = self._get_ocr_target_language(args)
-                output_file_arg: Optional[str] = getattr(args, 'output_file', None)
-                self.process_image(os.path.abspath(args.input_file), target_language, output_file_arg)
-            else:
-                # PDF, DOCX, or TXT - route to translation
+            # Validate that some input method is specified
+            if not args.input_file and not args.custom_text:
+                raise CLIError("Please specify a command (translation, usage report, etc.)")
+            
+            # Handle input file processing (OCR or translation)
+            if args.input_file:
+                file_type = self._detect_and_validate_file(args.input_file)
+                
+                # Route based on file type
+                if file_type == 'image':
+                    target_language = self._get_ocr_target_language(args)
+                    output_file_arg: Optional[str] = getattr(args, 'output_file', None)
+                    self.process_image(os.path.abspath(args.input_file), target_language, output_file_arg)
+                else:
+                    # PDF, DOCX, or TXT - route to translation
+                    source_language, target_language = self._get_translation_languages(args)
+                    output_file = self._resolve_output_path(args)
+                    
+                    self.translate_document(
+                        args.input_file, source_language, target_language,
+                        args.page_nums, args.abstract, output_file, args.auto_save, 
+                        args.progressive_save, args.custom_font
+                    )
+            
+            # Handle custom text translation
+            elif args.custom_text:
                 source_language, target_language = self._get_translation_languages(args)
                 output_file = self._resolve_output_path(args)
                 
-                self.translate_document(
-                    args.input_file, source_language, target_language,
-                    args.page_nums, args.abstract, output_file, args.auto_save, 
-                    args.progressive_save, args.custom_font
+                self.translate_custom_text(
+                    source_language, target_language, output_file, args.auto_save, args.custom_font
                 )
         
-        # Handle custom text translation
-        elif args.custom_text:
-            source_language, target_language = self._get_translation_languages(args)
-            output_file = self._resolve_output_path(args)
-            
-            self.translate_custom_text(
-                source_language, target_language, output_file, args.auto_save, args.custom_font
-            )
+        except CLIError as e:
+            logger.error(f"Error: {e}")
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+        except KeyboardInterrupt:
+            logger.info("Operation cancelled by user")
+            print("\nOperation cancelled.", file=sys.stderr)
+            sys.exit(130)  # Standard exit code for SIGINT
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}", exc_info=True)
+            print(f"Unexpected error: {e}", file=sys.stderr)
+            sys.exit(1)
 
 
 def main() -> None:
     """Main entry point for the CLI application."""
-    parser = create_argument_parser()
-    args = parser.parse_args()
+    try:
+        parser = create_argument_parser()
+        args = parser.parse_args()
+        
+        # Initialize processor (may raise CLIError)
+        sandbox = SandboxProcessor(args.professor, model=args.model)
+        
+        # Run the application (handles all its own exceptions)
+        sandbox.run(args)
     
-    sandbox = SandboxProcessor(args.professor, model=args.model)
-    sandbox.run(args)
+    except CLIError as e:
+        # Only for initialization errors before run() is called
+        logger.error(f"Initialization error: {e}")
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == '__main__':
