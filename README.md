@@ -1,5 +1,5 @@
 # PU_AISandbox
-Translate text interchangably between Chinese, Japanese, Korean, and English from either source PDFs or inputted text.
+Tools using the Princeton University AI Sandbox for East Asian language processing.
 
 ## Important Note
 This application is designed exclusively for Princeton University faculty members (or delegates) with access to the AI Sandbox. You must have a valid Princeton University AI Sandbox API key to use this tool.
