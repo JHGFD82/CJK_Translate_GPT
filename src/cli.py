@@ -140,6 +140,43 @@ class SandboxProcessor:
         """Set up logging for this session."""
         setup_logging()
 
+    def _detect_and_validate_file(self, file_path: str) -> str:
+        """Detect file type and validate the file.
+        
+        Args:
+            file_path: Path to the file
+            
+        Returns:
+            File type as string: 'image', 'pdf', 'docx', 'txt'
+            
+        Raises:
+            SystemExit on validation failure
+        """
+        abs_path = os.path.abspath(file_path)
+        
+        # Check if file exists
+        if not os.path.exists(abs_path):
+            print(f"Error: File '{file_path}' not found.")
+            exit(1)
+        
+        # Detect file type - check extensions directly
+        lower_path = abs_path.lower()
+        
+        if self.image_processor.is_image_file(abs_path):
+            if not self.image_processor.validate_image_file(abs_path):
+                print(f"Error: Image file '{file_path}' is not valid.")
+                exit(1)
+            return 'image'
+        elif lower_path.endswith('.pdf'):
+            return 'pdf'
+        elif lower_path.endswith('.docx'):
+            return 'docx'
+        elif lower_path.endswith('.txt'):
+            return 'txt'
+        else:
+            print(f"Error: Unsupported file format. Supported formats: PDF, DOCX, TXT, or image files (JPG, PNG, etc.)")
+            exit(1)
+
     def _handle_page_range(self, pages: List[str], page_nums: Optional[str], file_type: str) -> List[str]:
         """Handle page range selection for text-based documents.
         
@@ -176,27 +213,28 @@ class SandboxProcessor:
                           output_file: Optional[str] = None, auto_save: bool = False, progressive_save: bool = False, 
                           custom_font: Optional[str] = None) -> None:
         """Translate a document file (PDF, Word document, or text file)."""
-        # Convert file_path to absolute path
+        # Convert file_path to absolute path and detect type
         file_path = os.path.abspath(file_path)
+        file_type = self._detect_and_validate_file(file_path)
         
         abstract_text = input('Enter abstract text: ') if abstract else None
         
         try:
-            # Determine file type and process accordingly
-            if file_path.lower().endswith('.pdf'):
+            # Process based on file type
+            if file_type == 'pdf':
                 with open(file_path, 'rb') as f:
                     pages = self.translation_service.pdf_processor.process_pdf(f)
                     document_text = self.translation_service.translate_document(
                         pages, abstract_text, page_nums, source_language, target_language, output_file, auto_save, progressive_save, file_path
                     )
-            elif DocxProcessor.is_docx_file(file_path):
+            elif file_type == 'docx':
                 with open(file_path, 'rb') as f:
                     pages = DocxProcessor.process_docx_with_pages(f, target_page_size=2000)
                     pages = self._handle_page_range(pages, page_nums, "Word document")
                     document_text = self.translation_service.translate_text_pages(
                         pages, abstract_text, source_language, target_language, output_file, auto_save, progressive_save, file_path
                     )
-            elif TxtProcessor.is_txt_file(file_path):
+            elif file_type == 'txt':
                 with open(file_path, 'r', encoding='utf-8') as f:
                     pages = TxtProcessor.process_txt_with_pages(f, target_page_size=2000)
                     pages = self._handle_page_range(pages, page_nums, "text file")
@@ -204,7 +242,8 @@ class SandboxProcessor:
                         pages, abstract_text, source_language, target_language, output_file, auto_save, progressive_save, file_path
                     )
             else:
-                print(f"Error: Unsupported file format. Please provide a PDF (.pdf), Word document (.docx), or text file (.txt).")
+                # This shouldn't happen due to earlier validation, but handle it gracefully
+                print(f"Error: Cannot translate file type '{file_type}'.")
                 exit(1)
             
             # Join all translated content
@@ -219,9 +258,6 @@ class SandboxProcessor:
                     full_translation, file_path, output_file, auto_save, source_language, target_language, custom_font
                 )
                 
-        except FileNotFoundError:
-            print(f"Error: File '{file_path}' not found.")
-            exit(1)
         except ImportError as e:
             if "python-docx" in str(e):
                 print("Error: python-docx is required to process Word documents.")
@@ -461,27 +497,23 @@ class SandboxProcessor:
         
         # Handle input file processing (OCR or translation)
         if args.input_file:
-            input_file_abs = os.path.abspath(args.input_file)
+            file_type = self._detect_and_validate_file(args.input_file)
             
-            # Route to image processing (OCR) if it's an image file
-            if self.image_processor.is_image_file(input_file_abs):
-                if not self.image_processor.validate_image_file(input_file_abs):
-                    print(f"Error: Image file '{input_file_abs}' is not valid.")
-                    exit(1)
-                
+            # Route based on file type
+            if file_type == 'image':
                 target_language = self._get_ocr_target_language(args)
-                self.process_image(input_file_abs, target_language, args.output_file)
-                return
-            
-            # Otherwise, route to document translation
-            source_language, target_language = self._get_translation_languages(args)
-            output_file = self._resolve_output_path(args)
-            
-            self.translate_document(
-                args.input_file, source_language, target_language,
-                args.page_nums, args.abstract, output_file, args.auto_save, 
-                args.progressive_save, args.custom_font
-            )
+                output_file_arg: Optional[str] = getattr(args, 'output_file', None)
+                self.process_image(os.path.abspath(args.input_file), target_language, output_file_arg)
+            else:
+                # PDF, DOCX, or TXT - route to translation
+                source_language, target_language = self._get_translation_languages(args)
+                output_file = self._resolve_output_path(args)
+                
+                self.translate_document(
+                    args.input_file, source_language, target_language,
+                    args.page_nums, args.abstract, output_file, args.auto_save, 
+                    args.progressive_save, args.custom_font
+                )
         
         # Handle custom text translation
         elif args.custom_text:
