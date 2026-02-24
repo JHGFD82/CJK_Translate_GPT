@@ -9,13 +9,13 @@ from collections.abc import Iterator as ABCIterator
 
 from portkey_ai import Portkey
 
-from .config import (
+from ..config import (
     DEFAULT_MODEL, OCR_MODEL, OCR_TEMPERATURE, OCR_MAX_TOKENS, OCR_TOP_P,
     OCR_FREQUENCY_PENALTY, OCR_PRESENCE_PENALTY,
     MAX_RETRIES, BASE_RETRY_DELAY, model_supports_vision, get_vision_capable_models, resolve_model
 )
-from .processors.image_processor import ImageProcessor
-from .token_tracker import TokenTracker
+from ..processors.image_processor import ImageProcessor
+from ..token_tracker import TokenTracker
 
 
 class ImageProcessorService:

@@ -25,7 +25,7 @@ Features:
 """
 
 from .cli import main, SandboxProcessor
-from .translation_service import TranslationService
+from .services.translation_service import TranslationService
 from .file_output import FileOutputHandler
 from .processors.pdf_processor import PDFProcessor
 from .processors.docx_processor import DocxProcessor
