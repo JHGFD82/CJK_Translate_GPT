@@ -50,6 +50,7 @@ __all__ = [
     # Main entry points
     "main",
     "SandboxProcessor",
+    "CLIError",
     
     # Core services
     "TranslationService",
