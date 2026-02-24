@@ -23,6 +23,18 @@ class FileOutputHandler:
     """Handles saving translations to various file formats."""
 
     @staticmethod
+    def _emit_message(
+        message: str,
+        level: int = logging.INFO,
+        log_message: Optional[str] = None,
+        leading_newline: bool = False,
+    ) -> None:
+        """Emit a synchronized log + console message."""
+        logging.log(level, log_message or message)
+        prefix = "\n" if leading_newline else ""
+        print(f"{prefix}{message}")
+
+    @staticmethod
     def _normalize_paragraphs(content: str) -> list[str]:
         """Split content into normalized paragraphs for document output."""
         paragraphs: list[str] = []
@@ -65,11 +77,17 @@ class FileOutputHandler:
         try:
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(content)
-            logging.info(f'Translation saved to text file: {output_path}')
-            print(f"\nTranslation saved to: {output_path}")
-        except Exception as e:
-            logging.error(f'Error saving to text file: {e}')
-            print(f"Error saving to text file: {e}")
+            FileOutputHandler._emit_message(
+                f"Translation saved to: {output_path}",
+                level=logging.INFO,
+                log_message=f'Translation saved to text file: {output_path}',
+                leading_newline=True,
+            )
+        except (OSError, UnicodeError) as e:
+            FileOutputHandler._emit_message(
+                f"Error saving to text file: {e}",
+                level=logging.ERROR,
+            )
 
     @staticmethod
     def append_to_text_file(content: str, output_path: str) -> None:
@@ -77,11 +95,16 @@ class FileOutputHandler:
         try:
             with open(output_path, 'a', encoding='utf-8') as f:
                 f.write(content + '\n\n')
-            logging.info(f'Translation appended to text file: {output_path}')
-            print(f"Page appended to: {output_path}")
-        except Exception as e:
-            logging.error(f'Error appending to text file: {e}')
-            print(f"Error appending to text file: {e}")
+            FileOutputHandler._emit_message(
+                f"Page appended to: {output_path}",
+                level=logging.INFO,
+                log_message=f'Translation appended to text file: {output_path}',
+            )
+        except (OSError, UnicodeError) as e:
+            FileOutputHandler._emit_message(
+                f"Error appending to text file: {e}",
+                level=logging.ERROR,
+            )
     
     @staticmethod
     def save_to_pdf(content: str, output_path: str, custom_font: Optional[str] = None, target_lang: Optional[str] = None) -> None:
@@ -125,7 +148,7 @@ class FileOutputHandler:
                     encoding='utf-8'
                 )
                 logging.info(f"Created paragraph style with font: {font_name}")
-            except Exception as e:
+            except (TypeError, ValueError, KeyError) as e:
                 logging.warning(f"Failed to create custom style with font {font_name}: {e}")
                 normal_style = styles['Normal']
                 font_name = 'Times-Roman'  # Fallback to default
@@ -167,23 +190,39 @@ class FileOutputHandler:
             # Build PDF
             if story:
                 doc.build(story)
-                logging.info(f'Translation saved to PDF file: {output_path}')
-                print(f"\nTranslation saved to PDF: {output_path}")
+                FileOutputHandler._emit_message(
+                    f"Translation saved to PDF: {output_path}",
+                    level=logging.INFO,
+                    log_message=f'Translation saved to PDF file: {output_path}',
+                    leading_newline=True,
+                )
                 if font_name != 'Times-Roman':
-                    print(f"Used font: {font_name}")
+                    FileOutputHandler._emit_message(f"Used font: {font_name}", level=logging.INFO)
             else:
-                logging.error("No content could be processed for PDF generation")
-                print("Error: No content could be processed for PDF generation")
+                FileOutputHandler._emit_message(
+                    "Error: No content could be processed for PDF generation",
+                    level=logging.ERROR,
+                    log_message="No content could be processed for PDF generation",
+                )
                 FileOutputHandler._fallback_to_text(content, output_path)
             
         except ImportError:
-            logging.warning('reportlab not installed. Falling back to text file.')
-            print("Warning: reportlab not installed. Saving as text file instead.")
+            FileOutputHandler._emit_message(
+                "Warning: reportlab not installed. Saving as text file instead.",
+                level=logging.WARNING,
+                log_message='reportlab not installed. Falling back to text file.',
+            )
             FileOutputHandler._fallback_to_text(content, output_path)
         except Exception as e:
-            logging.error(f'Error saving to PDF: {e}')
-            print(f"Error generating PDF: {e}")
-            print("Falling back to text file for reliable CJK character support...")
+            FileOutputHandler._emit_message(
+                f"Error generating PDF: {e}",
+                level=logging.ERROR,
+                log_message=f'Error saving to PDF: {e}',
+            )
+            FileOutputHandler._emit_message(
+                "Falling back to text file for reliable CJK character support...",
+                level=logging.WARNING,
+            )
             FileOutputHandler._fallback_to_text(content, output_path)
     
     @staticmethod
@@ -242,25 +281,41 @@ class FileOutputHandler:
             # Save the document
             if len(doc.paragraphs) > 0:
                 doc.save(output_path)
-                logging.info(f'Translation saved to Word document: {output_path}')
-                print(f"\nTranslation saved to Word document: {output_path}")
+                FileOutputHandler._emit_message(
+                    f"Translation saved to Word document: {output_path}",
+                    level=logging.INFO,
+                    log_message=f'Translation saved to Word document: {output_path}',
+                    leading_newline=True,
+                )
                 if font_name != 'Times New Roman':
-                    print(f"Used font: {font_name}")
+                    FileOutputHandler._emit_message(f"Used font: {font_name}", level=logging.INFO)
             else:
-                logging.error("No content could be processed for Word document generation")
-                print("Error: No content could be processed for Word document generation")
+                FileOutputHandler._emit_message(
+                    "Error: No content could be processed for Word document generation",
+                    level=logging.ERROR,
+                    log_message="No content could be processed for Word document generation",
+                )
                 FileOutputHandler._fallback_to_text(content, output_path)
             
         except ImportError:
-            logging.warning('python-docx not installed. Falling back to text file.')
-            print("Warning: python-docx not installed. To enable Word document export, install it with:")
-            print("pip install python-docx")
-            print("Saving as text file instead.")
+            FileOutputHandler._emit_message(
+                "Warning: python-docx not installed. To enable Word document export, install it with:",
+                level=logging.WARNING,
+                log_message='python-docx not installed. Falling back to text file.',
+            )
+            FileOutputHandler._emit_message("pip install python-docx", level=logging.INFO)
+            FileOutputHandler._emit_message("Saving as text file instead.", level=logging.WARNING)
             FileOutputHandler._fallback_to_text(content, output_path)
         except Exception as e:
-            logging.error(f'Error saving to Word document: {e}')
-            print(f"Error generating Word document: {e}")
-            print("Falling back to text file for reliable CJK character support...")
+            FileOutputHandler._emit_message(
+                f"Error generating Word document: {e}",
+                level=logging.ERROR,
+                log_message=f'Error saving to Word document: {e}',
+            )
+            FileOutputHandler._emit_message(
+                "Falling back to text file for reliable CJK character support...",
+                level=logging.WARNING,
+            )
             FileOutputHandler._fallback_to_text(content, output_path)
     
     @staticmethod
@@ -268,7 +323,7 @@ class FileOutputHandler:
                               auto_save: bool, source_lang: str, target_lang: str, custom_font: Optional[str] = None) -> None:
         """Save translation output to file based on user preferences."""
         if not content.strip():
-            print("No content to save.")
+            FileOutputHandler._emit_message("No content to save.", level=logging.INFO)
             return
         
         output_path = FileOutputHandler._resolve_output_path(
@@ -306,7 +361,7 @@ class FileOutputHandler:
         """Save a single page progressively to output file. Returns the output path."""
         _ = custom_font
         if not content.strip():
-            print("No content to save.")
+            FileOutputHandler._emit_message("No content to save.", level=logging.INFO)
             return None
         
         output_path = FileOutputHandler._resolve_output_path(
@@ -326,10 +381,16 @@ class FileOutputHandler:
         # PDF and Word document merging is complex and requires additional dependencies
         extension = Path(output_path).suffix.lower()
         if extension == '.pdf':
-            print("Note: Progressive saving for PDF format not yet supported. Using text format.")
+            FileOutputHandler._emit_message(
+                "Note: Progressive saving for PDF format not yet supported. Using text format.",
+                level=logging.INFO,
+            )
             output_path = str(Path(output_path).with_suffix('.txt'))
         elif extension == '.docx':
-            print("Note: Progressive saving for Word document format not yet supported. Using text format.")
+            FileOutputHandler._emit_message(
+                "Note: Progressive saving for Word document format not yet supported. Using text format.",
+                level=logging.INFO,
+            )
             output_path = str(Path(output_path).with_suffix('.txt'))
         
         # Default to text file
