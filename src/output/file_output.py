@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime
 
-from .config import PDF_MARGINS
+from ..config import PDF_MARGINS
 
 
 def generate_output_filename(input_file: str, source_lang: str, target_lang: str, extension: str = '.txt') -> str:

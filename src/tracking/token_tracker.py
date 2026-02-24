@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, asdict
 
-from .config import (
+from ..config import (
     load_model_catalog, get_model_pricing, get_pricing_unit,
     get_monthly_limit, save_model_catalog
 )
@@ -22,7 +22,8 @@ USAGE_DATA_FILE = "token_usage.json"  # Legacy file name for backward compatibil
 
 def get_usage_data_path(professor: Optional[str] = None) -> Path:
     """Get the path to the usage data file for a specific professor or the legacy file."""
-    base_dir = Path(__file__).parent.parent / USAGE_DATA_DIR
+    project_root = Path(__file__).parent.parent.parent
+    base_dir = project_root / USAGE_DATA_DIR
     
     if professor:
         # Ensure data directory exists
@@ -30,7 +31,7 @@ def get_usage_data_path(professor: Optional[str] = None) -> Path:
         return base_dir / f"token_usage_{professor.lower()}.json"
     else:
         # Legacy path for backward compatibility
-        return Path(__file__).parent.parent / USAGE_DATA_FILE
+        return project_root / USAGE_DATA_FILE
 
 
 @dataclass
