@@ -50,6 +50,7 @@ python -m src.cli conlan CE -c  # Custom text translation
 python -m src.cli conlan CE -i test.pdf  # PDF translation
 python -m src.cli conlan CE -i test.docx  # Word document translation
 python -m src.cli conlan CE -i test.txt  # Text file translation
+python -m src.cli conlan E -i test.jpg -o output.txt  # Image OCR (auto-detected by extension)
 ```
 
 ### Language Code Pattern
@@ -87,8 +88,17 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 - **PDF Files (.pdf)**: Full text extraction with page range support via `PDFProcessor`
 - **Word Documents (.docx)**: Text-only extraction via `DocxProcessor`, split into logical sections
 - **Text Files (.txt)**: Direct UTF-8 processing via `TxtProcessor`, automatic paragraph detection
+- **Image Files (.jpg, .jpeg, .png, .gif, .bmp, .webp)**: OCR via `ImageProcessorService` with vision-capable models
 - **Legacy PDF Argument**: `--input_PDF` maintained for backward compatibility, use `-i/--input` for new code
-- **File Type Detection**: Automatic detection based on file extension, supports .pdf, .docx/.doc, and .txt
+- **File Type Detection**: Automatic detection based on file extension; images automatically trigger OCR instead of translation
+
+### Image OCR Processing
+- **Automatic Detection**: Image files are detected by extension and routed to OCR automatically
+- **Language Code**: Use single character (E, C, J, K) for target language, not translation pairs (CE, JE)
+- **Vision Model Validation**: Automatically selects and validates vision-capable models from `pricing_config.json`
+- **Token Tracking**: OCR usage tracked in same file as translation via shared `TokenTracker`
+- **Output**: Extracted text printed to console and optionally saved to file with `-o` flag
+- **Example**: `python main.py professor E -i image.jpg -o extracted.txt`
 
 ### File Path Handling
 - **Input Path Resolution**: `os.path.abspath()` applied to input files in `translate_pdf()` method
@@ -96,9 +106,10 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 - **Directory Placement**: Output files placed in same directory as source file via `generate_output_filename()`
 
 ## External Dependencies
-- **Azure OpenAI**: Uses `SANDBOX_ENDPOINT` and `SANDBOX_API_VERSION` from config
+- **PortKey**: Uses `SANDBOX_ENDPOINT` and `SANDBOX_API_VERSION` from config
 - **Font Management**: Custom fonts in `fonts/` directory for PDF and Word output
 - **Document Generation**: `reportlab` for PDF, `python-docx` for Word documents
+- **Image Processing**: `ImageProcessor` for image-to-data-url conversion, `ImageProcessorService` for OCR
 - **Princeton-Specific**: API keys from Princeton's AI Sandbox service
 
 ## Common Patterns to Follow
