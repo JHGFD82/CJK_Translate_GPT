@@ -8,6 +8,7 @@ from typing import Optional
 from datetime import datetime
 
 from ..config import PDF_MARGINS
+from .font_resolver import get_docx_font, get_pdf_font
 
 
 def generate_output_filename(input_file: str, source_lang: str, target_lang: str, extension: str = '.txt') -> str:
@@ -20,6 +21,43 @@ def generate_output_filename(input_file: str, source_lang: str, target_lang: str
 
 class FileOutputHandler:
     """Handles saving translations to various file formats."""
+
+    @staticmethod
+    def _normalize_paragraphs(content: str) -> list[str]:
+        """Split content into normalized paragraphs for document output."""
+        paragraphs: list[str] = []
+        for paragraph in content.split('\n\n'):
+            stripped = paragraph.strip()
+            if stripped:
+                paragraphs.append(stripped.replace('\n', ' '))
+        return paragraphs
+
+    @staticmethod
+    def _resolve_output_path(
+        input_file: Optional[str],
+        output_file: Optional[str],
+        auto_save: bool,
+        source_lang: str,
+        target_lang: str,
+        default_extension: str = '.txt',
+    ) -> Optional[str]:
+        """Resolve the output path from explicit or auto-save settings."""
+        if output_file:
+            return output_file
+        if auto_save and input_file:
+            return generate_output_filename(input_file, source_lang, target_lang, default_extension)
+        return None
+
+    @staticmethod
+    def _ensure_parent_directory(output_path: str) -> None:
+        """Ensure the parent directory for output exists."""
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _fallback_to_text(content: str, output_path: str) -> None:
+        """Fallback to text output when rich document generation fails."""
+        text_output_path = str(Path(output_path).with_suffix('.txt'))
+        FileOutputHandler.save_to_text_file(content, text_output_path)
     
     @staticmethod
     def save_to_text_file(content: str, output_path: str) -> None:
@@ -72,7 +110,7 @@ class FileOutputHandler:
                 font_name = 'Times-Roman'
                 logging.info(f"Using Times-Roman for English translation (target_lang={target_lang})")
             else:
-                font_name = FileOutputHandler._get_cjk_font(custom_font)
+                font_name = get_pdf_font(custom_font)
                 logging.info(f"Using CJK font: {font_name} (custom_font={custom_font}, target_lang={target_lang})")
             
             # Create paragraph style with proper font
@@ -92,50 +130,39 @@ class FileOutputHandler:
                 normal_style = styles['Normal']
                 font_name = 'Times-Roman'  # Fallback to default
             
+            fallback_style = ParagraphStyle(
+                'FallbackCJK',
+                parent=styles['Normal'],
+                fontName='Times-Roman',
+                fontSize=12,
+                leading=18,
+                spaceAfter=12
+            )
+
             # Split content into paragraphs and add to story
-            paragraphs = content.split('\n\n')
-            for i, para in enumerate(paragraphs):
-                if para.strip():
-                    clean_text = para.strip()
+            for i, clean_text in enumerate(FileOutputHandler._normalize_paragraphs(content), start=1):
+                try:
+                    paragraph = Paragraph(clean_text, normal_style)
+                    story.append(paragraph)
+                    story.append(Spacer(1, 12))
+                    logging.debug(f"Successfully added paragraph {i} with font {font_name}")
+                except Exception as paragraph_error:
+                    logging.warning(f"Error processing paragraph {i} with font {font_name}: {paragraph_error}")
                     try:
-                        # For CJK characters, we need to handle the text more carefully
-                        # Replace line breaks within paragraphs with spaces
-                        clean_text = clean_text.replace('\n', ' ')
-                        
-                        # Test if the font can handle the text
-                        p = Paragraph(clean_text, normal_style)
-                        story.append(p)
+                        paragraph = Paragraph(clean_text, fallback_style)
+                        story.append(paragraph)
                         story.append(Spacer(1, 12))
-                        logging.debug(f"Successfully added paragraph {i+1} with font {font_name}")
-                        
-                    except Exception as e:
-                        logging.warning(f"Error processing paragraph {i+1} with font {font_name}: {e}")
-                        # Try with a different font as fallback
-                        try:
-                            # Try with Times-Roman as fallback
-                            fallback_style = ParagraphStyle(
-                                'FallbackCJK',
-                                parent=styles['Normal'],
-                                fontName='Times-Roman',
-                                fontSize=12,
-                                leading=18,
-                                spaceAfter=12
-                            )
-                            p = Paragraph(clean_text, fallback_style)
-                            story.append(p)
+                        logging.info(f"Used fallback font Times-Roman for paragraph {i}")
+                    except Exception as fallback_error:
+                        logging.warning(f"Fallback font also failed for paragraph {i}: {fallback_error}")
+                        ascii_safe_text = clean_text.encode('ascii', 'ignore').decode('ascii')
+                        if ascii_safe_text.strip():
+                            paragraph = Paragraph(ascii_safe_text, styles['Normal'])
+                            story.append(paragraph)
                             story.append(Spacer(1, 12))
-                            logging.info(f"Used fallback font Times-Roman for paragraph {i+1}")
-                        except Exception as e2:
-                            logging.warning(f"Fallback font also failed for paragraph {i+1}: {e2}")
-                            # Ultimate fallback: convert to ASCII-safe text
-                            ascii_safe_text = clean_text.encode('ascii', 'ignore').decode('ascii')
-                            if ascii_safe_text.strip():
-                                p = Paragraph(ascii_safe_text, styles['Normal'])
-                                story.append(p)
-                                story.append(Spacer(1, 12))
-                                logging.warning(f"Used ASCII-safe fallback for paragraph {i+1}")
-                            else:
-                                logging.warning(f"Paragraph {i+1} contained no ASCII-safe characters, skipping")
+                            logging.warning(f"Used ASCII-safe fallback for paragraph {i}")
+                        else:
+                            logging.warning(f"Paragraph {i} contained no ASCII-safe characters, skipping")
             
             # Build PDF
             if story:
@@ -147,21 +174,17 @@ class FileOutputHandler:
             else:
                 logging.error("No content could be processed for PDF generation")
                 print("Error: No content could be processed for PDF generation")
-                # Fallback to text file
-                text_output_path = output_path.replace('.pdf', '.txt')
-                FileOutputHandler.save_to_text_file(content, text_output_path)
+                FileOutputHandler._fallback_to_text(content, output_path)
             
         except ImportError:
             logging.warning('reportlab not installed. Falling back to text file.')
             print("Warning: reportlab not installed. Saving as text file instead.")
-            text_output_path = output_path.replace('.pdf', '.txt')
-            FileOutputHandler.save_to_text_file(content, text_output_path)
+            FileOutputHandler._fallback_to_text(content, output_path)
         except Exception as e:
             logging.error(f'Error saving to PDF: {e}')
             print(f"Error generating PDF: {e}")
             print("Falling back to text file for reliable CJK character support...")
-            text_output_path = output_path.replace('.pdf', '.txt')
-            FileOutputHandler.save_to_text_file(content, text_output_path)
+            FileOutputHandler._fallback_to_text(content, output_path)
     
     @staticmethod
     def save_to_docx(content: str, output_path: str, custom_font: Optional[str] = None, target_lang: Optional[str] = None) -> None:
@@ -186,48 +209,35 @@ class FileOutputHandler:
                 font_name = 'Times New Roman'
                 logging.info(f"Using Times New Roman for English translation (target_lang={target_lang})")
             else:
-                font_name = FileOutputHandler._get_docx_font(custom_font)
+                font_name = get_docx_font(custom_font)
                 logging.info(f"Using CJK font for Word: {font_name} (custom_font={custom_font}, target_lang={target_lang})")
             
             # Split content into paragraphs and add to document
-            paragraphs = content.split('\n\n')
-            for i, para in enumerate(paragraphs):
-                if para.strip():
-                    clean_text = para.strip()
-                    # Replace line breaks within paragraphs with spaces
-                    clean_text = clean_text.replace('\n', ' ')
-                    
+            for i, clean_text in enumerate(FileOutputHandler._normalize_paragraphs(content), start=1):
+                try:
+                    paragraph = doc.add_paragraph(clean_text)
+                    paragraph_format = paragraph.paragraph_format
+                    paragraph_format.space_after = Pt(12)
+                    paragraph_format.line_spacing = 1.5
+
+                    if paragraph.runs:
+                        for run in paragraph.runs:
+                            run.font.name = font_name
+                            run.font.size = Pt(12)
+                    else:
+                        run = paragraph.add_run(clean_text)
+                        run.font.name = font_name
+                        run.font.size = Pt(12)
+
+                    logging.debug(f"Successfully added paragraph {i} with font {font_name}")
+                except Exception as paragraph_error:
+                    logging.warning(f"Error processing paragraph {i} for Word document: {paragraph_error}")
                     try:
-                        # Add paragraph to document
-                        p = doc.add_paragraph(clean_text)
-                        
-                        # Configure paragraph formatting
-                        paragraph_format = p.paragraph_format
-                        paragraph_format.space_after = Pt(12)
-                        paragraph_format.line_spacing = 1.5
-                        
-                        # Configure font
-                        for run in p.runs:
-                            run.font.name = font_name
-                            run.font.size = Pt(12)
-                        
-                        # If paragraph has no runs (empty), add one with the font
-                        if not p.runs:
-                            run = p.runs[0] if p.runs else p.add_run()
-                            run.font.name = font_name
-                            run.font.size = Pt(12)
-                        
-                        logging.debug(f"Successfully added paragraph {i+1} with font {font_name}")
-                        
-                    except Exception as e:
-                        logging.warning(f"Error processing paragraph {i+1} for Word document: {e}")
-                        # Try adding paragraph without special formatting
-                        try:
-                            p = doc.add_paragraph(clean_text)
-                            logging.info(f"Added paragraph {i+1} with basic formatting")
-                        except Exception as e2:
-                            logging.warning(f"Failed to add paragraph {i+1} to Word document: {e2}")
-                            continue
+                        doc.add_paragraph(clean_text)
+                        logging.info(f"Added paragraph {i} with basic formatting")
+                    except Exception as fallback_error:
+                        logging.warning(f"Failed to add paragraph {i} to Word document: {fallback_error}")
+                        continue
             
             # Save the document
             if len(doc.paragraphs) > 0:
@@ -239,23 +249,19 @@ class FileOutputHandler:
             else:
                 logging.error("No content could be processed for Word document generation")
                 print("Error: No content could be processed for Word document generation")
-                # Fallback to text file
-                text_output_path = output_path.replace('.docx', '.txt')
-                FileOutputHandler.save_to_text_file(content, text_output_path)
+                FileOutputHandler._fallback_to_text(content, output_path)
             
         except ImportError:
             logging.warning('python-docx not installed. Falling back to text file.')
             print("Warning: python-docx not installed. To enable Word document export, install it with:")
             print("pip install python-docx")
             print("Saving as text file instead.")
-            text_output_path = output_path.replace('.docx', '.txt')
-            FileOutputHandler.save_to_text_file(content, text_output_path)
+            FileOutputHandler._fallback_to_text(content, output_path)
         except Exception as e:
             logging.error(f'Error saving to Word document: {e}')
             print(f"Error generating Word document: {e}")
             print("Falling back to text file for reliable CJK character support...")
-            text_output_path = output_path.replace('.docx', '.txt')
-            FileOutputHandler.save_to_text_file(content, text_output_path)
+            FileOutputHandler._fallback_to_text(content, output_path)
     
     @staticmethod
     def save_translation_output(content: str, input_file: Optional[str], output_file: Optional[str], 
@@ -265,64 +271,70 @@ class FileOutputHandler:
             print("No content to save.")
             return
         
-        # Determine output file path
-        if output_file:
-            output_path = output_file
-        elif auto_save and input_file:
-            output_path = generate_output_filename(input_file, source_lang, target_lang, '.txt')
-        else:
-            # No saving requested
+        output_path = FileOutputHandler._resolve_output_path(
+            input_file,
+            output_file,
+            auto_save,
+            source_lang,
+            target_lang,
+            '.txt',
+        )
+        if not output_path:
             return
         
-        # Ensure directory exists
-        output_dir = Path(output_path).parent
-        output_dir.mkdir(parents=True, exist_ok=True)
+        FileOutputHandler._ensure_parent_directory(output_path)
+
+        extension = Path(output_path).suffix.lower()
+        writer_map = {
+            '.pdf': FileOutputHandler.save_to_pdf,
+            '.docx': FileOutputHandler.save_to_docx,
+        }
         
-        # Determine file type and save accordingly
-        if output_path.lower().endswith('.pdf'):
-            FileOutputHandler.save_to_pdf(content, output_path, custom_font, target_lang)
-        elif output_path.lower().endswith('.docx'):
-            FileOutputHandler.save_to_docx(content, output_path, custom_font, target_lang)
-        else:
-            # Default to text file
-            if not output_path.lower().endswith('.txt'):
-                output_path += '.txt'
-            FileOutputHandler.save_to_text_file(content, output_path)
+        writer = writer_map.get(extension)
+        if writer:
+            writer(content, output_path, custom_font, target_lang)
+            return
+
+        if extension != '.txt':
+            output_path = f"{output_path}.txt"
+        FileOutputHandler.save_to_text_file(content, output_path)
 
     @staticmethod
     def save_page_progressively(content: str, input_file: Optional[str], output_file: Optional[str], 
                                auto_save: bool, source_lang: str, target_lang: str, is_first_page: bool = False,
                                custom_font: Optional[str] = None) -> Optional[str]:
         """Save a single page progressively to output file. Returns the output path."""
+        _ = custom_font
         if not content.strip():
             print("No content to save.")
             return None
         
-        # Determine output file path
-        if output_file:
-            output_path = output_file
-        elif auto_save and input_file:
-            output_path = generate_output_filename(input_file, source_lang, target_lang, '.txt')
-        else:
-            # No saving requested
+        output_path = FileOutputHandler._resolve_output_path(
+            input_file,
+            output_file,
+            auto_save,
+            source_lang,
+            target_lang,
+            '.txt',
+        )
+        if not output_path:
             return None
         
-        # Ensure directory exists
-        output_dir = Path(output_path).parent
-        output_dir.mkdir(parents=True, exist_ok=True)
+        FileOutputHandler._ensure_parent_directory(output_path)
         
         # For progressive saving, we currently only support text files
         # PDF and Word document merging is complex and requires additional dependencies
-        if output_path.lower().endswith('.pdf'):
+        extension = Path(output_path).suffix.lower()
+        if extension == '.pdf':
             print("Note: Progressive saving for PDF format not yet supported. Using text format.")
-            output_path = output_path.replace('.pdf', '.txt')
-        elif output_path.lower().endswith('.docx'):
+            output_path = str(Path(output_path).with_suffix('.txt'))
+        elif extension == '.docx':
             print("Note: Progressive saving for Word document format not yet supported. Using text format.")
-            output_path = output_path.replace('.docx', '.txt')
+            output_path = str(Path(output_path).with_suffix('.txt'))
         
         # Default to text file
-        if not output_path.lower().endswith('.txt'):
-            output_path += '.txt'
+        if Path(output_path).suffix.lower() != '.txt':
+            output_path = f"{output_path}.txt"
         
         # Save first page or append subsequent pages
         if is_first_page:
@@ -331,127 +343,3 @@ class FileOutputHandler:
             FileOutputHandler.append_to_text_file(content, output_path)
         
         return output_path
-    
-    @staticmethod
-    def _get_cjk_font(custom_font: Optional[str] = None) -> str:
-        """Get an appropriate font for CJK characters from the fonts directory."""
-        try:
-            from reportlab.pdfbase import pdfmetrics
-            from reportlab.pdfbase.ttfonts import TTFont
-            import os
-            
-            # Check fonts from the local fonts directory
-            fonts_dir = os.path.join(os.path.dirname(__file__), '..', 'fonts')
-            if os.path.exists(fonts_dir):
-                # If a custom font is specified, try it first
-                if custom_font:
-                    custom_font_path = os.path.join(fonts_dir, f"{custom_font}.ttf")
-                    if os.path.exists(custom_font_path):
-                        try:
-                            custom_font_name = f"CustomFont_{custom_font}"
-                            if custom_font_name not in pdfmetrics.getRegisteredFontNames():
-                                pdfmetrics.registerFont(TTFont(custom_font_name, custom_font_path))  # type: ignore
-                            logging.info(f"Using custom CJK font: {custom_font_name}")
-                            return custom_font_name
-                        except Exception as e:
-                            logging.warning(f"Failed to register custom font {custom_font}: {e}")
-                            print(f"Warning: Custom font '{custom_font}' failed to load. Using default font selection.")
-                    else:
-                        logging.warning(f"Custom font file not found: {custom_font_path}")
-                        print(f"Warning: Custom font '{custom_font}.ttf' not found in fonts/ directory. Using default font selection.")
-                
-                # Preferred CJK fonts (in order of preference) - map to available fonts
-                preferred_fonts = [
-                    ('Arial Unicode.ttf', 'ArialUnicode'),         # Your available Arial Unicode
-                    ('AppleGothic.ttf', 'AppleGothic'),           # Apple Gothic (good for CJK)
-                    ('AppleMyungjo.ttf', 'AppleMyungjo'),         # Apple Myungjo (good for CJK)
-                ]
-                
-                # First, try preferred fonts
-                for font_filename, font_name in preferred_fonts:
-                    font_path = os.path.join(fonts_dir, font_filename)
-                    if os.path.exists(font_path):
-                        try:
-                            if font_name not in pdfmetrics.getRegisteredFontNames():
-                                pdfmetrics.registerFont(TTFont(font_name, font_path))  # type: ignore
-                            logging.info(f"Using preferred CJK font: {font_name} ({font_filename})")
-                            return font_name
-                        except Exception as e:
-                            logging.warning(f"Failed to register preferred font {font_name}: {e}")
-                            continue
-                
-                # If no preferred fonts, use any available .ttf file (reportlab only supports TTF, not OTF)
-                for font_file in os.listdir(fonts_dir):
-                    if font_file.endswith('.ttf'):
-                        font_path = os.path.join(fonts_dir, font_file)
-                        # Create a safe font name by removing problematic characters
-                        safe_font_name = font_file.replace('.ttf', '').replace('-', '_').replace(',', '_').replace(' ', '_')
-                        try:
-                            if safe_font_name not in pdfmetrics.getRegisteredFontNames():
-                                pdfmetrics.registerFont(TTFont(safe_font_name, font_path))  # type: ignore
-                            logging.info(f"Using available CJK font: {safe_font_name} ({font_file})")
-                            return safe_font_name
-                        except Exception as e:
-                            logging.warning(f"Failed to register font {safe_font_name}: {e}")
-                            continue
-            
-            # No compatible fonts found - give clear guidance
-            logging.warning("No CJK fonts found in fonts/ directory.")
-            print("Warning: No CJK fonts available for PDF generation.")
-            print("To fix: Add CJK .ttf fonts to the 'fonts/' directory in this project.")
-            print("Note: Only .ttf fonts are supported. OTF fonts will not work with reportlab.")
-            print("Recommended CJK fonts:")
-            print("  - Arial Unicode MS (Microsoft)")
-            print("  - Source Han Sans (Adobe): https://github.com/adobe-fonts/source-han-sans")
-            print("  - Apple system fonts (AppleGothic, AppleMyungjo)")
-            print("Alternative: Save as .txt file for proper CJK character display.")
-            
-            return 'Times-Roman'  # Fallback to reportlab default (Times New Roman equivalent)
-            
-        except Exception as e:
-            logging.warning(f"Error checking CJK fonts: {e}")
-            return 'Times-Roman'
-
-    @staticmethod
-    def _get_docx_font(custom_font: Optional[str] = None) -> str:
-        """Get an appropriate font for CJK characters for Word documents."""
-        try:
-            import os
-            
-            # Check fonts from the local fonts directory
-            fonts_dir = os.path.join(os.path.dirname(__file__), '..', 'fonts')
-            if os.path.exists(fonts_dir):
-                # If a custom font is specified, try it first
-                if custom_font:
-                    custom_font_path = os.path.join(fonts_dir, f"{custom_font}.ttf")
-                    if os.path.exists(custom_font_path):
-                        # For Word documents, we can use the font name directly
-                        # Since Word handles font loading differently than reportlab
-                        logging.info(f"Using custom CJK font for Word: {custom_font}")
-                        return custom_font
-                    else:
-                        logging.warning(f"Custom font file not found: {custom_font_path}")
-                        print(f"Warning: Custom font '{custom_font}.ttf' not found in fonts/ directory. Using default font selection.")
-                
-                # Preferred CJK fonts for Word documents (system font names)
-                preferred_word_fonts = [
-                    'Arial Unicode MS',      # Microsoft's Unicode font
-                    'AppleGothic',          # Apple Gothic (good for CJK)
-                    'AppleMyungjo',         # Apple Myungjo (good for CJK)
-                    'Arial',                # Fallback to Arial
-                    'Calibri',              # Default Word font
-                ]
-                
-                # For Word documents, we use system font names rather than file paths
-                # Word will handle font resolution internally
-                for font_name in preferred_word_fonts:
-                    logging.info(f"Using CJK font for Word: {font_name}")
-                    return font_name
-            
-            # Default fallback
-            logging.info("Using Times New Roman as fallback for Word document")
-            return 'Times New Roman'
-            
-        except Exception as e:
-            logging.warning(f"Error checking fonts for Word document: {e}")
-            return 'Times New Roman'
