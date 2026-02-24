@@ -396,18 +396,21 @@ class SandboxProcessor:
         if is_image:
             # For OCR, extract target language from either single code or translation pair
             if isinstance(args.language_code, tuple):
-                target_language = str(args.language_code[1])
+                # Type narrowing: we know it's a tuple here
+                lang_tuple: tuple[str, str] = args.language_code  # type: ignore[assignment]
+                target_language = lang_tuple[1]
             else:
-                target_language = str(args.language_code)
+                # Single language string
+                target_language = args.language_code  # type: ignore[assignment]
             return ("", target_language)  # Source language not needed for OCR
         else:
             # For translation, require a language pair
             if not isinstance(args.language_code, tuple):
                 print("Error: Translation requires a 2-character language code (e.g., CE, JE, KE)")
                 exit(1)
-            source_language = str(args.language_code[0])
-            target_language = str(args.language_code[1])
-            return (source_language, target_language)
+            # Type narrowing: we know it's a tuple here
+            lang_tuple: tuple[str, str] = args.language_code  # type: ignore[assignment]
+            return (lang_tuple[0], lang_tuple[1])
 
     def _resolve_output_path(self, args: argparse.Namespace) -> Optional[str]:
         """Resolve the output file path based on arguments.
@@ -418,16 +421,19 @@ class SandboxProcessor:
         Returns:
             Absolute path to output file or None
         """
-        if args.output_file:
+        output_file_arg: Optional[str] = getattr(args, 'output_file', None)
+        input_file_arg: Optional[str] = getattr(args, 'input_file', None)
+        
+        if output_file_arg:
             # If output file is a relative path, make it relative to input file directory
-            if not os.path.isabs(args.output_file) and args.input_file:
-                input_dir = os.path.dirname(os.path.abspath(args.input_file))
-                return os.path.join(input_dir, args.output_file)
+            if not os.path.isabs(output_file_arg) and input_file_arg:
+                input_dir = os.path.dirname(os.path.abspath(input_file_arg))
+                return os.path.join(input_dir, output_file_arg)
             else:
-                return os.path.abspath(args.output_file)
-        elif args.input_file:
-            input_dir = os.path.dirname(os.path.abspath(args.input_file))
-            input_name, _ = os.path.splitext(os.path.basename(args.input_file))
+                return os.path.abspath(output_file_arg)
+        elif input_file_arg:
+            input_dir = os.path.dirname(os.path.abspath(input_file_arg))
+            input_name, _ = os.path.splitext(os.path.basename(input_file_arg))
             return os.path.join(input_dir, f"{input_name}_translated.txt")
         
         return None
