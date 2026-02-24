@@ -24,9 +24,19 @@ from .token_tracker import TokenTracker
 class TranslationService:
     """Handles translation operations using PortKey API."""
     
-    def __init__(self, api_key: str, professor: Optional[str] = None, token_tracker: Optional[TokenTracker] = None, token_tracker_file: Optional[str] = None):
+    def __init__(self, api_key: str, professor: Optional[str] = None, token_tracker: Optional[TokenTracker] = None, token_tracker_file: Optional[str] = None, model: Optional[str] = None):
+        """Initialize translation service.
+        
+        Args:
+            api_key: PortKey API key
+            professor: Professor name for token tracking
+            token_tracker: Shared TokenTracker instance
+            token_tracker_file: Custom token tracker file path
+            model: Optional model name to use instead of default
+        """
         self.api_key = api_key
         self.professor = professor
+        self.custom_model = model  # Store custom model if provided
         self.client = Portkey(
             api_key=api_key
         )
@@ -35,7 +45,15 @@ class TranslationService:
         self.token_tracker = token_tracker if token_tracker is not None else TokenTracker(professor=professor, data_file=token_tracker_file)
     
     def _get_model(self) -> str:
-        """Get the default model, with fallback if not available."""
+        """Get the model to use, preferring custom model if specified."""
+        if self.custom_model:
+            # Validate custom model exists in config
+            available_models = get_available_models()
+            if self.custom_model not in available_models:
+                raise ValueError(f"Custom model '{self.custom_model}' not found in available models. Use --list-models to see available options.")
+            else:
+                return self.custom_model
+        
         available_models = get_available_models()
         return DEFAULT_MODEL if DEFAULT_MODEL in available_models else available_models[0]
     
