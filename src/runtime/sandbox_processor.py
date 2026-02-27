@@ -219,8 +219,6 @@ class SandboxProcessor:
         print(f"Enter the {source_language} text you want to translate to {target_language}:")
         print("(Press Ctrl+D on Unix/Linux/Mac or Ctrl+Z followed by Enter on Windows to finish)")
 
-        logger.info(f"Starting custom text translation: {source_language} -> {target_language}")
-
         try:
             custom_text = ""
             while True:
@@ -235,6 +233,7 @@ class SandboxProcessor:
                 print("No text provided.")
                 return
 
+            logger.info(f"Starting custom text translation: {source_language} -> {target_language}")
             print("\nTranslating...")
             translated_text = self.translation_service.translate_text(custom_text, source_language, target_language)
 
