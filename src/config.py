@@ -254,6 +254,15 @@ def get_model_system_role(model: str) -> str:
     models = config["models"]
     return models.get(model, {}).get("system_role", "system")
 
+def model_uses_max_completion_tokens(model: str) -> bool:
+    """Check if a model requires 'max_completion_tokens' instead of 'max_tokens'.
+    
+    Newer reasoning models (e.g. o3-mini, gpt-5) reject 'max_tokens'.
+    """
+    config = load_model_catalog()
+    models = config["models"]
+    return models.get(model, {}).get("use_max_completion_tokens", False)
+
 def resolve_model(
     requested_model: Optional[str] = None,
     *,
