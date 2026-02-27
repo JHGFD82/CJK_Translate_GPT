@@ -244,6 +244,16 @@ def get_vision_capable_models() -> List[str]:
     return [model for model, details in config["models"].items() 
             if details.get("supports_vision", False)]
 
+def get_model_system_role(model: str) -> str:
+    """Get the appropriate system message role for a model.
+    
+    Newer reasoning models (e.g. o3-mini, gpt-5) require 'developer' instead of 'system'.
+    Defaults to 'system' for all other models.
+    """
+    config = load_model_catalog()
+    models = config["models"]
+    return models.get(model, {}).get("system_role", "system")
+
 def resolve_model(
     requested_model: Optional[str] = None,
     *,

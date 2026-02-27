@@ -7,12 +7,14 @@
     "gpt-5": {
       "input": 1.38,
       "output": 11.0,
-      "supports_vision": true
+      "supports_vision": true,
+      "system_role": "developer"
     },
     "o3-mini": {
       "input": 1.21,
       "output": 4.84,
-      "supports_vision": false
+      "supports_vision": false,
+      "system_role": "developer"
     },
     "gpt-4o-mini": {
       "input": 0.165,
