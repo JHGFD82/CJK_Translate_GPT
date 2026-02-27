@@ -56,59 +56,59 @@ In short: `src/cli.py` decides *what* to run; `src/runtime/` and below decide *h
 ### Basic Translation
 ```bash
 # Translate PDF from Chinese to English
-python main.py heller CE -i document.pdf
+python main.py heller translate CE -i document.pdf
 
 # Translate Word document from Japanese to Korean
-python main.py smith JK -i document.docx
+python main.py smith translate JK -i document.docx
 
 # Translate text file from Korean to English
-python main.py heller KE -i document.txt
+python main.py heller translate KE -i document.txt
 
 # Translate custom text from Japanese to Korean
-python main.py smith JK -c
+python main.py smith translate JK -c
 ```
 
 ### Save Output Options
 ```bash
 # Save translation to a specific text file
-python main.py heller CE -i document.pdf -o translation.txt
+python main.py heller translate CE -i document.pdf -o translation.txt
 
 # Save Word document translation to PDF
-python main.py heller CE -i document.docx -o translation.pdf
+python main.py heller translate CE -i document.docx -o translation.pdf
 
 # Save text file translation to Word document
-python main.py heller CE -i document.txt -o translation.docx
+python main.py heller translate CE -i document.txt -o translation.docx
 
 # Auto-save with timestamp in the same directory as input
-python main.py heller CE -i document.txt --auto-save
+python main.py heller translate CE -i document.txt --auto-save
 ```
 
 ### Advanced Options
 ```bash
 # Translate specific pages of PDF with abstract context
-python main.py smith CE -i document.pdf -p 5-10 -a
+python main.py smith translate CE -i document.pdf -p 5-10 -a
 
 # Translate text file and save to Word with custom font
-python main.py heller JE -i document.txt -o translation.docx -f AppleGothic
+python main.py heller translate JE -i document.txt -o translation.docx -f AppleGothic
 
 # Use custom font for PDF/Word output
-python main.py smith CE -i document.pdf -o translation.pdf -f AppleGothic
+python main.py smith translate CE -i document.pdf -o translation.pdf -f AppleGothic
 ```
 
 ### Model Selection
 ```bash
 # List all available models with pricing and vision support
-python main.py heller --list-models
+python main.py --list-models
 
 # Use specific model for translation
-python main.py heller CE -i document.pdf -m gpt-4o-mini
+python main.py heller translate CE -i document.pdf -m gpt-4o-mini
 
-# Use specific model for OCR
-python main.py smith E -i image.jpg -o extracted.txt -m gpt-4o
+# Use specific model for transcription (OCR)
+python main.py smith transcribe E -i image.jpg -o extracted.txt -m gpt-4o
 
 # Use different models for cost optimization
-python main.py heller JE -i document.txt -m gpt-4o-mini  # Lower cost
-python main.py smith CE -i complex.pdf -m gpt-4o        # Higher quality
+python main.py heller translate JE -i document.txt -m gpt-4o-mini  # Lower cost
+python main.py smith translate CE -i complex.pdf -m gpt-4o        # Higher quality
 ```
 
 **Available Models:**
@@ -123,28 +123,28 @@ python main.py smith CE -i complex.pdf -m gpt-4o        # Higher quality
 ### Image OCR Processing
 ```bash
 # Extract text from image to console
-python main.py heller E -i document_scan.jpg
+python main.py heller transcribe E -i document_scan.jpg
 
 # Extract text and save to file
-python main.py smith J -i photo.png -o output.txt
+python main.py smith transcribe J -i photo.png -o output.txt
 
 # Use specific model for better accuracy
-python main.py heller C -i scan.jpg -o chinese_text.txt -m gpt-4o
+python main.py heller transcribe C -i scan.jpg -o chinese_text.txt -m gpt-4o
 
 # Extract English text using cost-effective model
-python main.py smith E -i receipt.jpg -o receipt.txt -m gpt-4o-mini
+python main.py smith transcribe E -i receipt.jpg -o receipt.txt -m gpt-4o-mini
 ```
 
 ### Token Usage Tracking
 ```bash
 # View usage report for a professor
-python main.py heller --usage-report
+python main.py heller usage report
 
 # View daily usage for a specific date
-python main.py heller --daily-usage 2024-07-14
+python main.py heller usage daily 2024-07-14
 
 # View today's usage
-python main.py smith --daily-usage
+python main.py smith usage daily
 ```
 
 ### Progressive Saving
@@ -152,10 +152,10 @@ For large documents or unreliable connections, use progressive saving to save ea
 
 ```bash
 # Save each page as it's translated (useful for error recovery)
-python main.py heller CE -i large_document.txt --progressive-save -o output.txt
+python main.py heller translate CE -i large_document.txt --progressive-save -o output.txt
 
 # Combine with auto-save for timestamped progressive saving
-python main.py smith JK -i document.txt --progressive-save --auto-save
+python main.py smith translate JK -i document.txt --progressive-save --auto-save
 ```
 
 **Note:** When using `--progressive-save`, the translation is saved incrementally as each page is processed, which helps prevent data loss if the process is interrupted. Progressive saving only supports text file output (.txt) - PDF and Word document output are not compatible with progressive saving.

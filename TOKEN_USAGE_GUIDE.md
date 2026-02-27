@@ -34,21 +34,21 @@ The CJK Translation script includes comprehensive token usage tracking to help y
 
 ### View Overall Usage Report
 ```bash
-python main.py heller --usage-report
+python main.py heller usage report
 ```
 
 ### View Daily Usage
 ```bash
 # Today's usage
-python main.py heller --daily-usage
+python main.py heller usage daily
 
 # Specific date usage
-python main.py heller --daily-usage 2025-07-11
+python main.py heller usage daily 2025-07-11
 ```
 
 ### Update Model Pricing
 ```bash
-python main.py heller --update-pricing gpt-4o 2.75 11.00
+python main.py --update-pricing gpt-4o 2.75 11.00
 ```
 
 ## Current Pricing (as of July 2025)
@@ -140,22 +140,22 @@ This file stores all usage data and includes:
 ### Normal Usage:
 1. **Translate a document:**
    ```bash
-  python main.py heller CE -i document.pdf -o translation.txt
+  python main.py heller translate CE -i document.pdf -o translation.txt
    ```
 
 2. **Check usage after translation:**
    ```bash
-  python main.py heller --usage-report
+  python main.py heller usage report
    ```
 
 3. **Update pricing when Princeton changes rates:**
    ```bash
-  python main.py heller --update-pricing gpt-4o 3.00 12.00
+  python main.py --update-pricing gpt-4o 3.00 12.00
    ```
 
 4. **Check daily usage:**
    ```bash
-  python main.py heller --daily-usage
+  python main.py heller usage daily
    ```
 
 ## Sample Output

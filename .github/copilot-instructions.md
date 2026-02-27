@@ -101,7 +101,7 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 - **Token Tracking**: OCR usage tracked in same file as translation via shared `TokenTracker`
 - **Output**: Extracted text printed to console and optionally saved to file with `-o` flag
 - **Model Selection**: Use `-m/--model` to specify which model to use (e.g., `gpt-4o`, `gpt-4o-mini`, `gpt-5`)
-- **Example**: `python main.py professor E -i image.jpg -o extracted.txt -m gpt-4o-mini`
+- **Example**: `python main.py professor transcribe E -i image.jpg -o extracted.txt -m gpt-4o-mini`
 
 ### Model Selection and Configuration
 - **Default Models**: `OCR_MODEL=gpt-4o-mini` for OCR, `DEFAULT_MODEL=gpt-4o` for translation
