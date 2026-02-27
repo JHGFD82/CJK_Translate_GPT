@@ -4,7 +4,7 @@ import argparse
 import logging
 import os
 import sys
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Tuple, cast
 
 from ..config import get_api_key, extract_page_nums
 from ..errors import CLIError
@@ -328,34 +328,67 @@ class SandboxProcessor:
     def run(self, args: argparse.Namespace) -> None:
         """Run the translation application with the given arguments."""
         try:
-            if not args.input_file and not args.custom_text:
-                raise CLIError("Please specify a command (translation, usage report, etc.)")
+            command = args.command
 
-            if args.input_file:
-                file_type = self._detect_and_validate_file(args.input_file)
+            if command == 'translate':
+                # Handle translation command
+                language_code = args.language_code
+                
+                # Validate language_code is a tuple with 2 elements
+                if not isinstance(language_code, tuple):
+                    raise CLIError("Translation requires a 2-character language code (e.g., CE, JE, KE)")
+                    
+                # Cast to the expected type after validation
+                lang_tuple = cast(Tuple[str, str], language_code)
+                if len(lang_tuple) != 2:
+                    raise CLIError("Translation requires a 2-character language code (e.g., CE, JE, KE)")
 
-                if file_type == 'image':
-                    target_language = self._get_ocr_target_language(args)
-                    output_file_arg: Optional[str] = getattr(args, 'output_file', None)
-                    self.process_image(os.path.abspath(args.input_file), target_language, output_file_arg)
-                else:
-                    source_language, target_language = self._get_translation_languages(args)
+                source_language: str = lang_tuple[0]
+                target_language: str = lang_tuple[1]
+
+                if args.custom_text:
+                    output_file = self._resolve_output_path(args)
+                    self.translate_custom_text(
+                        source_language,
+                        target_language,
+                        output_file,
+                        args.auto_save,
+                        getattr(args, 'custom_font', None),
+                    )
+                elif args.input_file:
                     output_file = self._resolve_output_path(args)
                     self.translate_document(
                         args.input_file,
                         source_language,
                         target_language,
-                        args.page_nums,
-                        args.abstract,
+                        getattr(args, 'page_nums', None),
+                        getattr(args, 'abstract', False),
                         output_file,
-                        args.auto_save,
-                        args.progressive_save,
-                        args.custom_font,
+                        getattr(args, 'auto_save', False),
+                        getattr(args, 'progressive_save', False),
+                        getattr(args, 'custom_font', None),
                     )
-            elif args.custom_text:
-                source_language, target_language = self._get_translation_languages(args)
-                output_file = self._resolve_output_path(args)
-                self.translate_custom_text(source_language, target_language, output_file, args.auto_save, args.custom_font)
+                else:
+                    raise CLIError("No input specified. Use -i for file input or -c for custom text.")
+
+            elif command == 'transcribe':
+                # Handle transcribe (OCR) command
+                if not args.input_file:
+                    raise CLIError("Input file is required for transcribe command. Use -i option.")
+
+                # Validate it's an image file
+                file_type = self._detect_and_validate_file(args.input_file)
+                if file_type != 'image':
+                    raise CLIError(f"Transcribe command requires an image file, but got {file_type}.")
+
+                # Parse target language (single character code)
+                target_language = self._parse_single_language_code(args.language_code)
+
+                output_file = getattr(args, 'output_file', None)
+                self.process_image(os.path.abspath(args.input_file), target_language, output_file)
+
+            else:
+                raise CLIError(f"Unknown command: {command}")
 
         except CLIError as e:
             logger.error(f"Error: {e}")
@@ -369,3 +402,13 @@ class SandboxProcessor:
             logger.error(f"Unexpected error: {e}", exc_info=True)
             print(f"Unexpected error: {e}", file=sys.stderr)
             sys.exit(1)
+
+    def _parse_single_language_code(self, code: str) -> str:
+        """Parse a single language code (E, C, J, K) for transcribe command."""
+        from ..config import LANGUAGE_MAP
+
+        upper_code = code.upper()
+        if upper_code not in LANGUAGE_MAP:
+            raise CLIError(f"Invalid language code '{code}'. Use E, C, J, or K.")
+
+        return LANGUAGE_MAP[upper_code]
