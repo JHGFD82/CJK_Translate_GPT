@@ -38,15 +38,15 @@ def _print_daily_usage(token_tracker: TokenTracker, professor_name: str, date: O
         usage = token_tracker.get_daily_usage(date)
         print(f"\nUsage for {date} for {professor_name}:")
 
-    if not usage.get('models'):
+    if not usage.get('call_count'):
         print("No usage recorded for this date.")
         return
 
     print(f"Total tokens: {usage['total_tokens']:,}")
+    print(f"  Input tokens:  {usage.get('total_input_tokens', 0):,}")
+    print(f"  Output tokens: {usage.get('total_output_tokens', 0):,}")
     print(f"Total cost: ${usage['total_cost']:.4f}")
-    print("\nBy model:")
-    for model, model_usage in usage['models'].items():
-        print(f"  {model}: {model_usage['total_tokens']:,} tokens, ${model_usage['total_cost']:.4f}")
+    print(f"API calls: {usage['call_count']}")
 
 
 def handle_info_commands(args: argparse.Namespace) -> bool:
