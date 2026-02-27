@@ -9,14 +9,16 @@
       "output": 11.0,
       "supports_vision": true,
       "system_role": "developer",
-      "use_max_completion_tokens": true
+      "use_max_completion_tokens": true,
+      "fixed_parameters": true
     },
     "o3-mini": {
       "input": 1.21,
       "output": 4.84,
       "supports_vision": false,
       "system_role": "developer",
-      "use_max_completion_tokens": true
+      "use_max_completion_tokens": true,
+      "fixed_parameters": true
     },
     "gpt-4o-mini": {
       "input": 0.165,
