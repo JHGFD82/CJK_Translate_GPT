@@ -263,6 +263,16 @@ def model_uses_max_completion_tokens(model: str) -> bool:
     models = config["models"]
     return models.get(model, {}).get("use_max_completion_tokens", False)
 
+def model_has_fixed_parameters(model: str) -> bool:
+    """Check if a model only accepts default sampling parameters.
+
+    Reasoning models (e.g. o3-mini, gpt-5) reject temperature, top_p,
+    frequency_penalty, and presence_penalty — only the default values are supported.
+    """
+    config = load_model_catalog()
+    models = config["models"]
+    return models.get(model, {}).get("fixed_parameters", False)
+
 def resolve_model(
     requested_model: Optional[str] = None,
     *,
