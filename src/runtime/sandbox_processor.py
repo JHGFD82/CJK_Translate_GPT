@@ -13,6 +13,7 @@ from ..processors.docx_processor import DocxProcessor
 from ..processors.image_processor import ImageProcessor
 from ..processors.txt_processor import TxtProcessor
 from ..services.image_processor_service import ImageProcessorService
+from ..services.image_translation_service import ImageTranslationService
 from ..services.translation_service import TranslationService
 from ..tracking.token_tracker import TokenTracker
 
@@ -35,6 +36,9 @@ class SandboxProcessor:
                 api_key, professor_name, token_tracker=self.token_tracker, model=model
             )
             self.image_processor_service = ImageProcessorService(
+                api_key, professor_name, token_tracker=self.token_tracker, model=model
+            )
+            self.image_translation_service = ImageTranslationService(
                 api_key, professor_name, token_tracker=self.token_tracker, model=model
             )
 
@@ -142,6 +146,26 @@ class SandboxProcessor:
         """Translate a document file (PDF, Word document, or text file)."""
         file_path = os.path.abspath(file_path)
         file_type = self._detect_and_validate_file(file_path)
+
+        # Image files bypass the document translation pipeline entirely.
+        # A single combined OCR + translation prompt gives reasoning models
+        # (e.g. gpt-5) the ability to resolve ambiguous characters using
+        # translation context before committing to a transcript.
+        if file_type == 'image':
+            try:
+                self.process_image_translation(
+                    file_path,
+                    source_language,
+                    target_language,
+                    output_file,
+                    auto_save,
+                    custom_font,
+                )
+            except Exception as e:
+                logger.error(f"Error processing image: {e}", exc_info=True)
+                raise CLIError(f"Error processing image: {e}") from e
+            return
+
         abstract_text = input('Enter abstract text: ') if abstract else None
 
         logger.info(f"Starting translation: {source_language} → {target_language}")
@@ -259,7 +283,7 @@ class SandboxProcessor:
             raise CLIError(f"Error during translation: {e}") from e
 
     def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None) -> None:
-        """Process an image file with OCR."""
+        """Process an image file with OCR (transcribe command)."""
         logger.info(f"Starting OCR processing: {file_path} → {target_language}")
 
         try:
@@ -280,6 +304,54 @@ class SandboxProcessor:
         except Exception as e:
             logger.error(f"Error processing image: {e}", exc_info=True)
             raise CLIError(f"Error processing image: {e}") from e
+
+    def process_image_translation(
+        self,
+        file_path: str,
+        source_language: str,
+        target_language: str,
+        output_file: Optional[str] = None,
+        auto_save: bool = False,
+        custom_font: Optional[str] = None,
+    ) -> None:
+        """Transcribe and translate an image in a single API call (translate command).
+
+        Uses ImageTranslationService to send one combined prompt, allowing
+        reasoning models to resolve ambiguous characters using translation context.
+        Prints both the transcript and the translation; saves the translation if
+        an output path is specified or auto_save is enabled.
+        """
+        logger.info(
+            f"Starting image translation: {file_path} "
+            f"{source_language} → {target_language}"
+        )
+
+        transcript, translation = self.image_translation_service.process_image_translation(
+            file_path, source_language, target_language
+        )
+
+        if transcript:
+            print("\n=== Transcript ===")
+            print(transcript)
+            print("==================\n")
+
+        print("\n=== Translation ===")
+        print(translation)
+        print("===================\n")
+
+        if output_file or auto_save:
+            logger.info("Saving image translation output")
+            self.file_output.save_translation_output(
+                translation,
+                file_path,
+                output_file,
+                auto_save,
+                source_language,
+                target_language,
+                custom_font,
+            )
+
+        logger.info("Image translation completed successfully")
 
     def _resolve_output_path(self, args: argparse.Namespace) -> Optional[str]:
         """Resolve output file path based on arguments."""
