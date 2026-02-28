@@ -224,14 +224,6 @@ class TokenTracker:
         logging.info(f"Token usage recorded: {total_tokens} tokens (${total_cost:.4f}) for model {model}")
         return usage
     
-    def get_usage_summary(self) -> Dict[str, Any]:
-        """Get a summary of token usage."""
-        return {
-            "total_usage": self.usage_data["total_usage"],
-            "model_breakdown": self.usage_data["model_usage"],
-            "recent_sessions": self.usage_data["session_history"][-10:]  # Last 10 sessions
-        }
-    
     def get_daily_usage(self, date: Optional[str] = None) -> Dict[str, Any]:
         """Get usage for a specific date or today."""
         if date is None:
@@ -272,18 +264,6 @@ class TokenTracker:
             "is_exceeded": is_exceeded,
             "approaching_limit": usage_percentage > 80
         }
-    
-    def get_remaining_monthly_budget(self, month: Optional[str] = None) -> float:
-        """Get remaining budget for the month."""
-        return self._get_monthly_budget_status(month)["remaining_budget"]
-    
-    def is_monthly_limit_exceeded(self, month: Optional[str] = None) -> bool:
-        """Check if monthly cost limit has been exceeded."""
-        return self._get_monthly_budget_status(month)["is_exceeded"]
-    
-    def get_monthly_usage_percentage(self, month: Optional[str] = None) -> float:
-        """Get percentage of monthly limit used."""
-        return self._get_monthly_budget_status(month)["usage_percentage"]
     
     def print_usage_report(self):
         """Print a formatted usage report."""
@@ -345,14 +325,3 @@ class TokenTracker:
         save_model_catalog(config)
         logging.info(f"Updated pricing for {model}: input=${input_price}, output=${output_price}")
     
-    def update_pricing_unit(self, new_unit: int):
-        """Update the pricing unit (e.g., change from per 1M tokens to per 1K tokens)."""
-        # Load current config
-        config = load_model_catalog()
-        
-        # Ensure config section exists
-        config.setdefault("config", {})["pricing_unit"] = new_unit
-        
-        # Save updated config
-        save_model_catalog(config)
-        logging.info(f"Updated pricing unit to {new_unit:,} tokens")

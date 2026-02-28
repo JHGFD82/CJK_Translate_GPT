@@ -4,7 +4,6 @@ Word document processing utilities for the CJK Translation script.
 
 import logging
 from typing import List, BinaryIO
-import os
 
 from .base_text_processor import BaseTextProcessor
 
@@ -35,37 +34,6 @@ class DocxProcessor(BaseTextProcessor):
                 "python-docx is required to process Word documents. "
                 "Install it with: pip install python-docx"
             )
-    
-    def get_file_type_name(self) -> str:
-        """Get a human-readable name for the file type this processor handles."""
-        return "Word document"
-    """Handles extraction of text from Word documents."""
-    
-    @staticmethod
-    def process_docx(file_obj: BinaryIO) -> List[str]:
-        """
-        Extract text from a Word document and return as list of pages.
-        
-        Args:
-            file_obj: Binary file object of the Word document
-            
-        Returns:
-            List of strings, each representing a "page" of content
-        """
-        try:
-            processor = DocxProcessor()
-            content = processor.extract_raw_content(file_obj)
-            
-            if not content:
-                logging.warning("No text content found in Word document")
-                return [""]
-            
-            # For Word documents, treat the entire document as one "page"
-            return [content]
-                
-        except Exception as e:
-            logging.error(f"Error processing Word document: {e}")
-            raise Exception(f"Failed to process Word document: {e}")
     
     @staticmethod
     def process_docx_with_pages(file_obj: BinaryIO, target_page_size: int = 2000) -> List[str]:
@@ -98,18 +66,3 @@ class DocxProcessor(BaseTextProcessor):
             logging.error(f"Error processing Word document: {e}")
             raise Exception(f"Failed to process Word document: {e}")
     
-    @staticmethod
-    def validate_docx_file(file_path: str) -> bool:
-        """Validate that a file is a readable Word document."""
-        if not file_path.lower().endswith('.docx'):
-            return False
-        
-        if not os.path.exists(file_path):
-            return False
-        
-        try:
-            with open(file_path, 'rb') as f:
-                DocxProcessor.process_docx(f)
-            return True
-        except Exception:
-            return False

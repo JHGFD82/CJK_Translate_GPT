@@ -10,10 +10,6 @@ from mimetypes import guess_type
 class ImageProcessor():
     """Handles extraction of text from image files."""
 
-    def get_file_type_name(self) -> str:
-        """Get a human-readable name for the file type this processor handles."""
-        return "image file"
-
     @staticmethod
     def is_image_file(file_path: str) -> bool:
         """Check if a file is an image file based on its extension."""
