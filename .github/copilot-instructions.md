@@ -132,3 +132,11 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 
 ## Testing Without API Keys
 Use `python show_config.py` to validate professor configuration without making API calls.
+
+## Git Commit Workflow
+- A `.gitmessage` template exists at the repo root — always follow its format when writing commits:
+  - **Subject**: `<type>(<scope>): <short summary>` (imperative mood, ≤ 72 chars)
+  - **Types**: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`, `build`
+  - **Body sections**: `Why:`, `What changed:`, `Notes:` (when relevant)
+- After making any code changes, **always propose a git commit** using this format.
+- **Always show the proposed commit message to the user and wait for approval before running `git commit`.**
