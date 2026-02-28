@@ -281,19 +281,6 @@ class SandboxProcessor:
             logger.error(f"Error processing image: {e}", exc_info=True)
             raise CLIError(f"Error processing image: {e}") from e
 
-    def _get_ocr_target_language(self, args: argparse.Namespace) -> str:
-        """Extract target language for OCR processing."""
-        language_code: Union[str, tuple[str, str], None] = getattr(args, 'language_code', None)
-
-        if not language_code:
-            raise CLIError("Target language code is required for OCR (e.g., 'E' for English, 'C' for Chinese)")
-
-        if isinstance(language_code, tuple):
-            lang_tuple: tuple[str, str] = language_code
-            return lang_tuple[1]
-
-        return language_code  # type: ignore[return-value]
-
     def _get_translation_languages(self, args: argparse.Namespace) -> tuple[str, str]:
         """Extract source and target languages for translation."""
         language_code: Union[str, tuple[str, str], None] = getattr(args, 'language_code', None)
