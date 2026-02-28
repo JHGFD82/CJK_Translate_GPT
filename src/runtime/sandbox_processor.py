@@ -4,7 +4,7 @@ import argparse
 import logging
 import os
 import sys
-from typing import Optional, List, Union, Tuple, cast
+from typing import Optional, List, Tuple, cast
 
 from ..config import get_api_key, extract_page_nums
 from ..errors import CLIError
@@ -280,18 +280,6 @@ class SandboxProcessor:
         except Exception as e:
             logger.error(f"Error processing image: {e}", exc_info=True)
             raise CLIError(f"Error processing image: {e}") from e
-
-    def _get_translation_languages(self, args: argparse.Namespace) -> tuple[str, str]:
-        """Extract source and target languages for translation."""
-        language_code: Union[str, tuple[str, str], None] = getattr(args, 'language_code', None)
-
-        if not language_code:
-            raise CLIError("Language code is required for translation")
-        if not isinstance(language_code, tuple):
-            raise CLIError("Translation requires a 2-character language code (e.g., CE, JE, KE)")
-
-        lang_tuple: tuple[str, str] = language_code
-        return lang_tuple[0], lang_tuple[1]
 
     def _resolve_output_path(self, args: argparse.Namespace) -> Optional[str]:
         """Resolve output file path based on arguments."""

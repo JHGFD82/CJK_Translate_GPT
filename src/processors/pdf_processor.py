@@ -37,8 +37,8 @@ def detect_numbered_content(text: str) -> bool:
     return False
 
 
-def generate_process_text(abstract_text: str, page_text: str, previous_page: str, context_percentage: float = 0.65, 
-                         previous_translated: str = "", translated_context_percentage: float = 0.35) -> str:
+def generate_process_text(abstract_text: str, page_text: str, previous_page: str, context_percentage: float = 0.65,
+                         previous_translated: str = "") -> str:
     """Generate text for processing with context from both source and translated text."""
     # Use abstract if available, otherwise use source context
     source_context = abstract_text if abstract_text else previous_page[int(len(previous_page) * context_percentage):]
