@@ -10,7 +10,8 @@
       "supports_vision": true,
       "system_role": "developer",
       "use_max_completion_tokens": true,
-      "fixed_parameters": true
+      "fixed_parameters": true,
+      "max_completion_tokens": 16000
     },
     "o3-mini": {
       "input": 1.21,

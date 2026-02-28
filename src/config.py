@@ -273,6 +273,16 @@ def model_has_fixed_parameters(model: str) -> bool:
     models = config["models"]
     return models.get(model, {}).get("fixed_parameters", False)
 
+def get_model_max_completion_tokens(model: str, default: int) -> int:
+    """Get per-model max completion tokens override, falling back to the given default.
+
+    Reasoning models (e.g. gpt-5) consume hidden reasoning tokens from the same
+    completion budget, so they need a larger cap than standard models.
+    Set 'max_completion_tokens' in model_catalog.json to override the default.
+    """
+    config = load_model_catalog()
+    return config["models"].get(model, {}).get("max_completion_tokens", default)
+
 def resolve_model(
     requested_model: Optional[str] = None,
     *,
@@ -356,6 +366,12 @@ DEFAULT_MODEL: str = "gpt-4o"
 
 # OCR-specific model (can override DEFAULT_MODEL for image processing)
 OCR_MODEL: str = "gpt-4o"  # More cost-effective for text extraction
+
+# Combined image transcription + translation model
+# Defaults to a reasoning vision model since simultaneous OCR + translation
+# benefits from reasoning about ambiguous characters in context.
+IMAGE_TRANSLATION_MODEL: str = "gpt-5"
+IMAGE_TRANSLATION_MAX_TOKENS: int = 8000  # Overridden per-model via max_completion_tokens in catalog
 
 # Translation parameters
 TRANSLATION_TEMPERATURE: float = 0.5
