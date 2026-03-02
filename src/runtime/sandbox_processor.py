@@ -427,8 +427,8 @@ class SandboxProcessor:
                 if file_type != 'image':
                     raise CLIError(f"Transcribe command requires an image file, but got {file_type}.")
 
-                # Parse target language (single character code)
-                target_language = self._parse_single_language_code(args.language_code)
+                # language_code is already resolved to a full name by parse_single_language_code
+                target_language = args.language_code
 
                 output_file = getattr(args, 'output_file', None)
                 self.process_image(os.path.abspath(args.input_file), target_language, output_file)
@@ -449,12 +449,3 @@ class SandboxProcessor:
             print(f"Unexpected error: {e}", file=sys.stderr)
             sys.exit(1)
 
-    def _parse_single_language_code(self, code: str) -> str:
-        """Parse a single language code (E, C, J, K) for transcribe command."""
-        from ..config import LANGUAGE_MAP
-
-        upper_code = code.upper()
-        if upper_code not in LANGUAGE_MAP:
-            raise CLIError(f"Invalid language code '{code}'. Use E, C, J, or K.")
-
-        return LANGUAGE_MAP[upper_code]

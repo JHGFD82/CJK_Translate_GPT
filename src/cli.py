@@ -6,7 +6,7 @@ import sys
 
 from dotenv import load_dotenv
 
-from .config import parse_language_code, validate_page_nums
+from .config import parse_language_code, parse_single_language_code, validate_page_nums
 from .errors import CLIError
 from .runtime import SandboxProcessor, handle_info_commands
 
@@ -131,8 +131,8 @@ Examples:
     transcribe_parser = subparsers.add_parser('transcribe', help='Transcribe images using OCR')
     transcribe_parser.add_argument(
         'language_code',
-        type=str,
-        help='Target language (E, C, J, or K)',
+        type=parse_single_language_code,
+        help=f'Target language (E, C, J, or K)',
     )
     transcribe_parser.add_argument('-i', '--input', dest='input_file', type=str, required=True, help='Input image file path')
     transcribe_parser.add_argument('-o', '--output', dest='output_file', type=str, help='Output file path')

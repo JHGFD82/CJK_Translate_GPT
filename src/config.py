@@ -49,12 +49,29 @@ def validate_page_nums(value: str) -> str:
     return value
 
 
+def _language_keys_str() -> str:
+    """Return a human-readable list of valid language keys derived from LANGUAGE_MAP."""
+    return ', '.join(sorted(LANGUAGE_MAP.keys()))
+
+
+def parse_single_language_code(value: str) -> str:
+    """Parse a single language code (e.g. E, C, J, K) for transcribe/OCR commands."""
+    lang_char = value.upper()
+    if len(lang_char) != 1 or lang_char not in LANGUAGE_MAP:
+        raise argparse.ArgumentTypeError(
+            f"Invalid language code '{value}'. Use one of: {_language_keys_str()}."
+        )
+    return LANGUAGE_MAP[lang_char]
+
+
 def parse_language_code(value: str) -> Union[str, Tuple[str, str]]:
     """Parse language code for OCR or translation commands."""
+    valid_keys = _language_keys_str()
+
     if len(value) == 1:
         lang_char = value.upper()
         if lang_char not in LANGUAGE_MAP:
-            raise argparse.ArgumentTypeError(f"Invalid language code '{lang_char}'. Use C, J, K, or E.")
+            raise argparse.ArgumentTypeError(f"Invalid language code '{lang_char}'. Use one of: {valid_keys}.")
         return LANGUAGE_MAP[lang_char]
 
     if len(value) == 2:
@@ -62,16 +79,16 @@ def parse_language_code(value: str) -> Union[str, Tuple[str, str]]:
         target_char = value[1].upper()
 
         if source_char not in LANGUAGE_MAP:
-            raise argparse.ArgumentTypeError(f"Invalid source language code '{source_char}'. Use C, J, K, or E.")
+            raise argparse.ArgumentTypeError(f"Invalid source language code '{source_char}'. Use one of: {valid_keys}.")
         if target_char not in LANGUAGE_MAP:
-            raise argparse.ArgumentTypeError(f"Invalid target language code '{target_char}'. Use C, J, K, or E.")
+            raise argparse.ArgumentTypeError(f"Invalid target language code '{target_char}'. Use one of: {valid_keys}.")
         if source_char == target_char:
             raise argparse.ArgumentTypeError("Source and target languages cannot be the same.")
 
         return LANGUAGE_MAP[source_char], LANGUAGE_MAP[target_char]
 
     raise argparse.ArgumentTypeError(
-        "Language code must be 1 character (C, J, K, E for OCR) or 2 characters (CE, JK, etc. for translation)"
+        f"Language code must be 1 character ({valid_keys} for OCR) or 2 characters (CE, JK, etc. for translation)"
     )
 
 
