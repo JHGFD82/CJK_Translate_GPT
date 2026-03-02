@@ -378,42 +378,5 @@ def save_model_catalog(config: Dict[str, Any]) -> None:
     with open(catalog_file, 'w') as f:
         json.dump(config, f, indent=2)
 
-# Default model
+# Default model used by resolve_model() as the final named fallback
 DEFAULT_MODEL: str = "gpt-4o"
-
-# OCR-specific model (can override DEFAULT_MODEL for image processing)
-OCR_MODEL: str = "gpt-4o"  # More cost-effective for text extraction
-
-# Combined image transcription + translation model
-# Defaults to a reasoning vision model since simultaneous OCR + translation
-# benefits from reasoning about ambiguous characters in context.
-IMAGE_TRANSLATION_MODEL: str = "gpt-5"
-IMAGE_TRANSLATION_MAX_TOKENS: int = 8000  # Overridden per-model via max_completion_tokens in catalog
-
-# Translation parameters
-TRANSLATION_TEMPERATURE: float = 0.5
-TRANSLATION_MAX_TOKENS: int = 4000  # Increased from 1000 to handle academic content with footnotes
-TRANSLATION_TOP_P: float = 0.5
-
-# OCR parameters (more conservative to reduce hallucination)
-OCR_TEMPERATURE: float = 0.0  # Deterministic output
-OCR_MAX_TOKENS: int = 4000  # Same as translation for long documents
-OCR_TOP_P: float = 0.1  # Very low to prevent creativity
-OCR_FREQUENCY_PENALTY: float = 0.5  # Penalize repetition of tokens
-OCR_PRESENCE_PENALTY: float = 0.3  # Encourage diversity
-
-# Rate limiting and retry configuration
-PAGE_DELAY_SECONDS: float = 3.0  # Delay between pages to prevent content filter triggers
-MAX_RETRIES: int = 10  # Maximum retries for content filter errors
-BASE_RETRY_DELAY: float = 3.0  # Base delay for exponential backoff
-
-# PDF margins (in points)
-PDF_MARGINS = {
-    'left': 72,
-    'right': 72,
-    'top': 72,
-    'bottom': 18
-}
-
-# Context percentage for previous page
-CONTEXT_PERCENTAGE: float = 0.65

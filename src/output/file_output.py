@@ -7,8 +7,15 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime
 
-from ..config import PDF_MARGINS
 from .font_resolver import get_docx_font, get_pdf_font
+
+# PDF page margins (in points, 72 pts = 1 inch)
+PDF_MARGINS = {
+    'left': 72,
+    'right': 72,
+    'top': 72,
+    'bottom': 18,
+}
 
 
 def generate_output_filename(input_file: str, source_lang: str, target_lang: str, extension: str = '.txt') -> str:
