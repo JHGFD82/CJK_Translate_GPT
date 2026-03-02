@@ -15,8 +15,6 @@ import re
 
 def detect_numbered_content(text: str) -> bool:
     """Detect if text contains numbered lists, references, or citations."""
-    import re
-    
     # Look for various numbered patterns including Japanese/CJK formats
     patterns = [
         r'\d+\.\s+[^\d]',     # "1. Some text"
