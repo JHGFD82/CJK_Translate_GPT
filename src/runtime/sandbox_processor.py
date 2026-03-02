@@ -6,7 +6,7 @@ import os
 import sys
 from typing import Optional, List, Tuple, cast
 
-from ..config import get_api_key, extract_page_nums
+from ..config import get_api_key
 from ..errors import CLIError
 from ..output.file_output import FileOutputHandler
 from ..processors.docx_processor import DocxProcessor
@@ -18,6 +18,19 @@ from ..services.translation_service import TranslationService
 from ..tracking.token_tracker import TokenTracker
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_page_nums(page_nums_str: Optional[str]) -> Tuple[int, int]:
+    """Parse a page selection string into zero-based (start, end) indices."""
+    if page_nums_str is None:
+        return 0, 0
+    if '-' in page_nums_str:
+        start, end = map(int, page_nums_str.split('-'))
+        return start - 1, end - 1
+    page = int(page_nums_str)
+    if page <= 0:
+        raise ValueError(f"{page_nums_str} is not a valid page number.")
+    return page - 1, page - 1
 
 
 class SandboxProcessor:
@@ -80,7 +93,7 @@ class SandboxProcessor:
         if not page_nums:
             return pages
 
-        start_page, end_page = extract_page_nums(page_nums)
+        start_page, end_page = _parse_page_nums(page_nums)
 
         if start_page >= len(pages):
             raise CLIError(f"Page {start_page + 1} does not exist. Document has {len(pages)} logical pages.")
@@ -176,10 +189,12 @@ class SandboxProcessor:
                 with open(file_path, 'rb') as f:
                     pages = self.translation_service.pdf_processor.process_pdf(f)
                     logger.info("Translating PDF pages")
+                    start_page, end_page = _parse_page_nums(page_nums)
                     document_text = self.translation_service.translate_document(
                         pages,
                         abstract_text,
-                        page_nums,
+                        start_page,
+                        end_page,
                         source_language,
                         target_language,
                         output_file,

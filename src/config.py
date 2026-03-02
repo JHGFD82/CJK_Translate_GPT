@@ -19,21 +19,6 @@ LANGUAGE_MAP: Dict[str, str] = {
 }
 
 
-def extract_page_nums(page_nums_str: Optional[str]) -> Tuple[int, int]:
-    """Extract zero-based start/end page indices from a page selection string."""
-    if page_nums_str is None:
-        return 0, 0
-
-    if '-' in page_nums_str:
-        start_page, end_page = map(int, page_nums_str.split('-'))
-        return start_page - 1, end_page - 1
-
-    page_num = int(page_nums_str)
-    if page_num <= 0:
-        raise ValueError(f"{page_nums_str} is not a valid page number.")
-    return page_num - 1, page_num - 1
-
-
 def make_safe_filename(name: str) -> str:
     """Convert a professor name to a safe filename."""
     safe_name = re.sub(r'[^\w\-_\.]', '_', name)
