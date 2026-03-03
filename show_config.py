@@ -22,16 +22,19 @@ def make_safe_filename(name: str) -> str:
 
 from typing import Dict, Any
 
+_PROF_NAME_PATTERN = re.compile(r'^PROF_(.+?)_NAME$')
+
+
 def load_professor_config() -> Dict[str, Dict[str, Any]]:
     """Load professor configuration from environment variables."""
     professors: Dict[str, Dict[str, Any]] = {}
-    
+
     # Look for all PROF_[ID]_NAME variables
     for key, value in os.environ.items():
-        if key.startswith('PROF_') and key.endswith('_NAME'):
-            # Extract the ID from PROF_[ID]_NAME
-            prof_id = key[5:-5]  # Remove 'PROF_' and '_NAME'
-            
+        match = _PROF_NAME_PATTERN.match(key)
+        if match:
+            prof_id = match.group(1)
+
             # Get the corresponding keys
             primary_key_var = f'PROF_{prof_id}_KEY'
             backup_key_var = f'PROF_{prof_id}_BACKUP_KEY'
