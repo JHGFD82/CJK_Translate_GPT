@@ -6,6 +6,8 @@ import os
 import base64
 from mimetypes import guess_type
 
+from .constants import IMAGE_EXTENSIONS
+
 
 class ImageProcessor():
     """Handles extraction of text from image files."""
@@ -13,7 +15,7 @@ class ImageProcessor():
     @staticmethod
     def is_image_file(file_path: str) -> bool:
         """Check if a file is an image file based on its extension."""
-        return file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff'))
+        return file_path.lower().endswith(IMAGE_EXTENSIONS)
 
     @staticmethod
     def validate_image_file(file_path: str) -> bool:
