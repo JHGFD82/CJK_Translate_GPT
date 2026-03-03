@@ -6,6 +6,7 @@ import logging
 from typing import List, TextIO
 
 from .base_text_processor import BaseTextProcessor
+from .constants import DEFAULT_PAGE_SIZE
 
 
 class TxtProcessor(BaseTextProcessor):
@@ -16,7 +17,7 @@ class TxtProcessor(BaseTextProcessor):
         return file_obj.read().strip()
     
     @staticmethod
-    def process_txt_with_pages(file_obj: TextIO, target_page_size: int = 2000) -> List[str]:
+    def process_txt_with_pages(file_obj: TextIO, target_page_size: int = DEFAULT_PAGE_SIZE) -> List[str]:
         """
         Extract text from a plain text file and split into logical pages based on content size.
         
