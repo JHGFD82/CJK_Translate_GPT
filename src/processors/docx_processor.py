@@ -6,6 +6,7 @@ import logging
 from typing import List, BinaryIO
 
 from .base_text_processor import BaseTextProcessor
+from .constants import DEFAULT_PAGE_SIZE
 
 
 class DocxProcessor(BaseTextProcessor):
@@ -36,7 +37,7 @@ class DocxProcessor(BaseTextProcessor):
             )
     
     @staticmethod
-    def process_docx_with_pages(file_obj: BinaryIO, target_page_size: int = 2000) -> List[str]:
+    def process_docx_with_pages(file_obj: BinaryIO, target_page_size: int = DEFAULT_PAGE_SIZE) -> List[str]:
         """
         Extract text from a Word document and split into logical pages based on content size.
         
