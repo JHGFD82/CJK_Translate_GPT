@@ -77,13 +77,17 @@ def parse_language_code(value: str) -> Union[str, Tuple[str, str]]:
     )
 
 
+_PROF_NAME_PATTERN = re.compile(r'^PROF_(.+?)_NAME$')
+
+
 def load_professor_config() -> Dict[str, Dict[str, str]]:
     """Load professor configuration from environment variables."""
     professors: Dict[str, Dict[str, str]] = {}
 
     for key, value in os.environ.items():
-        if key.startswith('PROF_') and key.endswith('_NAME'):
-            prof_id = key[5:-5]
+        match = _PROF_NAME_PATTERN.match(key)
+        if match:
+            prof_id = match.group(1)
             primary_key_var = f'PROF_{prof_id}_KEY'
             backup_key_var = f'PROF_{prof_id}_BACKUP_KEY'
 
