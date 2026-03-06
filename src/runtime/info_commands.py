@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+from datetime import datetime
 from typing import Optional
 
 from ..config import load_model_catalog, get_pricing_unit
@@ -87,7 +88,7 @@ def handle_info_commands(args: argparse.Namespace) -> bool:
 
         if usage_subcommand == 'months':
             archived = token_tracker.list_archived_months()
-            current_month = token_tracker._get_current_month()
+            current_month = datetime.now().strftime("%Y-%m")
             if archived:
                 print(f"\nUsage history for {args.professor}:")
                 for m in archived:

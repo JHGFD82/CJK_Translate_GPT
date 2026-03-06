@@ -169,7 +169,7 @@ class TokenTracker:
             "session_history": [],
         }
 
-    def _build_month_data_from_sessions(self, month: str, sessions: List[Dict],
+    def _build_month_data_from_sessions(self, month: str, sessions: List[Dict[str, Any]],
                                         all_daily: Dict[str, Any]) -> Dict[str, Any]:
         """Reconstruct a self-contained monthly data blob from a list of session records."""
         total = UsageStats()
@@ -213,7 +213,7 @@ class TokenTracker:
         current_month = self._get_current_month()
 
         # Group raw session records by month prefix of their timestamp
-        sessions_by_month: Dict[str, List[Dict]] = {}
+        sessions_by_month: Dict[str, List[Dict[str, Any]]] = {}
         for session in data.get("session_history", []):
             m = session.get("timestamp", "")[:7]  # "YYYY-MM"
             if m:

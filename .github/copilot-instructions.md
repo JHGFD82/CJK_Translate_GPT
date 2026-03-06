@@ -138,16 +138,5 @@ Use `python show_config.py` to validate professor configuration without making A
   - **Subject**: `<type>(<scope>): <short summary>` (imperative mood, ≤ 72 chars)
   - **Types**: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`, `build`
   - **Body sections**: `Why:`, `What changed:`, `Notes:` (when relevant)
-- After making any code changes, **always propose a git commit** using this format.
-- **Always show the proposed commit message to the user and wait for approval before running `git commit`.**
-
-### ⚠️ How to Run `git commit` (Multi-line Message Safety)
-The `run_in_terminal` tool corrupts multi-line strings passed directly on the command line (shell quoting issues, heredoc pollution from prior failed attempts). **Always write the commit message to a file first, then use `git commit -F`.**
-
-**Correct procedure:**
-1. Use the `create_file` tool to write the message to `/tmp/commit_msg.txt`.
-2. Run `git -C "<repo_path>" add <files>` in the terminal.
-3. Run `git -C "<repo_path>" commit -F /tmp/commit_msg.txt` in the terminal.
-
-**Never** use `git commit -m "..."` with a multi-line body — the terminal tool will mangle it.
-Use `git -C "<repo_path>"` instead of `cd && git` to avoid state issues across tool calls.
+- After making code changes, **propose a commit message** in this format for the user to review.
+- **The user handles all git commits themselves. Never run `git commit` or `git add`.**
