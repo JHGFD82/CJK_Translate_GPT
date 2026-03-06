@@ -40,20 +40,14 @@ from ..config import (
 # Constants
 USAGE_DATA_DIR = "data"
 ARCHIVES_SUBDIR = "archives"
-USAGE_DATA_FILE = "token_usage.json"  # Legacy root-level file (migration only)
 
 
-def get_usage_data_path(professor: Optional[str] = None) -> Path:
+def get_usage_data_path(professor: str) -> Path:
     """Return the active (current-month) data file path for a professor."""
     project_root = Path(__file__).parent.parent.parent
     base_dir = project_root / USAGE_DATA_DIR
     base_dir.mkdir(exist_ok=True)
-
-    if professor:
-        return base_dir / f"token_usage_{professor.lower()}.json"
-    else:
-        # Legacy path for backward compatibility (no professor specified)
-        return project_root / USAGE_DATA_FILE
+    return base_dir / f"token_usage_{professor.lower()}.json"
 
 
 def get_archive_dir(professor: str) -> Path:
@@ -122,7 +116,7 @@ class TokenTracker:
     current file with every archive file.
     """
 
-    def __init__(self, professor: Optional[str] = None, data_file: Optional[str] = None,
+    def __init__(self, professor: str, data_file: Optional[str] = None,
                  monthly_limit: Optional[float] = None):
         """Initialize the token tracker.
 
@@ -142,10 +136,7 @@ class TokenTracker:
 
         self.usage_data = self._load_usage_data()
 
-        if professor:
-            logging.info(f"Token tracking initialized for Professor {professor.title()}: {self.data_file}")
-        else:
-            logging.info(f"Token tracking initialized (legacy mode): {self.data_file}")
+        logging.info(f"Token tracking initialized for Professor {professor.title()}: {self.data_file}")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -169,33 +160,8 @@ class TokenTracker:
             "session_history": [],
         }
 
-    def _build_month_data_from_sessions(self, month: str, sessions: List[Dict[str, Any]],
-                                        all_daily: Dict[str, Any]) -> Dict[str, Any]:
-        """Reconstruct a self-contained monthly data blob from a list of session records."""
-        total = UsageStats()
-        model_usage: Dict[str, UsageStats] = {}
-
-        for s in sessions:
-            pt, ct, tt, cost = (s["prompt_tokens"], s["completion_tokens"],
-                                s["total_tokens"], s["total_cost"])
-            total.add_usage(pt, ct, tt, cost)
-            m = s["model"]
-            model_usage.setdefault(m, UsageStats()).add_usage(pt, ct, tt, cost)
-
-        daily = {date: usage for date, usage in all_daily.items() if date.startswith(month)}
-
-        return {
-            "month": month,
-            "total_usage": total.to_dict(),
-            "model_usage": {m: s.to_dict() for m, s in model_usage.items()},
-            "daily_usage": daily,
-            "session_history": sessions,
-        }
-
     def _archive_month(self, data: Dict[str, Any], month: str) -> None:
         """Write *data* to the archive file for *month*, skipping if already archived."""
-        if not self.professor:
-            return
         archive_path = get_archive_path(self.professor, month)
         if archive_path.exists():
             logging.info(f"Archive already exists for {month}, skipping: {archive_path}")
@@ -204,59 +170,13 @@ class TokenTracker:
             json.dump(data, f, indent=2)
         logging.info(f"Archived {self.professor} month {month} → {archive_path}")
 
-    def _migrate_legacy_format(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Split a legacy (no 'month' key) monolithic file into per-month archives.
-
-        Returns the data for the current month only (or an empty structure if the
-        current month has no sessions yet).
-        """
-        current_month = self._get_current_month()
-
-        # Group raw session records by month prefix of their timestamp
-        sessions_by_month: Dict[str, List[Dict[str, Any]]] = {}
-        for session in data.get("session_history", []):
-            m = session.get("timestamp", "")[:7]  # "YYYY-MM"
-            if m:
-                sessions_by_month.setdefault(m, []).append(session)
-
-        all_daily = data.get("daily_usage", {})
-
-        # Archive every past month
-        for month, sessions in sorted(sessions_by_month.items()):
-            if month < current_month:
-                month_data = self._build_month_data_from_sessions(month, sessions, all_daily)
-                self._archive_month(month_data, month)
-
-        # Return current month's slice (or empty)
-        current_sessions = sessions_by_month.get(current_month, [])
-        if current_sessions:
-            return self._build_month_data_from_sessions(current_month, current_sessions, all_daily)
-        return self._empty_usage_data()
-
     def _load_usage_data(self) -> Dict[str, Any]:
-        """Load usage data, handling legacy migration and month rollover."""
+        """Load usage data, handling month rollover."""
         if not self.data_file.exists():
-            # Check for old root-level legacy file
-            if self.professor:
-                legacy_file = get_usage_data_path(None)
-                if legacy_file.exists():
-                    logging.info(f"Migrating root-level legacy file for {self.professor}")
-                    with open(legacy_file, "r") as f:
-                        raw = json.load(f)
-                    data = self._migrate_legacy_format(raw)
-                    self._save_usage_data_to(data)
-                    return data
             return self._empty_usage_data()
 
         with open(self.data_file, "r") as f:
             data = json.load(f)
-
-        # Migrate: old format had no "month" field
-        if "month" not in data:
-            logging.info(f"Migrating legacy monthly format for {self.professor}")
-            data = self._migrate_legacy_format(data)
-            self._save_usage_data_to(data)
-            return data
 
         # Rollover: file belongs to a past month → archive it and start fresh
         stored_month = data.get("month", "")
@@ -368,12 +288,11 @@ class TokenTracker:
             return self.usage_data["total_usage"]
 
         # Load from archive when requesting a past month
-        if self.professor:
-            archive_path = get_archive_path(self.professor, month)
-            if archive_path.exists():
-                with open(archive_path, "r") as f:
-                    archive = json.load(f)
-                return archive.get("total_usage", UsageStats().to_dict())
+        archive_path = get_archive_path(self.professor, month)
+        if archive_path.exists():
+            with open(archive_path, "r") as f:
+                archive = json.load(f)
+            return archive.get("total_usage", UsageStats().to_dict())
 
         return UsageStats().to_dict()
 
@@ -382,22 +301,19 @@ class TokenTracker:
         combined = UsageStats()
         combined.merge_dict(self.usage_data["total_usage"])
 
-        if self.professor:
-            archive_dir = get_archive_dir(self.professor)
-            for archive_file in sorted(archive_dir.glob("*.json")):
-                try:
-                    with open(archive_file, "r") as f:
-                        arc = json.load(f)
-                    combined.merge_dict(arc.get("total_usage", {}))
-                except (json.JSONDecodeError, KeyError) as e:
-                    logging.warning(f"Could not read archive {archive_file}: {e}")
+        archive_dir = get_archive_dir(self.professor)
+        for archive_file in sorted(archive_dir.glob("*.json")):
+            try:
+                with open(archive_file, "r") as f:
+                    arc = json.load(f)
+                combined.merge_dict(arc.get("total_usage", {}))
+            except (json.JSONDecodeError, KeyError) as e:
+                logging.warning(f"Could not read archive {archive_file}: {e}")
 
         return combined.to_dict()
 
     def list_archived_months(self) -> List[str]:
         """Return a sorted list of month strings that have been archived."""
-        if not self.professor:
-            return []
         archive_dir = get_archive_dir(self.professor)
         return sorted(p.stem for p in archive_dir.glob("*.json"))
 
@@ -428,9 +344,6 @@ class TokenTracker:
 
         # ── Archived month report ──────────────────────────────────
         if month and month != current_month:
-            if not self.professor:
-                print("Cannot load archived month without a professor name.")
-                return
             archive_path = get_archive_path(self.professor, month)
             if not archive_path.exists():
                 archived = self.list_archived_months()
@@ -442,10 +355,7 @@ class TokenTracker:
 
             total = arc["total_usage"]
             print("\n" + "=" * 60)
-            if self.professor:
-                print(f"TOKEN USAGE REPORT - PROFESSOR {self.professor.upper()}")
-            else:
-                print("TOKEN USAGE REPORT")
+            print(f"TOKEN USAGE REPORT - PROFESSOR {self.professor.upper()}")
             print("=" * 60)
             print(f"\nArchived Month ({month}):")
             print("-" * 40)
@@ -477,10 +387,7 @@ class TokenTracker:
         monthly_total = self.usage_data["total_usage"]
 
         print("\n" + "=" * 60)
-        if self.professor:
-            print(f"TOKEN USAGE REPORT - PROFESSOR {self.professor.upper()}")
-        else:
-            print("TOKEN USAGE REPORT")
+        print(f"TOKEN USAGE REPORT - PROFESSOR {self.professor.upper()}")
         print("=" * 60)
 
         print(f"\nCurrent Month ({current_month}):")
