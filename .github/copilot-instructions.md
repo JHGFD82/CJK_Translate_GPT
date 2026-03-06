@@ -24,13 +24,13 @@ PROF_[ID]_BACKUP_KEY=backup_key   # Fallback key
 - Error message formatting
 
 ## Token Tracking Architecture
-**Per-Professor Isolation**: Each professor gets separate token usage tracking:
-- Files: `data/token_usage_{safe_name}.json`
-- Structure: `{total_usage, model_usage, daily_usage, session_history}`
-- Pricing: Loaded from `src/model_catalog.json` with configurable units (default: per 1M tokens)
-- Budget tracking: Monthly limits with percentage warnings
-
-**Migration Pattern**: Legacy `token_usage.json` is automatically migrated to professor-specific files on first run.
+**Per-Professor, Per-Month Isolation**: Each professor gets a separate active file for the current month, with past months automatically archived.
+- **Active file**: `data/token_usage_{safe_name}.json` — covers the current calendar month only
+- **Archives**: `data/archives/{safe_name}/{YYYY-MM}.json` — one file per past month, written automatically on month rollover
+- **File structure**: `{month, total_usage, model_usage, daily_usage, session_history}` — all totals are for that month only
+- **Pricing**: Loaded from `src/model_catalog.json` with configurable units (default: per 1M tokens)
+- **Budget tracking**: Monthly limits with percentage warnings; resets naturally each month
+- **All-time totals**: Computed on demand by aggregating the active file + all archive files via `get_all_time_usage()`
 
 ## Key Development Workflows
 
@@ -41,18 +41,31 @@ PROF_[ID]_BACKUP_KEY=backup_key   # Fallback key
 
 ### Testing CLI Changes
 ```bash
-# Test basic functionality
-python -m src.cli professor_name --help
-python -m src.cli professor_name --usage-report
-python -m src.cli professor_name --list-models
+# Global commands (no professor required)
+python main.py --help
+python main.py --list-models
+python main.py --update-pricing gpt-4o 0.03 0.06
 
-# Test with actual professor (requires .env)
-python -m src.cli conlan CE -c  # Custom text translation
-python -m src.cli conlan CE -i test.pdf  # PDF translation
-python -m src.cli conlan CE -i test.docx  # Word document translation
-python -m src.cli conlan CE -i test.txt  # Text file translation
-python -m src.cli conlan E -i test.jpg -o output.txt  # Image OCR (auto-detected by extension)
-python -m src.cli conlan E -i test.jpg -o output.txt -m gpt-4o-mini  # OCR with specific model
+# Usage / reporting
+python main.py heller usage report              # Current month + budget status
+python main.py heller usage report --all-time   # Above + all-time totals
+python main.py heller usage report 2025-07      # Report for a specific archived month
+python main.py heller usage months              # List all archived month files
+python main.py heller usage daily               # Today's usage
+python main.py heller usage daily 2026-03-01    # Specific date
+
+# Translation
+python main.py heller translate CE -c                        # Custom text input
+python main.py heller translate CE -i test.pdf               # PDF translation
+python main.py heller translate CE -i test.docx              # Word document
+python main.py heller translate CE -i test.txt               # Plain text file
+python main.py heller translate CE -i test.pdf -p 1-5        # Page range
+python main.py heller translate CE -i test.pdf -o out.docx   # Output as Word
+
+# Transcription (OCR) — use single language char, not a pair
+python main.py heller transcribe E -i test.jpg               # OCR to console
+python main.py heller transcribe E -i test.jpg -o output.txt # OCR to file
+python main.py heller transcribe E -i test.jpg -m gpt-4o-mini # Specific model
 ```
 
 ### Language Code Pattern
@@ -106,7 +119,7 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 ### Model Selection and Configuration
 - **Default Models**: `OCR_MODEL=gpt-4o-mini` for OCR, `DEFAULT_MODEL=gpt-4o` for translation
 - **Custom Model**: Use `-m/--model MODEL_NAME` flag to override defaults for both translation and OCR
-- **List Models**: `python main.py professor --list-models` shows all available models with pricing and vision support
+- **List Models**: `python main.py --list-models` shows all available models with pricing and vision support
 - **Vision Validation**: ImageProcessorService automatically validates model supports vision, falls back to defaults if not
 - **Model Priority**: Custom model → OCR_MODEL/DEFAULT_MODEL → first available vision-capable model
 - **Configuration**: Models and pricing defined in `src/model_catalog.json` with `supports_vision` boolean flag
