@@ -137,14 +137,23 @@ python main.py smith transcribe E -i receipt.jpg -o receipt.txt -m gpt-4o-mini
 
 ### Token Usage Tracking
 ```bash
-# View usage report for a professor
+# Current month report + budget status
 python main.py heller usage report
 
-# View daily usage for a specific date
-python main.py heller usage daily 2024-07-14
+# Report for a specific archived month
+python main.py heller usage report 2025-07
 
-# View today's usage
-python main.py smith usage daily
+# Current month + all-time totals across all archived months
+python main.py heller usage report --all-time
+
+# List all archived month files
+python main.py heller usage months
+
+# Today's usage
+python main.py heller usage daily
+
+# Usage for a specific date
+python main.py heller usage daily 2026-02-14
 ```
 
 ### Progressive Saving
@@ -193,7 +202,7 @@ This ensures that temporary API issues or problematic pages don't stop the entir
 - Extracts text from images containing CJK or English text
 - Requires vision-capable models (gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-5)
 - Use single-character language code for target language (E, C, J, K)
-- Example: `python main.py heller E -i photo.jpg -o extracted.txt`
+- Example: `python main.py heller transcribe E -i photo.jpg -o extracted.txt`
 
 **Note:** For Word document input, only .docx format is supported. Legacy .doc files are not supported.
 
@@ -264,9 +273,11 @@ pip install -r requirements.txt
 ## Token Usage Tracking
 
 Each professor has separate token usage tracking and monthly budgets:
-- Usage data is stored in `data/token_usage_[professor_name].json` files
+- **Active file**: `data/token_usage_{name}.json` — current calendar month only
+- **Archives**: `data/archives/{name}/{YYYY-MM}.json` — one file per past month, written automatically on the first use of a new month
+- All totals in each file cover that month only; no single file grows indefinitely
 - Monthly limits are configurable in `src/model_catalog.json`
-- View reports using `--usage-report` and `--daily-usage` options
+- All-time totals are computed on demand by aggregating the active file with all archive files (`usage report --all-time`)
 
 ## Output File Formats
 
