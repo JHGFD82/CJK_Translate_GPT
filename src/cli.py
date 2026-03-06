@@ -83,7 +83,16 @@ Examples:
     usage_subparsers = usage_parser.add_subparsers(dest='usage_subcommand', help='Usage subcommand')
 
     # usage report
-    usage_subparsers.add_parser('report', help='Display comprehensive usage report')
+    report_parser = usage_subparsers.add_parser('report', help='Display comprehensive usage report')
+    report_parser.add_argument(
+        '--all-time',
+        action='store_true',
+        default=False,
+        help='Include all-time totals aggregated from all archived months',
+    )
+
+    # usage months
+    usage_subparsers.add_parser('months', help='List all archived months for this professor')
 
     # usage daily [date]
     daily_parser = usage_subparsers.add_parser('daily', help='Display daily usage')
