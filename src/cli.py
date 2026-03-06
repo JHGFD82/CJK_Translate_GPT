@@ -28,26 +28,32 @@ def create_argument_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Language codes:
-  Use two characters for translation (source+target): CE, JK, EC, etc.
-  Use one character for transcription: E (English), C (Chinese), J (Japanese), K (Korean)
+  Two characters for translation (source→target): CE, EC, JE, EJ, KE, EK, JK, KJ, ...
+  One character  for transcription (OCR):          E (English), C (Chinese), J (Japanese), K (Korean)
 
-Examples:
-  # Global commands (no professor required)
+Usage / reporting:
+  python main.py heller usage report              Current month report + budget status
+  python main.py heller usage report --all-time   Above + all-time totals across all archived months
+  python main.py heller usage report 2025-07      Report for a specific archived month
+  python main.py heller usage months              List all archived month files
+  python main.py heller usage daily               Today's usage
+  python main.py heller usage daily 2026-03-01    Usage for a specific date
+
+Global commands (no professor required):
   python main.py --list-models
   python main.py --update-pricing gpt-4o 0.03 0.06
-  
-  # Usage commands
-  python main.py heller usage report
-  python main.py heller usage daily
-  python main.py heller usage daily 2024-12-25
-  
-  # Translation commands
+
+Translation:
   python main.py heller translate CE -i document.pdf
   python main.py heller translate JE -i document.docx -p 1-5
   python main.py heller translate KE -c
-  
-  # Transcription commands (OCR)
+  python main.py heller translate CE -i doc.pdf -o translated.docx    Save as Word document
+  python main.py heller translate CE -i doc.pdf --progressive-save    Save each page immediately
+
+Transcription (OCR):
+  python main.py heller transcribe E -i image.jpg
   python main.py heller transcribe E -i image.jpg -o output.txt
+  python main.py heller transcribe C -i scan.png -m gpt-4o-mini
         """,
     )
 
@@ -82,13 +88,24 @@ Examples:
     usage_parser = subparsers.add_parser('usage', help='View token usage and costs')
     usage_subparsers = usage_parser.add_subparsers(dest='usage_subcommand', help='Usage subcommand')
 
-    # usage report
-    report_parser = usage_subparsers.add_parser('report', help='Display comprehensive usage report')
+    # usage report [YYYY-MM]
+    report_parser = usage_subparsers.add_parser(
+        'report',
+        help='Display usage report (current month by default)',
+    )
+    report_parser.add_argument(
+        'month',
+        type=str,
+        nargs='?',
+        default=None,
+        metavar='YYYY-MM',
+        help='Archived month to report on (e.g. 2025-07). Omit for current month.',
+    )
     report_parser.add_argument(
         '--all-time',
         action='store_true',
         default=False,
-        help='Include all-time totals aggregated from all archived months',
+        help='Include all-time totals aggregated from all archived months (current month only)',
     )
 
     # usage months
@@ -168,15 +185,26 @@ def main() -> None:
             raise CLIError(
                 "Professor name is required.\n"
                 "Usage: python main.py <professor_name> <command> [options]\n"
-                "Or for global commands: python main.py --list-models"
+                "\nAvailable commands:\n"
+                "  usage report [YYYY-MM] [--all-time]  Token usage report\n"
+                "  usage months                         List archived month files\n"
+                "  usage daily [YYYY-MM-DD]             Daily usage\n"
+                "  translate <code> -i <file>           Translate a document\n"
+                "  transcribe <lang> -i <image>         OCR an image\n"
+                "\nOr for global commands: python main.py --list-models"
             )
 
         # Handle professor-specific commands
         if not args.command:
             raise CLIError(
                 f"No command specified for professor '{args.professor}'.\n"
-                "Available commands: usage, translate, transcribe\n"
-                "Use --help for more information."
+                "\nAvailable commands:\n"
+                "  usage report [YYYY-MM] [--all-time]  Token usage report\n"
+                "  usage months                         List archived month files\n"
+                "  usage daily [YYYY-MM-DD]             Daily usage\n"
+                "  translate <code> -i <file>           Translate a document\n"
+                "  transcribe <lang> -i <image>         OCR an image\n"
+                "\nRun 'python main.py --help' for full usage information."
             )
 
         # Route to appropriate handler

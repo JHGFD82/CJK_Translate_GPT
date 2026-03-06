@@ -414,14 +414,66 @@ class TokenTracker:
             "approaching_limit": usage_pct > 80,
         }
 
-    def print_usage_report(self, include_all_time: bool = False):
-        """Print a formatted usage report for the current month.
+    def print_usage_report(self, month: Optional[str] = None, include_all_time: bool = False):
+        """Print a formatted usage report.
 
         Args:
-            include_all_time: When True, also print all-time totals aggregated
-                              from all archived months plus the current month.
+            month:           If given (e.g. '2025-07'), print a report for that
+                             archived month instead of the current month.
+            include_all_time: When True (current month only), also print all-time
+                              totals aggregated from all archived months plus the
+                              current month.
         """
         current_month = self._get_current_month()
+
+        # ── Archived month report ──────────────────────────────────
+        if month and month != current_month:
+            if not self.professor:
+                print("Cannot load archived month without a professor name.")
+                return
+            archive_path = get_archive_path(self.professor, month)
+            if not archive_path.exists():
+                archived = self.list_archived_months()
+                hint = f"  Available: {', '.join(archived)}" if archived else "  No archives found."
+                print(f"No archive found for {month}.\n{hint}")
+                return
+            with open(archive_path, "r") as f:
+                arc = json.load(f)
+
+            total = arc["total_usage"]
+            print("\n" + "=" * 60)
+            if self.professor:
+                print(f"TOKEN USAGE REPORT - PROFESSOR {self.professor.upper()}")
+            else:
+                print("TOKEN USAGE REPORT")
+            print("=" * 60)
+            print(f"\nArchived Month ({month}):")
+            print("-" * 40)
+            print(f"Total Tokens Used: {total['total_tokens']:,}")
+            print(f"  • Input Tokens:  {total['total_input_tokens']:,}")
+            print(f"  • Output Tokens: {total['total_output_tokens']:,}")
+            print(f"Total Cost: ${total['total_cost']:.4f}")
+            print(f"API Calls:  {total['call_count']}")
+
+            print("\nModel Breakdown:")
+            print("-" * 40)
+            for mdl, data in arc.get("model_usage", {}).items():
+                print(f"{mdl}:")
+                print(f"  • Calls:  {data['call_count']}")
+                print(f"  • Tokens: {data['total_tokens']:,}")
+                print(f"  • Cost:   ${data['total_cost']:.4f}")
+
+            print("\nDaily Breakdown:")
+            print("-" * 40)
+            for day in sorted(arc.get("daily_usage", {}).keys()):
+                d = arc["daily_usage"][day]
+                calls = d.get("call_count", "?")
+                print(f"{day}: {d['total_tokens']:,} tokens  ${d['total_cost']:.4f}  ({calls} calls)")
+
+            print("=" * 60)
+            return
+
+        # ── Current month report ───────────────────────────────────
         monthly_total = self.usage_data["total_usage"]
 
         print("\n" + "=" * 60)
@@ -431,7 +483,6 @@ class TokenTracker:
             print("TOKEN USAGE REPORT")
         print("=" * 60)
 
-        # ── Current month ──────────────────────────────────────────
         print(f"\nCurrent Month ({current_month}):")
         print("-" * 40)
         print(f"Total Tokens Used: {monthly_total['total_tokens']:,}")
@@ -481,6 +532,8 @@ class TokenTracker:
                 print(f"Total Cost:   ${all_time['total_cost']:.4f}")
                 print(f"Total Calls:  {all_time['call_count']}")
                 print(f"Archived months: {', '.join(archived)}")
+            else:
+                print("\n(No archived months yet — all usage is in the current month.)")
 
         print("=" * 60)
 
