@@ -80,18 +80,22 @@ def handle_info_commands(args: argparse.Namespace) -> bool:
         usage_subcommand = getattr(args, 'usage_subcommand', None)
 
         if usage_subcommand == 'report':
+            month = getattr(args, 'month', None)
             include_all_time = getattr(args, 'all_time', False)
-            token_tracker.print_usage_report(include_all_time=include_all_time)
+            token_tracker.print_usage_report(month=month, include_all_time=include_all_time)
             return True
 
         if usage_subcommand == 'months':
             archived = token_tracker.list_archived_months()
+            current_month = token_tracker._get_current_month()
             if archived:
-                print(f"\nArchived months for {args.professor}:")
+                print(f"\nUsage history for {args.professor}:")
                 for m in archived:
-                    print(f"  {m}")
+                    print(f"  {m}  (archived)")
+                print(f"  {current_month}  (current)")
+                print(f"\nTo view a specific month: python main.py {args.professor} usage report <YYYY-MM>")
             else:
-                print(f"No archived months found for {args.professor}.")
+                print(f"No archived months found for {args.professor} (current month: {current_month}).")
             return True
 
         if usage_subcommand == 'daily':
