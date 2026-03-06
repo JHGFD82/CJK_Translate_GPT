@@ -1,57 +1,72 @@
-# CJK Translate GPT - Token Usage Tracking
+# PU AI Sandbox Toolkit - Token Usage Tracking
 
 ## Overview
 
-The CJK Translation script includes comprehensive token usage tracking to help you monitor your API usage and costs. This feature tracks token consumption across all API calls and provides detailed reports on usage patterns and costs.
+The PU AI Sandbox Toolkit includes comprehensive token usage tracking to help you monitor API usage and costs across all translation and OCR operations. Each professor's usage is tracked in isolation, with data split by calendar month so that the active file stays small and the $250/month Princeton budget limit is always front-and-center.
 
-**Important:** The script now requires a `model_catalog.json` file to function. This file serves as the single source of truth for all model pricing and configuration data.
+**Important:** The toolkit requires a `model_catalog.json` file to function. This file is the single source of truth for all model pricing and configuration.
 
 ## Features
 
 ### 1. Automatic Token Tracking
 - All API calls are automatically tracked
-- Records input tokens, output tokens, and total tokens
+- Records input tokens, output tokens, and total tokens per call
 - Calculates costs based on current pricing from `model_catalog.json`
-- Stores usage data persistently in `token_usage.json`
+- Separate tracking file per professor, per calendar month
 
-### 2. Centralized Configuration
-- All model pricing stored in `model_catalog.json`
-- Script will not run without valid pricing configuration
-- Automatic model discovery from pricing configuration
-- Consistent pricing across all modules
+### 2. Per-Month File Isolation
+- The active file covers the **current month only** — it never grows indefinitely
+- At the start of a new month the previous file is automatically archived
+- Past months are stored in `data/archives/{professor}/{YYYY-MM}.json`
+- All-time totals are computed on demand by aggregating all archive files
 
 ### 3. Usage Reports
-- View comprehensive usage reports
-- See breakdowns by model, date, and session
-- Track costs for better budget management
+- Current month report with budget status
+- Per-model and per-day breakdowns
+- View any archived month's full report
+- Optional all-time aggregate across every archived month
 
 ### 4. Pricing Management
-- Update pricing information via command line
+- Update pricing via command line — changes are saved to `model_catalog.json`
 - Easily update rates when Princeton changes them
-- Support for multiple models with fallback handling
 
 ## Usage Commands
 
-### View Overall Usage Report
+### Current month report + budget status
 ```bash
 python main.py heller usage report
 ```
 
-### View Daily Usage
+### Report for a specific archived month
+```bash
+python main.py heller usage report 2025-07
+```
+
+### Current month + all-time totals
+```bash
+python main.py heller usage report --all-time
+```
+
+### List all archived months
+```bash
+python main.py heller usage months
+```
+
+### Daily usage
 ```bash
 # Today's usage
 python main.py heller usage daily
 
-# Specific date usage
-python main.py heller usage daily 2025-07-11
+# Specific date
+python main.py heller usage daily 2026-02-14
 ```
 
-### Update Model Pricing
+### Update model pricing
 ```bash
 python main.py --update-pricing gpt-4o 2.75 11.00
 ```
 
-## Current Pricing (as of July 2025)
+## Current Pricing (as of March 2026)
 
 Based on the Princeton KB article: https://princeton.service-now.com/service?id=kb_article&sys_id=KB0014337
 
@@ -67,31 +82,38 @@ Based on the Princeton KB article: https://princeton.service-now.com/service?id=
 
 ## File Structure
 
-### Required Files:
-- `src/model_catalog.json` - **REQUIRED** - Central pricing configuration and model definitions
-- `src/tracking/token_tracker.py` - Core token tracking functionality
-- `src/config.py` - Centralized configuration management
+### Required Files
+- `src/model_catalog.json` — **REQUIRED** — central pricing configuration and model definitions
+- `src/tracking/token_tracker.py` — core token tracking functionality
+- `src/config.py` — centralized configuration management
 
-### Auto-Generated Files:
-- `token_usage.json` - Usage data (created automatically)
+### Auto-Generated Files
+```
+data/
+  token_usage_{name}.json          ← active file, current month only
+  archives/
+    {name}/
+      2026-02.json                 ← one file per past month (auto-created)
+      2026-03.json
+      ...
+```
 
-### Updated Files:
-- `src/services/translation_service.py` - Integrated token tracking
-- `src/cli.py` - Added usage commands
-- `src/processors/pdf_processor.py` - Added PDF processing utilities
-- `src/output/file_output.py` - Added file naming utilities
+Each JSON file (active or archive) is self-contained for its month:
+```json
+{
+  "month": "2026-03",
+  "total_usage": { ... },
+  "model_usage":  { ... },
+  "daily_usage":  { ... },
+  "session_history": [ ... ]
+}
+```
 
 ## Data Storage
 
 ### model_catalog.json (Required)
-This file is **required** for the script to function and contains:
-- Model pricing information (input/output costs per 1M tokens)
-- Configuration settings (pricing unit, monthly limits)
-- Available model definitions
+Contains model pricing and global config. **The toolkit will not run without this file.**
 
-**The script will fail to start without this file.**
-
-Example structure:
 ```json
 {
   "config": {
@@ -111,111 +133,121 @@ Example structure:
 }
 ```
 
-### token_usage.json (Auto-generated)
-This file stores all usage data and includes:
-- Total usage across all sessions
-- Usage breakdown by model
-- Daily usage statistics
-- Individual session history
-
-**This file is created automatically and should not be manually edited.**
+### token_usage_{name}.json (Auto-generated)
+Stores the **current month's** usage data only. Automatically archived and reset at the start of each new month. Do not manually edit this file.
 
 ## Example Usage Workflow
 
-### First Time Setup:
-1. **Ensure `src/model_catalog.json` exists** (required):
-   ```json
-   {
-     "config": {
-       "pricing_unit": 1000000,
-       "monthly_limit": 250.0
-     },
-     "models": {
-       "gpt-4o": {"input": 2.75, "output": 11.0},
-       "gpt-4o-mini": {"input": 0.165, "output": 0.66}
-     }
-   }
-   ```
+### First Time Setup
+1. Ensure `src/model_catalog.json` exists (see structure above).
+2. Add professor config to `.env` — usage files are created automatically on first run.
 
-### Normal Usage:
+### Normal Usage
 1. **Translate a document:**
    ```bash
-  python main.py heller translate CE -i document.pdf -o translation.txt
+   python main.py heller translate CE -i document.pdf -o translation.txt
    ```
 
-2. **Check usage after translation:**
+2. **Check current month usage + budget:**
    ```bash
-  python main.py heller usage report
+   python main.py heller usage report
    ```
 
-3. **Update pricing when Princeton changes rates:**
+3. **Review a past month:**
    ```bash
-  python main.py --update-pricing gpt-4o 3.00 12.00
+   python main.py heller usage months          # see what's archived
+   python main.py heller usage report 2026-02  # pull that month's report
    ```
 
-4. **Check daily usage:**
+4. **Update pricing when Princeton changes rates:**
    ```bash
-  python main.py heller usage daily
+   python main.py --update-pricing gpt-4o 3.00 12.00
    ```
 
 ## Sample Output
 
-### Usage Report
+### Current Month Report
 ```
 ============================================================
-TOKEN USAGE REPORT
+TOKEN USAGE REPORT - PROFESSOR HELLER
 ============================================================
-Total Tokens Used: 15,450
-  • Input Tokens: 10,200
-  • Output Tokens: 5,250
-Total Cost: $0.5125
+
+Current Month (2026-03):
+----------------------------------------
+Total Tokens Used: 3,731
+  • Input Tokens:  2,716
+  • Output Tokens: 1,015
+Total Cost: $0.0186
+
+Model Breakdown (this month):
+----------------------------------------
+gpt-4o-2024-08-06:
+  • Calls:  2
+  • Tokens: 3,731
+  • Cost:   $0.0186
+
+Monthly Budget (2026-03):
+----------------------------------------
+Monthly Limit: $250.00
+Used:          $0.0186 (0.0%)
+Remaining:     $249.98
+============================================================
+```
+
+### Archived Month Report
+```
+============================================================
+TOKEN USAGE REPORT - PROFESSOR HELLER
+============================================================
+
+Archived Month (2026-02):
+----------------------------------------
+Total Tokens Used: 223,722
+  • Input Tokens:  150,297
+  • Output Tokens: 73,425
+Total Cost: $0.9050
+API Calls:  34
 
 Model Breakdown:
 ----------------------------------------
-gpt-4o:
-  • Calls: 3
-  • Tokens: 12,000
-  • Cost: $0.4620
-gpt-4o-mini:
-  • Calls: 2
-  • Tokens: 3,450
-  • Cost: $0.0505
+gpt-4o-2024-08-06:
+  • Calls:  18
+  • Tokens: 40,052
+  • Cost:   $0.2449
 
-Today's Usage (2025-07-11):
+Daily Breakdown:
 ----------------------------------------
-Tokens: 3,450
-Cost: $0.0505
+2026-02-24: 136,905 tokens  $0.2009  (11 calls)
+2026-02-27: 83,086 tokens  $0.6854  (21 calls)
 ============================================================
 ```
 
 ## Important Notes
 
-1. **model_catalog.json is required** - The script will not run without this file
-2. **Token tracking is automatic** - No need to manually track usage
-3. **Pricing updates persist** - Updated pricing is saved to `model_catalog.json`
-4. **Historical data preserved** - All usage history is maintained in `token_usage.json`
-5. **Cost calculations** - Automatically calculates costs based on current pricing
-6. **Multiple models supported** - Tracks usage across all available models
-7. **Centralized configuration** - All model and pricing data managed in one place
-8. **Error handling** - Script provides clear error messages for missing/invalid config
+1. **model_catalog.json is required** — the toolkit will not run without it
+2. **Token tracking is automatic** — no manual steps needed
+3. **Active file = current month only** — totals never accumulate across months in one file
+4. **Month rollover is automatic** — the first run of a new month archives the previous file and starts fresh
+5. **All-time totals on demand** — use `usage report --all-time` to aggregate across all archives
+6. **Pricing updates persist** — saved to `model_catalog.json`
+7. **Per-professor isolation** — each professor has their own active file and archive folder
 
 ## Troubleshooting
 
-If you encounter issues:
+### Toolkit won't start
+1. Check that `src/model_catalog.json` exists — it is required
+2. Verify `model_catalog.json` has valid JSON (check for syntax errors)
+3. Ensure `model_catalog.json` has both `"config"` and `"models"` sections
+4. Confirm the `"models"` section is not empty
 
-### Script won't start:
-1. **Check that `src/model_catalog.json` exists** - This file is required
-2. **Verify model_catalog.json has valid JSON** - Check for syntax errors
-3. **Ensure model_catalog.json has required sections** - Must have "config" and "models" sections
-4. **Check that models section is not empty** - At least one model must be defined
+### Usage tracking issues
+1. Check that `data/` has write permissions
+2. Verify the model name in pricing matches the model name returned by the API
+3. Ensure `monthly_limit` is set in `model_catalog.json`
 
-### Usage tracking issues:
-1. Check that `token_usage.json` has write permissions
-2. Verify the model name in pricing matches the actual model used by the API
-3. Ensure monthly_limit is set in model_catalog.json
-
-### Common error messages:
-- "Model catalog file not found" - Create `src/model_catalog.json`
-- "Invalid JSON in model catalog file" - Fix JSON syntax errors
-- "Missing required 'models' section" - Add models section to config
-- "No models configured" - Add at least one model to the models section
+### Common error messages
+- `"Model catalog file not found"` — create `src/model_catalog.json`
+- `"Invalid JSON in model catalog file"` — fix JSON syntax errors
+- `"Missing required 'models' section"` — add models section to config
+- `"No models configured"` — add at least one model to the models section
+- `"No archive found for YYYY-MM"` — that month has no data; run `usage months` to see what's available
