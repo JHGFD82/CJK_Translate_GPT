@@ -6,3 +6,5 @@ pdfminer.six
 tqdm
 reportlab
 python-docx
+pytest
+pytest-mock
