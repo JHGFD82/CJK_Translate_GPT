@@ -22,8 +22,8 @@ ENV/
 .vscode/settings.json
 .vscode/launch.json
 
-# Test PDFs
-tests/
+# Local test folder
+example_docs/
 
 # Fonts - include folder and README but exclude font files
 fonts/*
