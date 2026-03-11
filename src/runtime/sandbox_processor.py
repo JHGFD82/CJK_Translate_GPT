@@ -258,20 +258,32 @@ class SandboxProcessor:
         """Translate custom text input by the user."""
         abstract_text: Optional[str] = None
         if abstract:
-            print("Enter abstract text (press Enter when done):")
-            abstract_text = input()
-
-        print(f"Enter the {source_language} text you want to translate to {target_language}:")
-        print("(Press Ctrl+D on Unix/Linux/Mac or Ctrl+Z followed by Enter on Windows to finish)")
-
-        try:
-            custom_text = ""
+            print("Enter abstract text, then type --- on its own line to finish:")
+            lines = []
             while True:
                 try:
                     line = input()
-                    custom_text += line + "\n"
+                    if line.strip() == '---':
+                        break
+                    lines.append(line)
                 except EOFError:
                     break
+            abstract_text = '\n'.join(lines) or None
+
+        print(f"Enter the {source_language} text you want to translate to {target_language}:")
+        print("(Type --- on its own line when done)")
+
+        try:
+            lines = []
+            while True:
+                try:
+                    line = input()
+                    if line.strip() == '---':
+                        break
+                    lines.append(line)
+                except EOFError:
+                    break
+            custom_text = '\n'.join(lines)
 
             if not custom_text.strip():
                 logger.warning("No text provided for translation")
