@@ -26,10 +26,10 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description='Translate documents between Chinese, Japanese, Korean, and English using Princeton AI Sandbox',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Language codes:
-  Two characters for translation (source→target): CE, EC, JE, EJ, KE, EK, JK, KJ, ...
-  One character  for transcription (OCR):          E (English), C (Chinese), J (Japanese), K (Korean)
+        epilog="""\nLanguage codes:
+  Two characters for translation (source→target): CE, EC, JE, EJ, KE, EK, JK, KJ, SE, TE, ...
+  One character  for transcription (OCR):          E (English), C (Chinese), S (Simplified Chinese),
+                                                    T (Traditional Chinese), J (Japanese), K (Korean)
 
 Usage / reporting:
   python main.py heller usage report              Current month report + budget status
@@ -53,7 +53,10 @@ Translation:
 Transcription (OCR):
   python main.py heller transcribe E -i image.jpg
   python main.py heller transcribe E -i image.jpg -o output.txt
-  python main.py heller transcribe C -i scan.png -m gpt-4o-mini
+  python main.py heller transcribe S -i scan.png                     Simplified Chinese
+  python main.py heller transcribe T -i scan.png -m gpt-4o-mini      Traditional Chinese
+  python main.py heller transcribe J -i scan.png                     Japanese (kanji + kana)
+  python main.py heller transcribe C -i scan.png -m gpt-4o-mini      Generic Chinese
         """,
     )
 
@@ -158,7 +161,7 @@ Transcription (OCR):
     transcribe_parser.add_argument(
         'language_code',
         type=parse_single_language_code,
-        help=f'Target language (E, C, J, or K)',
+        help='Target language: E (English), C (Chinese), S (Simplified Chinese), T (Traditional Chinese), J (Japanese), K (Korean)',
     )
     transcribe_parser.add_argument('-i', '--input', dest='input_file', type=str, required=True, help='Input image file path')
     transcribe_parser.add_argument('-o', '--output', dest='output_file', type=str, help='Output file path')

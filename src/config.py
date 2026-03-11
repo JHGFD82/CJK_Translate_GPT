@@ -13,9 +13,11 @@ from typing import Dict, List, Any, Optional, Tuple, Union
 # Language mapping
 LANGUAGE_MAP: Dict[str, str] = {
     'C': 'Chinese',
-    'J': 'Japanese', 
+    'S': 'Simplified Chinese',
+    'T': 'Traditional Chinese',
+    'J': 'Japanese',
     'K': 'Korean',
-    'E': 'English'
+    'E': 'English',
 }
 
 
