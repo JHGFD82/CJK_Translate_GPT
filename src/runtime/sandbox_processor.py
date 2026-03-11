@@ -320,12 +320,12 @@ class SandboxProcessor:
             logger.error(f"Error during translation: {e}", exc_info=True)
             raise CLIError(f"Error during translation: {e}") from e
 
-    def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None) -> None:
+    def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False) -> None:
         """Process an image file with OCR (transcribe command)."""
         logger.info(f"Starting OCR processing: {file_path} → {target_language}")
 
         try:
-            extracted_text = self.image_processor_service.process_image_ocr(file_path, target_language, output_format="console")
+            extracted_text = self.image_processor_service.process_image_ocr(file_path, target_language, output_format="console", vertical=vertical)
 
             print("\n=== Extracted Text ===")
             print(extracted_text)
@@ -470,7 +470,8 @@ class SandboxProcessor:
                 target_language = args.language_code
 
                 output_file = getattr(args, 'output_file', None)
-                self.process_image(os.path.abspath(args.input_file), target_language, output_file)
+                vertical = getattr(args, 'vertical', False)
+                self.process_image(os.path.abspath(args.input_file), target_language, output_file, vertical=vertical)
 
             else:
                 raise CLIError(f"Unknown command: {command}")
