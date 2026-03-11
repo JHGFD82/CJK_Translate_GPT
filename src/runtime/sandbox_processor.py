@@ -259,7 +259,7 @@ class SandboxProcessor:
         abstract_text: Optional[str] = None
         if abstract:
             print("Enter abstract text, then type --- on its own line to finish:")
-            lines = []
+            lines: list[str] = []
             while True:
                 try:
                     line = input()
@@ -274,16 +274,16 @@ class SandboxProcessor:
         print("(Type --- on its own line when done)")
 
         try:
-            lines = []
+            lines2: list[str] = []
             while True:
                 try:
                     line = input()
                     if line.strip() == '---':
                         break
-                    lines.append(line)
+                    lines2.append(line)
                 except EOFError:
                     break
-            custom_text = '\n'.join(lines)
+            custom_text = '\n'.join(lines2)
 
             if not custom_text.strip():
                 logger.warning("No text provided for translation")
