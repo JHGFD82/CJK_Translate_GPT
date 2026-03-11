@@ -166,6 +166,7 @@ Transcription (OCR):
     transcribe_parser.add_argument('-i', '--input', dest='input_file', type=str, required=True, help='Input image file path')
     transcribe_parser.add_argument('-o', '--output', dest='output_file', type=str, help='Output file path')
     transcribe_parser.add_argument('-m', '--model', dest='model', type=str, help='Model to use (e.g., gpt-4o, gpt-4o-mini)')
+    transcribe_parser.add_argument('-v', '--vertical', dest='vertical', action='store_true', help='Text is predominantly vertical (top-to-bottom, right-to-left columns)')
 
     return parser
 
