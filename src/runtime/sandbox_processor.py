@@ -250,11 +250,17 @@ class SandboxProcessor:
         self,
         source_language: str,
         target_language: str,
+        abstract: bool = False,
         output_file: Optional[str] = None,
         auto_save: bool = False,
         custom_font: Optional[str] = None,
     ) -> None:
         """Translate custom text input by the user."""
+        abstract_text: Optional[str] = None
+        if abstract:
+            print("Enter abstract text (press Enter when done):")
+            abstract_text = input()
+
         print(f"Enter the {source_language} text you want to translate to {target_language}:")
         print("(Press Ctrl+D on Unix/Linux/Mac or Ctrl+Z followed by Enter on Windows to finish)")
 
@@ -274,7 +280,12 @@ class SandboxProcessor:
 
             logger.info(f"Starting custom text translation: {source_language} -> {target_language}")
             print("\nTranslating...")
-            translated_text = self.translation_service.translate_text(custom_text, source_language, target_language)
+            if abstract_text:
+                translated_text = self.translation_service.translate_page_text(
+                    abstract_text, custom_text, '', source_language, target_language
+                )
+            else:
+                translated_text = self.translation_service.translate_text(custom_text, source_language, target_language)
 
             if output_file or auto_save:
                 input_filename = f"custom_text_{source_language}to{target_language}.txt"
@@ -412,6 +423,7 @@ class SandboxProcessor:
                     self.translate_custom_text(
                         source_language,
                         target_language,
+                        getattr(args, 'abstract', False),
                         output_file,
                         args.auto_save,
                         getattr(args, 'custom_font', None),
