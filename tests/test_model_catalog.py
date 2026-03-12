@@ -360,6 +360,32 @@ class TestResolveModel:
     def test_requested_model_takes_precedence_over_prefer(self, mock_catalog):
         assert resolve_model(requested_model="gpt-5", prefer_model="gpt-4o-mini") == "gpt-5"
 
+    def test_priority_candidate_skipped_in_fallback_loop_when_incompatible(
+        self, monkeypatch
+    ):
+        # Exercises the `continue` branch (line 356): prefer_model is in the
+        # available-models list but fails vision compatibility, so step 4 hits
+        # it, skips it via `continue`, and falls through to the next model.
+        #
+        # Catalog order: text-only-model first, then vision-model.
+        ordered_catalog = {
+            "config": {"pricing_unit": 1_000_000, "monthly_limit": 250.0},
+            "models": {
+                "text-only-model": {"input": 0.1, "output": 0.3, "supports_vision": False},
+                "vision-model": {"input": 2.0, "output": 8.0, "supports_vision": True},
+            },
+        }
+        monkeypatch.setattr(config_module, "load_model_catalog", lambda: ordered_catalog)
+        # prefer_model="text-only-model" fails vision check in steps 2/3.
+        # DEFAULT_MODEL patched to something absent from the catalog so it
+        # also fails in steps 2/3.
+        # Step 4 iterates [text-only-model, vision-model]:
+        #   - text-only-model is in priority_candidates → continue  ← hit
+        #   - vision-model is not → compatible → returned
+        monkeypatch.setattr(config_module, "DEFAULT_MODEL", "nonexistent")
+        result = resolve_model(prefer_model="text-only-model", require_vision=True)
+        assert result == "vision-model"
+
 
 # ---------------------------------------------------------------------------
 # save_model_catalog
