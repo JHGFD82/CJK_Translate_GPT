@@ -3,7 +3,7 @@ Tests for token tracking data structures and math:
   - UsageStats.add_usage, merge_dict, to_dict
   - TokenTracker._update_stats
   - TokenTracker._calculate_costs  (mocked pricing)
-  - TokenTracker._get_monthly_budget_status  (mocked usage data)
+  - TokenTracker._get_monthly_budget_status  (current and past months)
   - Module-level path helpers
   - TokenUsage dataclass
   - TokenTracker._empty_usage_data
@@ -726,3 +726,308 @@ class TestUpdatePricing:
 
         assert "new-model" in saved["models"]
         assert saved["models"]["new-model"]["input"] == pytest.approx(0.50)
+
+
+# ---------------------------------------------------------------------------
+# Shared realistic fixture data (placeholder names, values from real archives)
+# ---------------------------------------------------------------------------
+
+# Represents a current-month active file (professor "testprof", March 2026)
+CURRENT_MONTH_DATA = {
+    "month": "2026-03",
+    "total_usage": {
+        "total_tokens": 18177,
+        "total_input_tokens": 13878,
+        "total_output_tokens": 4299,
+        "total_cost": 0.08545,
+        "call_count": 8,
+    },
+    "model_usage": {
+        "gpt-4o-2026-03-01": {
+            "total_tokens": 18177,
+            "total_input_tokens": 13878,
+            "total_output_tokens": 4299,
+            "total_cost": 0.08545,
+            "call_count": 8,
+        }
+    },
+    "daily_usage": {
+        "2026-03-05": {
+            "total_tokens": 3731,
+            "total_input_tokens": 2716,
+            "total_output_tokens": 1015,
+            "total_cost": 0.01863,
+            "call_count": 2,
+        },
+        "2026-03-11": {
+            "total_tokens": 14446,
+            "total_input_tokens": 11162,
+            "total_output_tokens": 3284,
+            "total_cost": 0.06682,
+            "call_count": 6,
+        },
+    },
+    "session_history": [
+        {
+            "model": "gpt-4o-2026-03-01",
+            "prompt_tokens": 1358,
+            "completion_tokens": 514,
+            "total_tokens": 1872,
+            "timestamp": "2026-03-05T11:49:31",
+            "input_cost": 0.00373,
+            "output_cost": 0.00565,
+            "total_cost": 0.00939,
+        }
+    ],
+}
+
+# Represents an archived month file  (February 2026, multi-model)
+ARCHIVE_FEB_DATA = {
+    "month": "2026-02",
+    "total_usage": {
+        "total_tokens": 219991,
+        "total_input_tokens": 147581,
+        "total_output_tokens": 72410,
+        "total_cost": 0.88636,
+        "call_count": 32,
+    },
+    "model_usage": {
+        "gpt-4o-2026-02-01": {
+            "total_tokens": 36321,
+            "total_input_tokens": 21003,
+            "total_output_tokens": 15318,
+            "total_cost": 0.22626,
+            "call_count": 16,
+        },
+        "gpt-4o-mini-2026-02-01": {
+            "total_tokens": 112107,
+            "total_input_tokens": 111408,
+            "total_output_tokens": 699,
+            "total_cost": 0.01884,
+            "call_count": 3,
+        },
+        "gpt-5-2026-02-01": {
+            "total_tokens": 71563,
+            "total_input_tokens": 15170,
+            "total_output_tokens": 56393,
+            "total_cost": 0.64126,
+            "call_count": 13,
+        },
+    },
+    "daily_usage": {
+        "2026-02-24": {
+            "total_tokens": 136905,
+            "total_input_tokens": 122399,
+            "total_output_tokens": 14506,
+            "total_cost": 0.20095,
+            "call_count": 11,
+        },
+        "2026-02-27": {
+            "total_tokens": 83086,
+            "total_input_tokens": 25182,
+            "total_output_tokens": 57904,
+            "total_cost": 0.68541,
+            "call_count": 21,
+        },
+    },
+    "session_history": [],
+}
+
+
+@pytest.fixture()
+def loaded_tracker(tmp_path):
+    """TokenTracker pre-loaded with CURRENT_MONTH_DATA."""
+    import json
+    data_file = tmp_path / "token_usage_testprof.json"
+    data_file.write_text(json.dumps(CURRENT_MONTH_DATA))
+    return TokenTracker("testprof", data_file=str(data_file), monthly_limit=250.0)
+
+
+# ---------------------------------------------------------------------------
+# TokenTracker._get_monthly_budget_status  (past month via archive)
+# ---------------------------------------------------------------------------
+
+class TestMonthlyBudgetStatusPastMonth:
+    """Exercises the branch that reads a past month from an archive file."""
+
+    def test_past_month_usage_reflected_in_status(self, tmp_path):
+        import json
+        data_file = str(tmp_path / "token_usage_testprof.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=250.0)
+
+        archive_path = tmp_path / "2026-02.json"
+        archive_path.write_text(json.dumps(ARCHIVE_FEB_DATA))
+
+        with patch("src.tracking.token_tracker.get_archive_path", return_value=archive_path):
+            status = t._get_monthly_budget_status(month="2026-02")
+
+        assert status["monthly_usage"]["total_tokens"] == 219991
+        assert status["monthly_usage"]["call_count"] == 32
+
+    def test_past_month_usage_percentage_calculated(self, tmp_path):
+        import json
+        data_file = str(tmp_path / "token_usage_testprof.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=250.0)
+
+        archive_path = tmp_path / "2026-02.json"
+        archive_path.write_text(json.dumps(ARCHIVE_FEB_DATA))
+
+        with patch("src.tracking.token_tracker.get_archive_path", return_value=archive_path):
+            status = t._get_monthly_budget_status(month="2026-02")
+
+        # 0.88636 / 250.0 * 100 ≈ 0.35 %
+        assert status["usage_percentage"] == pytest.approx(
+            (0.88636 / 250.0) * 100, rel=1e-3
+        )
+
+    def test_past_month_not_exceeded(self, tmp_path):
+        import json
+        data_file = str(tmp_path / "token_usage_testprof.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=250.0)
+
+        archive_path = tmp_path / "2026-02.json"
+        archive_path.write_text(json.dumps(ARCHIVE_FEB_DATA))
+
+        with patch("src.tracking.token_tracker.get_archive_path", return_value=archive_path):
+            status = t._get_monthly_budget_status(month="2026-02")
+
+        assert status["is_exceeded"] is False
+
+
+# ---------------------------------------------------------------------------
+# TokenTracker.print_usage_report
+# ---------------------------------------------------------------------------
+
+class TestPrintUsageReport:
+
+    # --- current month -------------------------------------------------------
+
+    def test_current_month_report_contains_professor(self, loaded_tracker, capsys):
+        loaded_tracker.print_usage_report()
+        out = capsys.readouterr().out
+        assert "TESTPROF" in out
+
+    def test_current_month_total_tokens_shown(self, loaded_tracker, capsys):
+        loaded_tracker.print_usage_report()
+        out = capsys.readouterr().out
+        assert "18,177" in out
+
+    def test_current_month_total_cost_shown(self, loaded_tracker, capsys):
+        loaded_tracker.print_usage_report()
+        out = capsys.readouterr().out
+        assert "0.0855" in out or "0.0854" in out  # allow rounding
+
+    def test_current_month_model_breakdown_shown(self, loaded_tracker, capsys):
+        loaded_tracker.print_usage_report()
+        out = capsys.readouterr().out
+        assert "gpt-4o-2026-03-01" in out
+
+    def test_current_month_no_all_time_section_by_default(self, loaded_tracker, capsys, tmp_path):
+        archive_dir = tmp_path / "no_archives"
+        archive_dir.mkdir()
+        with patch("src.tracking.token_tracker.get_archive_dir", return_value=archive_dir):
+            loaded_tracker.print_usage_report(include_all_time=False)
+        out = capsys.readouterr().out
+        assert "All-Time" not in out
+
+    def test_current_month_all_time_section_shown_when_requested(self, loaded_tracker, capsys, tmp_path):
+        import json
+        archive_dir = tmp_path / "archives"
+        archive_dir.mkdir()
+        (archive_dir / "2026-02.json").write_text(json.dumps(ARCHIVE_FEB_DATA))
+
+        with patch("src.tracking.token_tracker.get_archive_dir", return_value=archive_dir):
+            loaded_tracker.print_usage_report(include_all_time=True)
+        out = capsys.readouterr().out
+        assert "All-Time" in out
+
+    def test_current_month_budget_section_shown(self, loaded_tracker, capsys):
+        loaded_tracker.print_usage_report()
+        out = capsys.readouterr().out
+        assert "Monthly Budget" in out or "Monthly Limit" in out
+
+    def test_today_daily_section_shown_when_usage_exists(self, loaded_tracker, capsys):
+        from datetime import datetime
+        today = datetime.now().strftime("%Y-%m-%d")
+        # inject today's usage so the daily block is printed
+        loaded_tracker.usage_data["daily_usage"][today] = {
+            "total_tokens": 500,
+            "total_input_tokens": 300,
+            "total_output_tokens": 200,
+            "total_cost": 0.02,
+            "call_count": 1,
+        }
+        loaded_tracker.print_usage_report()
+        out = capsys.readouterr().out
+        assert "500" in out
+
+    # --- archived month ------------------------------------------------------
+
+    def test_archived_month_report_contains_month_label(self, tmp_path, capsys):
+        import json
+        data_file = str(tmp_path / "token_usage_testprof.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=250.0)
+
+        archive_path = tmp_path / "2026-02.json"
+        archive_path.write_text(json.dumps(ARCHIVE_FEB_DATA))
+
+        with patch("src.tracking.token_tracker.get_archive_path", return_value=archive_path):
+            t.print_usage_report(month="2026-02")
+        out = capsys.readouterr().out
+        assert "2026-02" in out
+
+    def test_archived_month_total_tokens_shown(self, tmp_path, capsys):
+        import json
+        data_file = str(tmp_path / "token_usage_testprof.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=250.0)
+
+        archive_path = tmp_path / "2026-02.json"
+        archive_path.write_text(json.dumps(ARCHIVE_FEB_DATA))
+
+        with patch("src.tracking.token_tracker.get_archive_path", return_value=archive_path):
+            t.print_usage_report(month="2026-02")
+        out = capsys.readouterr().out
+        assert "219,991" in out
+
+    def test_archived_month_multi_model_breakdown_shown(self, tmp_path, capsys):
+        import json
+        data_file = str(tmp_path / "token_usage_testprof.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=250.0)
+
+        archive_path = tmp_path / "2026-02.json"
+        archive_path.write_text(json.dumps(ARCHIVE_FEB_DATA))
+
+        with patch("src.tracking.token_tracker.get_archive_path", return_value=archive_path):
+            t.print_usage_report(month="2026-02")
+        out = capsys.readouterr().out
+        assert "gpt-5-2026-02-01" in out
+        assert "gpt-4o-mini-2026-02-01" in out
+
+    def test_archived_month_daily_breakdown_shown(self, tmp_path, capsys):
+        import json
+        data_file = str(tmp_path / "token_usage_testprof.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=250.0)
+
+        archive_path = tmp_path / "2026-02.json"
+        archive_path.write_text(json.dumps(ARCHIVE_FEB_DATA))
+
+        with patch("src.tracking.token_tracker.get_archive_path", return_value=archive_path):
+            t.print_usage_report(month="2026-02")
+        out = capsys.readouterr().out
+        assert "2026-02-24" in out
+        assert "2026-02-27" in out
+
+    def test_archived_month_missing_prints_not_found(self, tmp_path, capsys):
+        import json
+        data_file = str(tmp_path / "token_usage_testprof.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=250.0)
+
+        non_existent = tmp_path / "1999-01.json"
+        archive_dir = tmp_path / "archives"
+        archive_dir.mkdir()
+
+        with patch("src.tracking.token_tracker.get_archive_path", return_value=non_existent), \
+             patch("src.tracking.token_tracker.get_archive_dir", return_value=archive_dir):
+            t.print_usage_report(month="1999-01")
+        out = capsys.readouterr().out
+        assert "No archive found" in out
