@@ -2,14 +2,59 @@
 
 import argparse
 import logging
+import os
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
-from ..config import load_model_catalog, get_pricing_unit
+from ..config import load_model_catalog, get_pricing_unit, load_professor_config
 from ..errors import CLIError
-from ..tracking.token_tracker import TokenTracker
+from ..tracking.token_tracker import TokenTracker, get_usage_data_path, get_archive_dir
 
 logger = logging.getLogger(__name__)
+
+
+def show_professor_config() -> None:
+    """Display current professor configuration and data-file status."""
+    professors = load_professor_config()
+
+    if not professors:
+        print("No professors configured in .env file.")
+        print("Add entries in the format:")
+        print("  PROF_[ID]_NAME=Professor Name")
+        print("  PROF_[ID]_KEY=api_key")
+        print("  PROF_[ID]_BACKUP_KEY=backup_api_key")
+        return
+
+    print("\nCurrent Professor Configuration:")
+    print("=" * 60)
+
+    for safe_name, prof in professors.items():
+        primary_set = "set" if os.environ.get(prof['primary_key']) else "NOT SET"
+        backup_set = "set" if os.environ.get(prof['backup_key']) else "not set"
+
+        # Data file on disk
+        usage_path = get_usage_data_path(safe_name)
+        usage_exists = usage_path.exists()
+        usage_label = str(usage_path) if usage_exists else f"{usage_path}  (not yet created)"
+
+        # Archived months
+        archive_dir = get_archive_dir(safe_name)
+        archived_months = sorted(p.stem for p in archive_dir.glob("*.json")) if archive_dir.exists() else []
+
+        print(f"\n  {prof['name']}")
+        print(f"    Safe name:    {safe_name}")
+        print(f"    Primary key:  {prof['primary_key']} ({primary_set})")
+        print(f"    Backup key:   {prof['backup_key']} ({backup_set})")
+        print(f"    Usage file:   {usage_label}")
+        if archived_months:
+            print(f"    Archives:     {', '.join(archived_months)}")
+        else:
+            print(f"    Archives:     none")
+
+    print("\n" + "=" * 60)
+    print("Usage: python main.py <professor> <command> [options]")
+    print("       python main.py --help")
 
 
 def list_available_models() -> None:
@@ -53,6 +98,10 @@ def _print_daily_usage(token_tracker: TokenTracker, professor_name: str, date: O
 def handle_info_commands(args: argparse.Namespace) -> bool:
     """Handle info/reporting commands without API-key dependent runtime initialization."""
     # Global info commands (no professor required)
+    if getattr(args, 'show_config', False):
+        show_professor_config()
+        return True
+
     if args.list_models:
         list_available_models()
         return True

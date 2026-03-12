@@ -91,6 +91,7 @@ class TestMainNoCommand:
 
     def _make_args_professor_only(self):
         return Namespace(
+            show_config=False,
             list_models=False,
             update_pricing=None,
             professor="heller",
@@ -186,6 +187,7 @@ class TestMainUnknownCommand:
     def test_unknown_command_exits_with_code_1(self):
         # Inject a fake Namespace with an unrecognised command to bypass argparse
         fake_args = Namespace(
+            show_config=False,
             list_models=False,
             update_pricing=None,
             professor="heller",
