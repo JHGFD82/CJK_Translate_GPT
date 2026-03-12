@@ -1,0 +1,479 @@
+#!/usr/bin/env python3
+"""
+Standalone usage visualizer for the CJK Translation Toolkit.
+Reads data/ and data/archives/, generates an interactive HTML report,
+and opens it in the default browser.
+
+Usage:
+    python data/visualize_usage.py
+    python data/visualize_usage.py --no-open   # generate file, print path only
+"""
+
+import json
+import os
+import re
+import sys
+import webbrowser
+import tempfile
+from pathlib import Path
+from datetime import datetime
+from collections import defaultdict
+
+DATA_DIR = Path(__file__).parent
+ARCHIVES_DIR = DATA_DIR / "archives"
+
+# --- Color palettes -----------------------------------------------------------
+
+PROF_COLORS = [
+    "#4e79a7", "#f28e2b", "#e15759", "#76b7b2",
+    "#59a14f", "#edc948", "#b07aa1", "#ff9da7",
+]
+
+MODEL_PALETTE = [
+    "#4e79a7", "#f28e2b", "#e15759", "#76b7b2",
+    "#59a14f", "#edc948", "#b07aa1", "#ff9da7",
+]
+
+# --- Data loading -------------------------------------------------------------
+
+def clean_model_name(name: str) -> str:
+    """Strip date suffixes: 'gpt-4o-2024-08-06' → 'gpt-4o'."""
+    return re.sub(r"-\d{4}-\d{2}-\d{2}$", "", name)
+
+
+def load_all_data() -> dict:
+    """Return {professor_safe_name: {YYYY-MM: month_dict}}."""
+    result: dict = {}
+
+    # Active (current-month) files
+    for active_file in sorted(DATA_DIR.glob("token_usage_*.json")):
+        prof = active_file.stem.replace("token_usage_", "")
+        with open(active_file, encoding="utf-8") as f:
+            data = json.load(f)
+        result.setdefault(prof, {})[data["month"]] = data
+
+    # Archived months
+    if ARCHIVES_DIR.exists():
+        for prof_dir in sorted(ARCHIVES_DIR.iterdir()):
+            if not prof_dir.is_dir():
+                continue
+            prof = prof_dir.name
+            for archive_file in sorted(prof_dir.glob("*.json")):
+                month = archive_file.stem
+                with open(archive_file, encoding="utf-8") as f:
+                    data = json.load(f)
+                result.setdefault(prof, {})[month] = data
+
+    return result
+
+
+def get_all_months(all_data: dict) -> list:
+    months: set = set()
+    for prof_data in all_data.values():
+        months.update(prof_data.keys())
+    return sorted(months)
+
+
+# --- Summary stats ------------------------------------------------------------
+
+def compute_summary(all_data: dict) -> dict:
+    total_cost = 0.0
+    total_tokens = 0
+    total_calls = 0
+    for prof_data in all_data.values():
+        for month_data in prof_data.values():
+            u = month_data.get("total_usage", {})
+            total_cost += u.get("total_cost", 0)
+            total_tokens += u.get("total_tokens", 0)
+            total_calls += u.get("call_count", 0)
+    return {
+        "total_cost": round(total_cost, 4),
+        "total_tokens": total_tokens,
+        "total_calls": total_calls,
+        "professors": sorted(all_data.keys()),
+        "month_span": f"{get_all_months(all_data)[0]} → {get_all_months(all_data)[-1]}"
+                      if all_data else "—",
+    }
+
+
+# --- Chart data builders ------------------------------------------------------
+
+def build_charts_data(all_data: dict) -> dict:
+    months = get_all_months(all_data)
+    professors = sorted(all_data.keys())
+
+    # 1. Monthly cost — one series per professor (for stacked bar)
+    monthly_cost_by_prof: dict = {}
+    for prof in professors:
+        monthly_cost_by_prof[prof] = [
+            round(all_data[prof].get(m, {}).get("total_usage", {}).get("total_cost", 0), 4)
+            for m in months
+        ]
+
+    # 2. Monthly token volume — input vs output, all professors combined
+    monthly_input: list = []
+    monthly_output: list = []
+    for m in months:
+        inp = sum(
+            all_data[p].get(m, {}).get("total_usage", {}).get("total_input_tokens", 0)
+            for p in professors
+        )
+        out = sum(
+            all_data[p].get(m, {}).get("total_usage", {}).get("total_output_tokens", 0)
+            for p in professors
+        )
+        monthly_input.append(round(inp / 1000, 1))
+        monthly_output.append(round(out / 1000, 1))
+
+    # 3. Daily cost for current month — one series per professor
+    current_month = datetime.now().strftime("%Y-%m")
+    daily_dates: set = set()
+    for prof in professors:
+        daily_dates.update(
+            all_data[prof].get(current_month, {}).get("daily_usage", {}).keys()
+        )
+    daily_dates_sorted = sorted(daily_dates)
+
+    daily_cost_by_prof: dict = {}
+    for prof in professors:
+        daily = all_data[prof].get(current_month, {}).get("daily_usage", {})
+        daily_cost_by_prof[prof] = [
+            round(daily.get(d, {}).get("total_cost", 0), 4)
+            for d in daily_dates_sorted
+        ]
+
+    # 4. Model share — all-time cost per model
+    model_totals: dict = defaultdict(float)
+    for prof_data in all_data.values():
+        for month_data in prof_data.values():
+            for raw_model, stats in month_data.get("model_usage", {}).items():
+                model_totals[clean_model_name(raw_model)] += stats.get("total_cost", 0)
+    model_labels = sorted(model_totals.keys())
+    model_values = [round(model_totals[k], 4) for k in model_labels]
+
+    return {
+        "months": months,
+        "professors": professors,
+        "monthly_cost_by_prof": monthly_cost_by_prof,
+        "monthly_input": monthly_input,
+        "monthly_output": monthly_output,
+        "current_month": current_month,
+        "daily_dates": [d[5:] for d in daily_dates_sorted],   # strip YYYY- prefix
+        "daily_cost_by_prof": daily_cost_by_prof,
+        "model_labels": model_labels,
+        "model_values": model_values,
+    }
+
+
+# --- HTML generation ----------------------------------------------------------
+
+HTML_TEMPLATE = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CJK Toolkit — Usage Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f6fa;
+    color: #333;
+    padding: 24px;
+  }}
+  h1 {{
+    font-size: 1.6rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #1a1a2e;
+  }}
+  .subtitle {{
+    font-size: 0.85rem;
+    color: #666;
+    margin-bottom: 24px;
+  }}
+  .summary-grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+  }}
+  .stat-card {{
+    background: #fff;
+    border-radius: 10px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }}
+  .stat-card .value {{
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: #4e79a7;
+    line-height: 1.1;
+  }}
+  .stat-card .label {{
+    font-size: 0.78rem;
+    color: #888;
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }}
+  .charts-grid {{
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }}
+  @media (max-width: 900px) {{
+    .charts-grid {{ grid-template-columns: 1fr; }}
+  }}
+  .chart-card {{
+    background: #fff;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }}
+  .chart-card h2 {{
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }}
+  canvas {{ max-height: 280px; }}
+  footer {{
+    margin-top: 24px;
+    font-size: 0.75rem;
+    color: #aaa;
+    text-align: center;
+  }}
+</style>
+</head>
+<body>
+
+<h1>CJK Translation Toolkit — Usage Dashboard</h1>
+<p class="subtitle">Generated {generated_at} &nbsp;·&nbsp; Data range: {month_span}</p>
+
+<div class="summary-grid">
+  <div class="stat-card">
+    <div class="value">${total_cost}</div>
+    <div class="label">Total spend</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">{total_tokens_k}K</div>
+    <div class="label">Total tokens</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">{total_calls}</div>
+    <div class="label">API calls</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">{num_professors}</div>
+    <div class="label">Professors</div>
+  </div>
+</div>
+
+<div class="charts-grid">
+
+  <div class="chart-card">
+    <h2>Monthly cost by professor</h2>
+    <canvas id="monthlyCostChart"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Monthly token volume (K tokens)</h2>
+    <canvas id="tokenVolumeChart"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Daily cost — {current_month}</h2>
+    <canvas id="dailyCostChart"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>All-time cost by model</h2>
+    <canvas id="modelShareChart"></canvas>
+  </div>
+
+</div>
+
+<footer>Princeton University AI Sandbox &nbsp;·&nbsp; CJK Translation Toolkit</footer>
+
+<script>
+const PROF_COLORS = {prof_colors_json};
+const MODEL_PALETTE = {model_palette_json};
+const DATA = {charts_data_json};
+
+// Shared tick formatter
+const usdFormatter = v => '$' + v.toFixed(4);
+const usdTooltip = {{
+  callbacks: {{
+    label: ctx => ' ' + ctx.dataset.label + ': $' + ctx.parsed.y.toFixed(4)
+  }}
+}};
+
+// 1. Monthly cost stacked bar
+new Chart(document.getElementById('monthlyCostChart'), {{
+  type: 'bar',
+  data: {{
+    labels: DATA.months,
+    datasets: DATA.professors.map((prof, i) => ({{
+      label: prof,
+      data: DATA.monthly_cost_by_prof[prof],
+      backgroundColor: PROF_COLORS[i % PROF_COLORS.length],
+      borderRadius: 3,
+    }}))
+  }},
+  options: {{
+    responsive: true,
+    plugins: {{
+      legend: {{ position: 'bottom', labels: {{ boxWidth: 12, font: {{ size: 11 }} }} }},
+      tooltip: usdTooltip,
+    }},
+    scales: {{
+      x: {{ stacked: true, ticks: {{ font: {{ size: 10 }} }} }},
+      y: {{ stacked: true, ticks: {{ callback: usdFormatter, font: {{ size: 10 }} }} }},
+    }}
+  }}
+}});
+
+// 2. Token volume grouped bar
+new Chart(document.getElementById('tokenVolumeChart'), {{
+  type: 'bar',
+  data: {{
+    labels: DATA.months,
+    datasets: [
+      {{
+        label: 'Input tokens',
+        data: DATA.monthly_input,
+        backgroundColor: '#4e79a7cc',
+        borderRadius: 3,
+      }},
+      {{
+        label: 'Output tokens',
+        data: DATA.monthly_output,
+        backgroundColor: '#f28e2bcc',
+        borderRadius: 3,
+      }}
+    ]
+  }},
+  options: {{
+    responsive: true,
+    plugins: {{
+      legend: {{ position: 'bottom', labels: {{ boxWidth: 12, font: {{ size: 11 }} }} }},
+      tooltip: {{ callbacks: {{ label: ctx => ' ' + ctx.dataset.label + ': ' + ctx.parsed.y + 'K' }} }},
+    }},
+    scales: {{
+      x: {{ ticks: {{ font: {{ size: 10 }} }} }},
+      y: {{ ticks: {{ callback: v => v + 'K', font: {{ size: 10 }} }} }},
+    }}
+  }}
+}});
+
+// 3. Daily cost line chart
+new Chart(document.getElementById('dailyCostChart'), {{
+  type: 'line',
+  data: {{
+    labels: DATA.daily_dates,
+    datasets: DATA.professors.map((prof, i) => ({{
+      label: prof,
+      data: DATA.daily_cost_by_prof[prof],
+      borderColor: PROF_COLORS[i % PROF_COLORS.length],
+      backgroundColor: PROF_COLORS[i % PROF_COLORS.length] + '22',
+      tension: 0.3,
+      fill: true,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+    }}))
+  }},
+  options: {{
+    responsive: true,
+    plugins: {{
+      legend: {{ position: 'bottom', labels: {{ boxWidth: 12, font: {{ size: 11 }} }} }},
+      tooltip: usdTooltip,
+    }},
+    scales: {{
+      x: {{ ticks: {{ font: {{ size: 10 }} }} }},
+      y: {{ ticks: {{ callback: usdFormatter, font: {{ size: 10 }} }} }},
+    }}
+  }}
+}});
+
+// 4. Model share doughnut
+new Chart(document.getElementById('modelShareChart'), {{
+  type: 'doughnut',
+  data: {{
+    labels: DATA.model_labels,
+    datasets: [{{
+      data: DATA.model_values,
+      backgroundColor: DATA.model_labels.map((_, i) => MODEL_PALETTE[i % MODEL_PALETTE.length]),
+      borderWidth: 2,
+      borderColor: '#fff',
+    }}]
+  }},
+  options: {{
+    responsive: true,
+    cutout: '60%',
+    plugins: {{
+      legend: {{ position: 'bottom', labels: {{ boxWidth: 12, font: {{ size: 11 }} }} }},
+      tooltip: {{
+        callbacks: {{
+          label: ctx => ' ' + ctx.label + ': $' + ctx.parsed.toFixed(4)
+        }}
+      }},
+    }}
+  }}
+}});
+</script>
+</body>
+</html>
+"""
+
+
+def generate_html(summary: dict, charts_data: dict) -> str:
+    return HTML_TEMPLATE.format(
+        generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
+        month_span=summary["month_span"],
+        total_cost=f"{summary['total_cost']:.4f}",
+        total_tokens_k=f"{summary['total_tokens'] / 1000:.1f}",
+        total_calls=summary["total_calls"],
+        num_professors=len(summary["professors"]),
+        current_month=charts_data["current_month"],
+        prof_colors_json=json.dumps(PROF_COLORS),
+        model_palette_json=json.dumps(MODEL_PALETTE),
+        charts_data_json=json.dumps(charts_data, ensure_ascii=False),
+    )
+
+
+# --- Entry point --------------------------------------------------------------
+
+def main():
+    no_open = "--no-open" in sys.argv
+
+    print("Loading usage data...")
+    all_data = load_all_data()
+
+    if not all_data:
+        print("No usage data found in", DATA_DIR)
+        sys.exit(1)
+
+    professors = sorted(all_data.keys())
+    total_months = len(get_all_months(all_data))
+    print(f"  Found {len(professors)} professor(s): {', '.join(professors)}")
+    print(f"  Covering {total_months} month(s)")
+
+    summary = compute_summary(all_data)
+    charts_data = build_charts_data(all_data)
+    html = generate_html(summary, charts_data)
+
+    out_path = DATA_DIR / "usage_report.html"
+    out_path.write_text(html, encoding="utf-8")
+    print(f"  Report written to: {out_path}")
+
+    if not no_open:
+        webbrowser.open(out_path.as_uri())
+        print("  Opening in browser...")
+
+
+if __name__ == "__main__":
+    main()

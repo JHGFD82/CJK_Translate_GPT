@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CJK Toolkit — Usage Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f6fa;
+    color: #333;
+    padding: 24px;
+  }
+  h1 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #1a1a2e;
+  }
+  .subtitle {
+    font-size: 0.85rem;
+    color: #666;
+    margin-bottom: 24px;
+  }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .stat-card .value {
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: #4e79a7;
+    line-height: 1.1;
+  }
+  .stat-card .label {
+    font-size: 0.78rem;
+    color: #888;
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+  @media (max-width: 900px) {
+    .charts-grid { grid-template-columns: 1fr; }
+  }
+  .chart-card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .chart-card h2 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  canvas { max-height: 280px; }
+  footer {
+    margin-top: 24px;
+    font-size: 0.75rem;
+    color: #aaa;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>CJK Translation Toolkit — Usage Dashboard</h1>
+<p class="subtitle">Generated 2026-03-12 15:23 &nbsp;·&nbsp; Data range: 2025-07 → 2026-03</p>
+
+<div class="summary-grid">
+  <div class="stat-card">
+    <div class="value">$16.9178</div>
+    <div class="label">Total spend</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">3428.4K</div>
+    <div class="label">Total tokens</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">1733</div>
+    <div class="label">API calls</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">2</div>
+    <div class="label">Professors</div>
+  </div>
+</div>
+
+<div class="charts-grid">
+
+  <div class="chart-card">
+    <h2>Monthly cost by professor</h2>
+    <canvas id="monthlyCostChart"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Monthly token volume (K tokens)</h2>
+    <canvas id="tokenVolumeChart"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>Daily cost — 2026-03</h2>
+    <canvas id="dailyCostChart"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h2>All-time cost by model</h2>
+    <canvas id="modelShareChart"></canvas>
+  </div>
+
+</div>
+
+<footer>Princeton University AI Sandbox &nbsp;·&nbsp; CJK Translation Toolkit</footer>
+
+<script>
+const PROF_COLORS = ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#edc948", "#b07aa1", "#ff9da7"];
+const MODEL_PALETTE = ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#edc948", "#b07aa1", "#ff9da7"];
+const DATA = {"months": ["2025-07", "2025-09", "2025-10", "2025-11", "2026-01", "2026-02", "2026-03"], "professors": ["conlan", "heller"], "monthly_cost_by_prof": {"conlan": [7.8311, 5.5125, 0.4171, 0.5427, 0.8754, 0.5006, 0.2213], "heller": [0, 0, 0, 0, 0, 0.8864, 0.1308]}, "monthly_input": [1062.3, 785.1, 66.8, 75.9, 127.4, 224.5, 60.6], "monthly_output": [505.6, 304.9, 21.2, 30.4, 47.7, 99.2, 16.9], "current_month": "2026-03", "daily_dates": ["03-03", "03-05", "03-11", "03-12"], "daily_cost_by_prof": {"conlan": [0.2213, 0, 0, 0], "heller": [0, 0.0186, 0.0668, 0.0453]}, "model_labels": ["gpt-4o", "gpt-4o-mini", "gpt-5"], "model_values": [16.2482, 0.0283, 0.6413]};
+
+// Shared tick formatter
+const usdFormatter = v => '$' + v.toFixed(4);
+const usdTooltip = {
+  callbacks: {
+    label: ctx => ' ' + ctx.dataset.label + ': $' + ctx.parsed.y.toFixed(4)
+  }
+};
+
+// 1. Monthly cost stacked bar
+new Chart(document.getElementById('monthlyCostChart'), {
+  type: 'bar',
+  data: {
+    labels: DATA.months,
+    datasets: DATA.professors.map((prof, i) => ({
+      label: prof,
+      data: DATA.monthly_cost_by_prof[prof],
+      backgroundColor: PROF_COLORS[i % PROF_COLORS.length],
+      borderRadius: 3,
+    }))
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+      tooltip: usdTooltip,
+    },
+    scales: {
+      x: { stacked: true, ticks: { font: { size: 10 } } },
+      y: { stacked: true, ticks: { callback: usdFormatter, font: { size: 10 } } },
+    }
+  }
+});
+
+// 2. Token volume grouped bar
+new Chart(document.getElementById('tokenVolumeChart'), {
+  type: 'bar',
+  data: {
+    labels: DATA.months,
+    datasets: [
+      {
+        label: 'Input tokens',
+        data: DATA.monthly_input,
+        backgroundColor: '#4e79a7cc',
+        borderRadius: 3,
+      },
+      {
+        label: 'Output tokens',
+        data: DATA.monthly_output,
+        backgroundColor: '#f28e2bcc',
+        borderRadius: 3,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+      tooltip: { callbacks: { label: ctx => ' ' + ctx.dataset.label + ': ' + ctx.parsed.y + 'K' } },
+    },
+    scales: {
+      x: { ticks: { font: { size: 10 } } },
+      y: { ticks: { callback: v => v + 'K', font: { size: 10 } } },
+    }
+  }
+});
+
+// 3. Daily cost line chart
+new Chart(document.getElementById('dailyCostChart'), {
+  type: 'line',
+  data: {
+    labels: DATA.daily_dates,
+    datasets: DATA.professors.map((prof, i) => ({
+      label: prof,
+      data: DATA.daily_cost_by_prof[prof],
+      borderColor: PROF_COLORS[i % PROF_COLORS.length],
+      backgroundColor: PROF_COLORS[i % PROF_COLORS.length] + '22',
+      tension: 0.3,
+      fill: true,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+    }))
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+      tooltip: usdTooltip,
+    },
+    scales: {
+      x: { ticks: { font: { size: 10 } } },
+      y: { ticks: { callback: usdFormatter, font: { size: 10 } } },
+    }
+  }
+});
+
+// 4. Model share doughnut
+new Chart(document.getElementById('modelShareChart'), {
+  type: 'doughnut',
+  data: {
+    labels: DATA.model_labels,
+    datasets: [{
+      data: DATA.model_values,
+      backgroundColor: DATA.model_labels.map((_, i) => MODEL_PALETTE[i % MODEL_PALETTE.length]),
+      borderWidth: 2,
+      borderColor: '#fff',
+    }]
+  },
+  options: {
+    responsive: true,
+    cutout: '60%',
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+      tooltip: {
+        callbacks: {
+          label: ctx => ' ' + ctx.label + ': $' + ctx.parsed.toFixed(4)
+        }
+      },
+    }
+  }
+});
+</script>
+</body>
+</html>
