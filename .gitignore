@@ -35,5 +35,10 @@ data/token_usage_*.json
 data/archives/*
 !data/README.md
 
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+
 # OS
 Thumbs.db
