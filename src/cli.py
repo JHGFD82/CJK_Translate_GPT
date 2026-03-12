@@ -155,6 +155,12 @@ Transcription (OCR):
     )
     translate_parser.add_argument('-f', '--font', dest='custom_font', type=str, help='Custom font name (must be in fonts/)')
     translate_parser.add_argument('-m', '--model', dest='model', type=str, help='Model to use (e.g., gpt-4o, gpt-4o-mini)')
+    translate_parser.add_argument(
+        '--dry-run',
+        dest='dry_run',
+        action='store_true',
+        help='Print the prompt(s) that would be sent to the model without making any API calls',
+    )
 
     # ===== TRANSCRIBE COMMAND =====
     transcribe_parser = subparsers.add_parser('transcribe', help='Transcribe images using OCR')
@@ -167,6 +173,12 @@ Transcription (OCR):
     transcribe_parser.add_argument('-o', '--output', dest='output_file', type=str, help='Output file path')
     transcribe_parser.add_argument('-m', '--model', dest='model', type=str, help='Model to use (e.g., gpt-4o, gpt-4o-mini)')
     transcribe_parser.add_argument('-v', '--vertical', dest='vertical', action='store_true', help='Text is predominantly vertical (top-to-bottom, right-to-left columns)')
+    transcribe_parser.add_argument(
+        '--dry-run',
+        dest='dry_run',
+        action='store_true',
+        help='Print the prompt(s) that would be sent to the model without making any API calls',
+    )
 
     return parser
 
