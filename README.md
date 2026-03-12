@@ -268,7 +268,7 @@ pip install -r requirements.txt
    - Full names (if they contain spaces, use quotes: `"john smith"`)
    - Safe names (spaces converted to underscores: `john_smith`)
    
-   Run `python show_config.py` to see available professors and their safe names.
+   Run `python main.py --show-config` to see available professors and their safe names.
 
 ## Token Usage Tracking
 
