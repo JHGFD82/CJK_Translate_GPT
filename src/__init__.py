@@ -1,5 +1,5 @@
 """
-CJK Translation Package
+PU AI Sandbox
 
 This package provides tools for translating documents and custom text
 between Chinese, Japanese, Korean, and English using the Princeton AI Sandbox.

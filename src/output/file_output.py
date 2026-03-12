@@ -1,5 +1,5 @@
 """
-File output utilities for the CJK Translation script.
+File output utilities for the PU AI Sandbox.
 """
 
 import logging

@@ -1,4 +1,4 @@
-# CJK Translation GPT - AI Coding Assistant Instructions
+# PU AI Sandbox - AI Coding Assistant Instructions
 
 ## Project Overview
 Academic translation tool for Princeton University faculty to translate between Chinese, Japanese, Korean, and English using Azure OpenAI API. Features professor-specific API key management, per-professor token tracking, and privacy-friendly configuration.

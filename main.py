@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CJK Translation Script
+PU AI Sandbox
 
 This script extracts text from a PDF file and translates it between different languages using the GPT engine. 
 It supports translation between Chinese, Japanese, Korean, and English in any direction.

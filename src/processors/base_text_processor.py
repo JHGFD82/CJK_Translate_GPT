@@ -1,5 +1,5 @@
 """
-Base text processing utilities for the CJK Translation script.
+Base text processing utilities for the PU AI Sandbox.
 Contains shared functionality for processing text-based documents.
 """
 

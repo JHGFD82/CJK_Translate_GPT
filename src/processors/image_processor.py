@@ -1,5 +1,5 @@
 """
-Image file processing utilities for the CJK Translation script.
+Image file processing utilities for the PU AI Sandbox.
 """
 
 import os

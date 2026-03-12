@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Standalone usage visualizer for the CJK Translation Toolkit.
+Standalone usage visualizer for the PU AI Sandbox.
 Reads data/ and data/archives/, generates an interactive HTML report,
 and opens it in the default browser.
 
@@ -251,7 +251,7 @@ HTML_TEMPLATE = """\
 </head>
 <body>
 
-<h1>CJK Translation Toolkit — Usage Dashboard</h1>
+<h1>PU AI Sandbox — Usage Dashboard</h1>
 <p class="subtitle">Generated {generated_at} &nbsp;·&nbsp; Data range: {month_span}</p>
 
 <div class="summary-grid">
@@ -297,7 +297,7 @@ HTML_TEMPLATE = """\
 
 </div>
 
-<footer>Princeton University AI Sandbox &nbsp;·&nbsp; CJK Translation Toolkit</footer>
+<footer>Princeton University AI Sandbox</footer>
 
 <script>
 const PROF_COLORS = {prof_colors_json};
