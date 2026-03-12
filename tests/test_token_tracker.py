@@ -1,6 +1,7 @@
 """
 Tests for token tracking data structures and math:
   - UsageStats.add_usage, merge_dict, to_dict
+  - TokenTracker.__init__ (default data_file path)
   - TokenTracker._update_stats
   - TokenTracker._calculate_costs  (mocked pricing)
   - TokenTracker._get_monthly_budget_status  (current and past months)
@@ -13,12 +14,14 @@ Tests for token tracking data structures and math:
   - TokenTracker.record_usage
   - TokenTracker.get_daily_usage / get_monthly_usage / get_all_time_usage
   - TokenTracker.list_archived_months
+  - TokenTracker.print_usage_report (current month, archives, budget warnings, no-archive message)
   - TokenTracker.update_pricing
 
 No API calls, no cloud I/O; disk writes are directed to tmp_path.
 """
 
 import json
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -1031,3 +1034,111 @@ class TestPrintUsageReport:
             t.print_usage_report(month="1999-01")
         out = capsys.readouterr().out
         assert "No archive found" in out
+
+
+# ---------------------------------------------------------------------------
+# TokenTracker.__init__ — else branch (line 133):
+#   self.data_file = get_usage_data_path(professor)
+# ---------------------------------------------------------------------------
+
+
+class TestInitDefaultDataFilePath:
+    """Verify that omitting data_file triggers the else branch (line 133)."""
+
+    def test_data_file_set_via_get_usage_data_path_when_none_provided(self, tmp_path):
+        expected_path = tmp_path / "token_usage_testprof.json"
+
+        with patch("src.tracking.token_tracker.get_usage_data_path",
+                   return_value=expected_path) as mock_path, \
+             patch("src.tracking.token_tracker.get_monthly_limit", return_value=100.0):
+            t = TokenTracker("testprof")  # no data_file argument
+
+        mock_path.assert_called_once_with("testprof")
+        assert t.data_file == expected_path
+
+    def test_data_file_is_path_object_when_not_provided(self, tmp_path):
+        expected_path = tmp_path / "token_usage_testprof.json"
+
+        with patch("src.tracking.token_tracker.get_usage_data_path",
+                   return_value=expected_path), \
+             patch("src.tracking.token_tracker.get_monthly_limit", return_value=100.0):
+            t = TokenTracker("testprof")
+
+        assert isinstance(t.data_file, Path)
+
+
+# ---------------------------------------------------------------------------
+# print_usage_report — budget warning lines (425, 427)
+# ---------------------------------------------------------------------------
+
+
+class TestPrintUsageReportBudgetWarnings:
+
+    def _make_tracker_with_cost(self, tmp_path, cost: float, limit: float) -> TokenTracker:
+        import json
+        data = {
+            "month": CURRENT_MONTH_DATA["month"],
+            "total_usage": {
+                "total_tokens": 1000,
+                "total_input_tokens": 600,
+                "total_output_tokens": 400,
+                "total_cost": cost,
+                "call_count": 5,
+            },
+            "model_usage": {},
+            "daily_usage": {},
+            "session_history": [],
+        }
+        data_file = tmp_path / "token_usage_warntest.json"
+        data_file.write_text(json.dumps(data))
+        return TokenTracker("warntest", data_file=str(data_file), monthly_limit=limit)
+
+    def test_exceeded_warning_printed_when_cost_exceeds_limit(self, tmp_path, capsys):
+        t = self._make_tracker_with_cost(tmp_path, cost=110.0, limit=100.0)
+        t.print_usage_report()
+        out = capsys.readouterr().out
+        assert "MONTHLY LIMIT EXCEEDED" in out
+
+    def test_approaching_warning_printed_when_above_80_percent(self, tmp_path, capsys):
+        # 85 out of 100 → 85 % → approaching but not exceeded
+        t = self._make_tracker_with_cost(tmp_path, cost=85.0, limit=100.0)
+        t.print_usage_report()
+        out = capsys.readouterr().out
+        assert "Approaching monthly limit" in out
+
+    def test_no_warning_when_well_under_limit(self, tmp_path, capsys):
+        t = self._make_tracker_with_cost(tmp_path, cost=10.0, limit=100.0)
+        t.print_usage_report()
+        out = capsys.readouterr().out
+        assert "EXCEEDED" not in out
+        assert "Approaching" not in out
+
+
+# ---------------------------------------------------------------------------
+# print_usage_report — "no archived months" message (line 443)
+# ---------------------------------------------------------------------------
+
+
+class TestPrintUsageReportNoArchivedMonths:
+
+    def test_no_archives_message_printed_when_include_all_time(self, loaded_tracker, capsys, tmp_path):
+        empty_archive_dir = tmp_path / "empty_archives"
+        empty_archive_dir.mkdir()
+
+        with patch("src.tracking.token_tracker.get_archive_dir", return_value=empty_archive_dir):
+            loaded_tracker.print_usage_report(include_all_time=True)
+
+        out = capsys.readouterr().out
+        assert "No archived months yet" in out
+
+    def test_no_archives_message_not_printed_when_archives_exist(self, loaded_tracker, capsys, tmp_path):
+        import json
+        archive_dir = tmp_path / "has_archives"
+        archive_dir.mkdir()
+        (archive_dir / "2026-02.json").write_text(json.dumps(ARCHIVE_FEB_DATA))
+
+        with patch("src.tracking.token_tracker.get_archive_dir", return_value=archive_dir):
+            loaded_tracker.print_usage_report(include_all_time=True)
+
+        out = capsys.readouterr().out
+        assert "No archived months yet" not in out
