@@ -80,9 +80,10 @@ class TestTranscribeSubcommand:
         with pytest.raises(SystemExit):
             parser.parse_args(["heller", "transcribe", "X", "-i", "scan.png"])
 
-    def test_missing_input_file_exits(self, parser):
-        with pytest.raises(SystemExit):
-            parser.parse_args(["heller", "transcribe", "J"])
+    def test_missing_input_file_is_none(self, parser):
+        # -i is optional at parse time; runtime validation catches the missing file
+        args = parser.parse_args(["heller", "transcribe", "J"])
+        assert args.input_file is None
 
 
 # ---------------------------------------------------------------------------
