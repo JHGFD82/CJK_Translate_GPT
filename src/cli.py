@@ -40,6 +40,7 @@ Usage / reporting:
   python main.py heller usage daily 2026-03-01    Usage for a specific date
 
 Global commands (no professor required):
+  python main.py --show-config
   python main.py --list-models
   python main.py --update-pricing gpt-4o 0.03 0.06
 
@@ -61,6 +62,12 @@ Transcription (OCR):
     )
 
     # Global commands (no professor required)
+    parser.add_argument(
+        '--show-config',
+        dest='show_config',
+        action='store_true',
+        help='Show professor configuration and data-file status',
+    )
     parser.add_argument(
         '--list-models',
         dest='list_models',
@@ -192,7 +199,7 @@ def main() -> None:
         args = parser.parse_args()
 
         # Handle global commands (no professor required)
-        if args.list_models or args.update_pricing:
+        if args.show_config or args.list_models or args.update_pricing:
             if handle_info_commands(args):
                 return
 
@@ -207,7 +214,7 @@ def main() -> None:
                 "  usage daily [YYYY-MM-DD]             Daily usage\n"
                 "  translate <code> -i <file>           Translate a document\n"
                 "  transcribe <lang> -i <image>         OCR an image\n"
-                "\nOr for global commands: python main.py --list-models"
+                "\nOr for global commands: python main.py --show-config | --list-models"
             )
 
         # Handle professor-specific commands
