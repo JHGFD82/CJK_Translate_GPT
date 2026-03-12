@@ -1,5 +1,5 @@
 """
-Shared pytest fixtures for the CJK Translation test suite.
+Shared pytest fixtures for the PU AI Sandbox test suite.
 
 All services are instantiated with a fake API key and a mocked TokenTracker so
 no real network calls or file I/O are triggered during tests.

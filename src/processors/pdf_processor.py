@@ -1,5 +1,5 @@
 """
-PDF processing utilities for the CJK Translation script.
+PDF processing utilities for the PU AI Sandbox.
 
 This module provides functionality to extract and process text from PDF files,
 including support for CJK (Chinese, Japanese, Korean) text extraction.

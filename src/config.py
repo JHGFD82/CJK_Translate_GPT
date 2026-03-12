@@ -1,5 +1,5 @@
 """
-Configuration constants for the CJK Translation script.
+Configuration constants for the PU AI Sandbox.
 """
 
 import json

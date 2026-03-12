@@ -1,5 +1,5 @@
 """
-Token usage tracking system for the CJK Translation script.
+Token usage tracking system for the PU AI Sandbox.
 
 Storage layout
 --------------
