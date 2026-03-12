@@ -36,7 +36,7 @@ PROF_[ID]_BACKUP_KEY=backup_key   # Fallback key
 
 ### Adding New Professors
 1. Add to `.env`: `PROF_N_NAME=name`, `PROF_N_KEY=key`, `PROF_N_BACKUP_KEY=backup`
-2. Run `python show_config.py` to verify configuration
+2. Run `python main.py --show-config` to verify configuration
 3. Token tracking files auto-created on first use
 
 ### Testing CLI Changes
@@ -144,7 +144,7 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 - **Logging**: Use structured logging with professor context where applicable
 
 ## Testing Without API Keys
-Use `python show_config.py` to validate professor configuration without making API calls.
+Use `python main.py --show-config` to validate professor configuration without making API calls.
 
 ## Git Commit Workflow
 - A `.gitmessage` template exists at the repo root — always follow its format when writing commits:
