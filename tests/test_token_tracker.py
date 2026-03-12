@@ -4,15 +4,33 @@ Tests for token tracking data structures and math:
   - TokenTracker._update_stats
   - TokenTracker._calculate_costs  (mocked pricing)
   - TokenTracker._get_monthly_budget_status  (mocked usage data)
+  - Module-level path helpers
+  - TokenUsage dataclass
+  - TokenTracker._empty_usage_data
+  - TokenTracker._archive_month
+  - TokenTracker._load_usage_data (including month rollover)
+  - TokenTracker._save_usage_data / _save_usage_data_to
+  - TokenTracker.record_usage
+  - TokenTracker.get_daily_usage / get_monthly_usage / get_all_time_usage
+  - TokenTracker.list_archived_months
+  - TokenTracker.update_pricing
 
 No API calls, no cloud I/O; disk writes are directed to tmp_path.
 """
 
-from unittest.mock import patch
+import json
+from unittest.mock import patch, MagicMock
 
 import pytest
 
-from src.tracking.token_tracker import UsageStats, TokenTracker
+from src.tracking.token_tracker import (
+    UsageStats,
+    TokenTracker,
+    TokenUsage,
+    get_usage_data_path,
+    get_archive_dir,
+    get_archive_path,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -232,3 +250,479 @@ class TestMonthlyBudgetStatus:
         self._set_total_cost(tracker, 10.0)
         status = tracker._get_monthly_budget_status()
         assert "monthly_usage" in status
+
+
+# ---------------------------------------------------------------------------
+# Module-level path helpers
+# ---------------------------------------------------------------------------
+
+class TestPathHelpers:
+
+    def test_get_usage_data_path_filename(self):
+        path = get_usage_data_path("Heller")
+        assert path.name == "token_usage_heller.json"
+
+    def test_get_usage_data_path_lowercases(self):
+        path = get_usage_data_path("SMITH")
+        assert path.name == "token_usage_smith.json"
+
+    def test_get_archive_dir_structure(self):
+        path = get_archive_dir("heller")
+        # Should end with archives/heller
+        assert path.parts[-1] == "heller"
+        assert path.parts[-2] == "archives"
+
+    def test_get_archive_path_filename(self):
+        path = get_archive_path("heller", "2026-01")
+        assert path.name == "2026-01.json"
+        assert path.parts[-2] == "heller"
+
+
+# ---------------------------------------------------------------------------
+# TokenUsage dataclass
+# ---------------------------------------------------------------------------
+
+class TestTokenUsage:
+
+    def test_fields_stored_correctly(self):
+        usage = TokenUsage(
+            model="gpt-4o",
+            prompt_tokens=100,
+            completion_tokens=50,
+            total_tokens=150,
+            timestamp="2026-03-12T10:00:00",
+            input_cost=0.01,
+            output_cost=0.02,
+            total_cost=0.03,
+        )
+        assert usage.model == "gpt-4o"
+        assert usage.prompt_tokens == 100
+        assert usage.completion_tokens == 50
+        assert usage.total_cost == pytest.approx(0.03)
+
+    def test_is_dataclass(self):
+        from dataclasses import fields
+        names = {f.name for f in fields(TokenUsage)}
+        assert names == {
+            "model", "prompt_tokens", "completion_tokens", "total_tokens",
+            "timestamp", "input_cost", "output_cost", "total_cost",
+        }
+
+
+# ---------------------------------------------------------------------------
+# TokenTracker._empty_usage_data
+# ---------------------------------------------------------------------------
+
+class TestEmptyUsageData:
+
+    def test_has_required_keys(self, tracker):
+        data = tracker._empty_usage_data()
+        assert set(data.keys()) == {"month", "total_usage", "model_usage", "daily_usage", "session_history"}
+
+    def test_month_matches_current_month(self, tracker):
+        from datetime import datetime
+        expected = datetime.now().strftime("%Y-%m")
+        assert tracker._empty_usage_data()["month"] == expected
+
+    def test_collections_are_empty(self, tracker):
+        data = tracker._empty_usage_data()
+        assert data["model_usage"] == {}
+        assert data["daily_usage"] == {}
+        assert data["session_history"] == []
+
+    def test_total_usage_is_zero_stats(self, tracker):
+        data = tracker._empty_usage_data()
+        assert data["total_usage"]["total_tokens"] == 0
+        assert data["total_usage"]["total_cost"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# TokenTracker._archive_month / _save_usage_data_to
+# ---------------------------------------------------------------------------
+
+class TestArchiveAndSave:
+
+    def test_archive_writes_json_file(self, tmp_path):
+        data_file = str(tmp_path / "token_usage_test.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=100.0)
+
+        archive_dir = tmp_path / "fake_archives"
+        archive_dir.mkdir()
+        archive_path = archive_dir / "2026-01.json"
+
+        with patch("src.tracking.token_tracker.get_archive_path", return_value=archive_path):
+            t._archive_month({"month": "2026-01", "total": 0}, "2026-01")
+
+        assert archive_path.exists()
+        loaded = json.loads(archive_path.read_text())
+        assert loaded["month"] == "2026-01"
+
+    def test_archive_skips_if_already_exists(self, tmp_path):
+        data_file = str(tmp_path / "token_usage_test.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=100.0)
+
+        archive_dir = tmp_path / "fake_archives"
+        archive_dir.mkdir()
+        archive_path = archive_dir / "2026-01.json"
+        archive_path.write_text(json.dumps({"month": "original"}))
+
+        with patch("src.tracking.token_tracker.get_archive_path", return_value=archive_path):
+            t._archive_month({"month": "NEW"}, "2026-01")
+
+        # File should not have been overwritten
+        assert json.loads(archive_path.read_text())["month"] == "original"
+
+    def test_save_usage_data_to_writes_file(self, tmp_path):
+        data_file = tmp_path / "token_usage_test.json"
+        t = TokenTracker("testprof", data_file=str(data_file), monthly_limit=100.0)
+        sample = {"month": "2026-03", "total_usage": {}, "model_usage": {}, "daily_usage": {}, "session_history": []}
+        t._save_usage_data_to(sample)
+        assert data_file.exists()
+        assert json.loads(data_file.read_text())["month"] == "2026-03"
+
+    def test_save_usage_data_persists_in_memory_state(self, tmp_path):
+        data_file = tmp_path / "token_usage_test.json"
+        t = TokenTracker("testprof", data_file=str(data_file), monthly_limit=100.0)
+        t.usage_data["month"] = "2999-99"  # sentinel
+        t._save_usage_data()
+        assert json.loads(data_file.read_text())["month"] == "2999-99"
+
+
+# ---------------------------------------------------------------------------
+# TokenTracker._load_usage_data  (month rollover)
+# ---------------------------------------------------------------------------
+
+class TestLoadUsageData:
+
+    def test_missing_file_returns_empty_structure(self, tmp_path):
+        data_file = str(tmp_path / "missing.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=100.0)
+        assert t.usage_data["model_usage"] == {}
+        assert t.usage_data["session_history"] == []
+
+    def test_current_month_file_loaded_as_is(self, tmp_path):
+        from datetime import datetime
+        current_month = datetime.now().strftime("%Y-%m")
+        data = {
+            "month": current_month,
+            "total_usage": UsageStats(total_tokens=999).to_dict(),
+            "model_usage": {},
+            "daily_usage": {},
+            "session_history": [],
+        }
+        data_file = tmp_path / "token_usage_test.json"
+        data_file.write_text(json.dumps(data))
+        t = TokenTracker("testprof", data_file=str(data_file), monthly_limit=100.0)
+        assert t.usage_data["total_usage"]["total_tokens"] == 999
+
+    def test_old_month_triggers_rollover(self, tmp_path):
+        stale_data = {
+            "month": "2020-01",
+            "total_usage": UsageStats(total_tokens=42).to_dict(),
+            "model_usage": {},
+            "daily_usage": {},
+            "session_history": [],
+        }
+        data_file = tmp_path / "token_usage_test.json"
+        data_file.write_text(json.dumps(stale_data))
+
+        archive_path = tmp_path / "2020-01.json"
+        with patch("src.tracking.token_tracker.get_archive_path", return_value=archive_path):
+            t = TokenTracker("testprof", data_file=str(data_file), monthly_limit=100.0)
+
+        # Active file should now be a fresh empty month
+        assert t.usage_data["total_usage"]["total_tokens"] == 0
+        # Archive should have been written with the old data
+        assert archive_path.exists()
+        assert json.loads(archive_path.read_text())["total_usage"]["total_tokens"] == 42
+
+
+# ---------------------------------------------------------------------------
+# TokenTracker.record_usage
+# ---------------------------------------------------------------------------
+
+class TestRecordUsage:
+
+    def _make_tracker(self, tmp_path):
+        data_file = str(tmp_path / "token_usage_test.json")
+        return TokenTracker("testprof", data_file=data_file, monthly_limit=100.0)
+
+    def _mock_pricing(self):
+        return (
+            patch("src.tracking.token_tracker.get_pricing_unit", return_value=1_000_000),
+            patch("src.tracking.token_tracker.get_model_pricing",
+                  return_value={"input": 2.0, "output": 8.0}),
+        )
+
+    def test_returns_token_usage_object(self, tmp_path):
+        t = self._make_tracker(tmp_path)
+        p1, p2 = self._mock_pricing()
+        with p1, p2:
+            result = t.record_usage("gpt-4o", 100, 50, 150)
+        assert isinstance(result, TokenUsage)
+        assert result.model == "gpt-4o"
+        assert result.prompt_tokens == 100
+        assert result.completion_tokens == 50
+
+    def test_updates_total_usage(self, tmp_path):
+        t = self._make_tracker(tmp_path)
+        p1, p2 = self._mock_pricing()
+        with p1, p2:
+            t.record_usage("gpt-4o", 200, 100, 300)
+        assert t.usage_data["total_usage"]["total_tokens"] == 300
+        assert t.usage_data["total_usage"]["call_count"] == 1
+
+    def test_updates_model_usage(self, tmp_path):
+        t = self._make_tracker(tmp_path)
+        p1, p2 = self._mock_pricing()
+        with p1, p2:
+            t.record_usage("gpt-4o", 200, 100, 300)
+        assert "gpt-4o" in t.usage_data["model_usage"]
+        assert t.usage_data["model_usage"]["gpt-4o"]["total_tokens"] == 300
+
+    def test_updates_daily_usage(self, tmp_path):
+        from datetime import datetime
+        today = datetime.now().strftime("%Y-%m-%d")
+        t = self._make_tracker(tmp_path)
+        p1, p2 = self._mock_pricing()
+        with p1, p2:
+            t.record_usage("gpt-4o", 100, 50, 150)
+        assert today in t.usage_data["daily_usage"]
+        assert t.usage_data["daily_usage"][today]["total_tokens"] == 150
+
+    def test_appends_to_session_history(self, tmp_path):
+        t = self._make_tracker(tmp_path)
+        p1, p2 = self._mock_pricing()
+        with p1, p2:
+            t.record_usage("gpt-4o", 100, 50, 150)
+            t.record_usage("gpt-4o", 200, 100, 300)
+        assert len(t.usage_data["session_history"]) == 2
+
+    def test_persists_to_disk(self, tmp_path):
+        data_file = tmp_path / "token_usage_test.json"
+        t = TokenTracker("testprof", data_file=str(data_file), monthly_limit=100.0)
+        p1, p2 = self._mock_pricing()
+        with p1, p2:
+            t.record_usage("gpt-4o", 100, 50, 150)
+        on_disk = json.loads(data_file.read_text())
+        assert on_disk["total_usage"]["total_tokens"] == 150
+
+    def test_uses_requested_model_for_pricing(self, tmp_path):
+        t = self._make_tracker(tmp_path)
+        pricing_call_args = []
+
+        def fake_pricing(model):
+            pricing_call_args.append(model)
+            return {"input": 2.0, "output": 8.0}
+
+        with patch("src.tracking.token_tracker.get_pricing_unit", return_value=1_000_000), \
+             patch("src.tracking.token_tracker.get_model_pricing", side_effect=fake_pricing):
+            t.record_usage("gpt-4o-2026-03-12", 100, 50, 150, requested_model="gpt-4o")
+
+        assert "gpt-4o" in pricing_call_args
+        assert "gpt-4o-2026-03-12" not in pricing_call_args
+
+    def test_multiple_calls_same_model_accumulate(self, tmp_path):
+        t = self._make_tracker(tmp_path)
+        p1, p2 = self._mock_pricing()
+        with p1, p2:
+            t.record_usage("gpt-4o", 100, 50, 150)
+            t.record_usage("gpt-4o", 100, 50, 150)
+        assert t.usage_data["model_usage"]["gpt-4o"]["call_count"] == 2
+        assert t.usage_data["model_usage"]["gpt-4o"]["total_tokens"] == 300
+
+
+# ---------------------------------------------------------------------------
+# TokenTracker.get_daily_usage
+# ---------------------------------------------------------------------------
+
+class TestGetDailyUsage:
+
+    def test_returns_zero_stats_on_empty_day(self, tracker):
+        result = tracker.get_daily_usage("2099-12-31")
+        assert result["total_tokens"] == 0
+        assert result["call_count"] == 0
+
+    def test_returns_recorded_usage_for_date(self, tracker):
+        tracker.usage_data["daily_usage"]["2026-03-12"] = {
+            "total_tokens": 500,
+            "total_input_tokens": 300,
+            "total_output_tokens": 200,
+            "total_cost": 0.05,
+            "call_count": 2,
+        }
+        result = tracker.get_daily_usage("2026-03-12")
+        assert result["total_tokens"] == 500
+
+    def test_defaults_to_today(self, tracker):
+        from datetime import datetime
+        today = datetime.now().strftime("%Y-%m-%d")
+        tracker.usage_data["daily_usage"][today] = {
+            "total_tokens": 42,
+            "total_input_tokens": 20,
+            "total_output_tokens": 22,
+            "total_cost": 0.01,
+            "call_count": 1,
+        }
+        result = tracker.get_daily_usage()
+        assert result["total_tokens"] == 42
+
+
+# ---------------------------------------------------------------------------
+# TokenTracker.get_monthly_usage
+# ---------------------------------------------------------------------------
+
+class TestGetMonthlyUsage:
+
+    def test_current_month_returns_in_memory_totals(self, tracker):
+        tracker.usage_data["total_usage"]["total_tokens"] = 777
+        result = tracker.get_monthly_usage()
+        assert result["total_tokens"] == 777
+
+    def test_past_month_reads_archive(self, tmp_path):
+        data_file = str(tmp_path / "token_usage_test.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=100.0)
+
+        archive_data = {
+            "month": "2025-11",
+            "total_usage": UsageStats(total_tokens=1234).to_dict(),
+            "model_usage": {},
+            "daily_usage": {},
+            "session_history": [],
+        }
+        archive_path = tmp_path / "2025-11.json"
+        archive_path.write_text(json.dumps(archive_data))
+
+        with patch("src.tracking.token_tracker.get_archive_path", return_value=archive_path):
+            result = t.get_monthly_usage("2025-11")
+        assert result["total_tokens"] == 1234
+
+    def test_missing_archive_returns_zero_stats(self, tmp_path):
+        data_file = str(tmp_path / "token_usage_test.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=100.0)
+
+        non_existent = tmp_path / "1999-01.json"
+        with patch("src.tracking.token_tracker.get_archive_path", return_value=non_existent):
+            result = t.get_monthly_usage("1999-01")
+        assert result["total_tokens"] == 0
+
+
+# ---------------------------------------------------------------------------
+# TokenTracker.get_all_time_usage
+# ---------------------------------------------------------------------------
+
+class TestGetAllTimeUsage:
+
+    def test_no_archives_returns_current_month_only(self, tmp_path):
+        data_file = str(tmp_path / "token_usage_test.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=100.0)
+        t.usage_data["total_usage"]["total_tokens"] = 100
+        t.usage_data["total_usage"]["total_cost"] = 1.0
+
+        empty_archive_dir = tmp_path / "archives"
+        empty_archive_dir.mkdir()
+        with patch("src.tracking.token_tracker.get_archive_dir", return_value=empty_archive_dir):
+            result = t.get_all_time_usage()
+        assert result["total_tokens"] == 100
+
+    def test_aggregates_archives_with_current_month(self, tmp_path):
+        data_file = str(tmp_path / "token_usage_test.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=100.0)
+        t.usage_data["total_usage"] = UsageStats(total_tokens=100, call_count=1).to_dict()
+
+        archive_dir = tmp_path / "archives"
+        archive_dir.mkdir()
+        for month, tokens in [("2026-01", 200), ("2026-02", 300)]:
+            arc = {
+                "month": month,
+                "total_usage": UsageStats(total_tokens=tokens, call_count=1).to_dict(),
+            }
+            (archive_dir / f"{month}.json").write_text(json.dumps(arc))
+
+        with patch("src.tracking.token_tracker.get_archive_dir", return_value=archive_dir):
+            result = t.get_all_time_usage()
+        assert result["total_tokens"] == 600   # 100 + 200 + 300
+        assert result["call_count"] == 3
+
+    def test_corrupt_archive_is_skipped(self, tmp_path):
+        data_file = str(tmp_path / "token_usage_test.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=100.0)
+        t.usage_data["total_usage"] = UsageStats(total_tokens=50).to_dict()
+
+        archive_dir = tmp_path / "archives"
+        archive_dir.mkdir()
+        (archive_dir / "2026-01.json").write_text("{bad json}")
+
+        with patch("src.tracking.token_tracker.get_archive_dir", return_value=archive_dir):
+            result = t.get_all_time_usage()
+        assert result["total_tokens"] == 50   # corrupt archive silently skipped
+
+
+# ---------------------------------------------------------------------------
+# TokenTracker.list_archived_months
+# ---------------------------------------------------------------------------
+
+class TestListArchivedMonths:
+
+    def test_empty_archive_dir_returns_empty_list(self, tmp_path):
+        data_file = str(tmp_path / "token_usage_test.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=100.0)
+
+        archive_dir = tmp_path / "archives"
+        archive_dir.mkdir()
+        with patch("src.tracking.token_tracker.get_archive_dir", return_value=archive_dir):
+            assert t.list_archived_months() == []
+
+    def test_returns_sorted_month_stems(self, tmp_path):
+        data_file = str(tmp_path / "token_usage_test.json")
+        t = TokenTracker("testprof", data_file=data_file, monthly_limit=100.0)
+
+        archive_dir = tmp_path / "archives"
+        archive_dir.mkdir()
+        for month in ["2026-02", "2025-11", "2026-01"]:
+            (archive_dir / f"{month}.json").write_text("{}")
+
+        with patch("src.tracking.token_tracker.get_archive_dir", return_value=archive_dir):
+            result = t.list_archived_months()
+        assert result == ["2025-11", "2026-01", "2026-02"]
+
+
+# ---------------------------------------------------------------------------
+# TokenTracker.update_pricing
+# ---------------------------------------------------------------------------
+
+class TestUpdatePricing:
+
+    def test_calls_save_model_catalog_with_updated_entry(self, tracker):
+        existing_catalog = {
+            "config": {"pricing_unit": 1_000_000, "monthly_limit": 250.0},
+            "models": {"gpt-4o": {"input": 2.75, "output": 11.0, "supports_vision": True}},
+        }
+        saved = {}
+
+        def fake_save(cfg):
+            saved.update(cfg)
+
+        with patch("src.tracking.token_tracker.load_model_catalog", return_value=existing_catalog), \
+             patch("src.tracking.token_tracker.save_model_catalog", side_effect=fake_save):
+            tracker.update_pricing("gpt-4o", 1.50, 6.00)
+
+        assert saved["models"]["gpt-4o"]["input"] == pytest.approx(1.50)
+        assert saved["models"]["gpt-4o"]["output"] == pytest.approx(6.00)
+
+    def test_adds_new_model_to_catalog(self, tracker):
+        existing_catalog = {
+            "config": {"pricing_unit": 1_000_000, "monthly_limit": 250.0},
+            "models": {},
+        }
+        saved = {}
+
+        def fake_save(cfg):
+            saved.update(cfg)
+
+        with patch("src.tracking.token_tracker.load_model_catalog", return_value=existing_catalog), \
+             patch("src.tracking.token_tracker.save_model_catalog", side_effect=fake_save):
+            tracker.update_pricing("new-model", 0.50, 2.00)
+
+        assert "new-model" in saved["models"]
+        assert saved["models"]["new-model"]["input"] == pytest.approx(0.50)
