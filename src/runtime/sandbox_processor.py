@@ -407,29 +407,6 @@ class SandboxProcessor:
         print(user_prompt)
         print(f"\n{sep}\n")
 
-    def _peek_first_chunk(self, file_path: str, file_type: str, page_nums: Optional[str]) -> str:
-        """Return the first text chunk from a document file for dry-run preview."""
-        start_page = _parse_page_nums(page_nums)[0]
-        if file_type == 'pdf':
-            with open(file_path, 'rb') as f:
-                pages = list(self.translation_service.pdf_processor.process_pdf(f))
-            if start_page < len(pages):
-                return self.translation_service.pdf_processor.process_page(pages[start_page])
-            return "[no text extracted]"
-        if file_type == 'docx':
-            with open(file_path, 'rb') as f:
-                chunks = DocxProcessor.process_docx_with_pages(f, target_page_size=2000)
-            if start_page < len(chunks):
-                return chunks[start_page]
-            return chunks[0] if chunks else "[no text extracted]"
-        if file_type == 'txt':
-            with open(file_path, 'r', encoding='utf-8') as f:
-                chunks = TxtProcessor.process_txt_with_pages(f, target_page_size=2000)
-            if start_page < len(chunks):
-                return chunks[start_page]
-            return chunks[0] if chunks else "[no text extracted]"
-        return "[unsupported file type]"
-
     def _resolve_output_path(self, args: argparse.Namespace) -> Optional[str]:
         """Resolve output file path based on arguments."""
         output_file_arg: Optional[str] = getattr(args, 'output_file', None)
@@ -470,37 +447,10 @@ class SandboxProcessor:
                 target_language: str = lang_tuple[1]
 
                 if getattr(args, 'dry_run', False):
-                    if args.custom_text:
-                        print(f"Enter the {source_language} text for the dry-run prompt preview:")
-                        print("(Type --- on its own line when done)")
-                        lines_dr: list[str] = []
-                        while True:
-                            try:
-                                line = input()
-                                if line.strip() == '---':
-                                    break
-                                lines_dr.append(line)
-                            except EOFError:
-                                break
-                        text_dr = '\n'.join(lines_dr) or f"[sample {source_language} text]"
-                        model_dr = self.translation_service._get_model()
-                        sys_p, usr_p = self.translation_service.build_prompts(text_dr, source_language, target_language)
-                        self._dry_run_display(model_dr, sys_p, usr_p)
-                    elif args.input_file:
-                        file_path_dr = os.path.abspath(args.input_file)
-                        file_type_dr = self._detect_and_validate_file(file_path_dr)
-                        if file_type_dr == 'image':
-                            model_dr = self.image_translation_service._get_model()
-                            sys_p, usr_p = self.image_translation_service.build_prompts(source_language, target_language)
-                            self._dry_run_display(model_dr, sys_p, usr_p,
-                                                  note="Image content would be base64-encoded and attached to the user message")
-                        else:
-                            text_dr = self._peek_first_chunk(file_path_dr, file_type_dr, getattr(args, 'page_nums', None))
-                            model_dr = self.translation_service._get_model()
-                            sys_p, usr_p = self.translation_service.build_prompts(text_dr, source_language, target_language)
-                            self._dry_run_display(model_dr, sys_p, usr_p)
-                    else:
-                        raise CLIError("No input specified. Use -i for file input or -c for custom text.")
+                    model_dr = self.translation_service._get_model()
+                    placeholder = f"[{source_language} text to translate]"
+                    sys_p, usr_p = self.translation_service.build_prompts(placeholder, source_language, target_language)
+                    self._dry_run_display(model_dr, sys_p, usr_p)
                     return
 
                 if args.custom_text:
@@ -531,14 +481,6 @@ class SandboxProcessor:
 
             elif command == 'transcribe':
                 # Handle transcribe (OCR) command
-                if not args.input_file:
-                    raise CLIError("Input file is required for transcribe command. Use -i option.")
-
-                # Validate it's an image file
-                file_type = self._detect_and_validate_file(args.input_file)
-                if file_type != 'image':
-                    raise CLIError(f"Transcribe command requires an image file, but got {file_type}.")
-
                 # language_code is already resolved to a full name by parse_single_language_code
                 target_language = args.language_code
 
@@ -549,6 +491,14 @@ class SandboxProcessor:
                     self._dry_run_display(model_dr, sys_p, usr_p,
                                           note="Image content would be base64-encoded and attached to the user message")
                     return
+
+                if not args.input_file:
+                    raise CLIError("Input file is required for transcribe command. Use -i option.")
+
+                # Validate it's an image file
+                file_type = self._detect_and_validate_file(args.input_file)
+                if file_type != 'image':
+                    raise CLIError(f"Transcribe command requires an image file, but got {file_type}.")
 
                 output_file = getattr(args, 'output_file', None)
                 vertical = getattr(args, 'vertical', False)

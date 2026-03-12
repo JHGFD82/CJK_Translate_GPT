@@ -133,7 +133,7 @@ Transcription (OCR):
     )
 
     # Input options
-    input_group = translate_parser.add_mutually_exclusive_group(required=True)
+    input_group = translate_parser.add_mutually_exclusive_group(required=False)
     input_group.add_argument('-i', '--input', dest='input_file', type=str, help='Input file path (PDF, DOCX, TXT)')
     input_group.add_argument('-c', '--custom', dest='custom_text', action='store_true', help='Input custom text')
 
@@ -169,7 +169,7 @@ Transcription (OCR):
         type=parse_single_language_code,
         help='Target language: E (English), C (Chinese), S (Simplified Chinese), T (Traditional Chinese), J (Japanese), K (Korean)',
     )
-    transcribe_parser.add_argument('-i', '--input', dest='input_file', type=str, required=True, help='Input image file path')
+    transcribe_parser.add_argument('-i', '--input', dest='input_file', type=str, required=False, help='Input image file path')
     transcribe_parser.add_argument('-o', '--output', dest='output_file', type=str, help='Output file path')
     transcribe_parser.add_argument('-m', '--model', dest='model', type=str, help='Model to use (e.g., gpt-4o, gpt-4o-mini)')
     transcribe_parser.add_argument('-v', '--vertical', dest='vertical', action='store_true', help='Text is predominantly vertical (top-to-bottom, right-to-left columns)')
