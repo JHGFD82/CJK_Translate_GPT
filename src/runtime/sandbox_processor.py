@@ -11,6 +11,7 @@ from ..errors import CLIError
 from ..output.file_output import FileOutputHandler
 from ..processors.docx_processor import DocxProcessor
 from ..processors.image_processor import ImageProcessor
+from ..processors.pdf_processor import generate_process_text
 from ..processors.txt_processor import TxtProcessor
 from ..services.image_processor_service import ImageProcessorService
 from ..services.image_translation_service import ImageTranslationService
@@ -448,8 +449,10 @@ class SandboxProcessor:
 
                 if getattr(args, 'dry_run', False):
                     model_dr = self.translation_service._get_model()
-                    placeholder = f"[{source_language} text to translate]"
-                    sys_p, usr_p = self.translation_service.build_prompts(placeholder, source_language, target_language)
+                    page_placeholder = f"[{source_language} text to translate]"
+                    abstract_placeholder = f"[{source_language} abstract text]" if getattr(args, 'abstract', False) else ""
+                    combined = generate_process_text(abstract_placeholder, page_placeholder, "")
+                    sys_p, usr_p = self.translation_service.build_prompts(combined, source_language, target_language)
                     self._dry_run_display(model_dr, sys_p, usr_p)
                     return
 
