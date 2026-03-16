@@ -432,11 +432,6 @@ class SandboxProcessor:
                 return os.path.join(input_dir, output_file_arg)
             return os.path.abspath(output_file_arg)
 
-        if input_file_arg:
-            input_dir = os.path.dirname(os.path.abspath(input_file_arg))
-            input_name, _ = os.path.splitext(os.path.basename(input_file_arg))
-            return os.path.join(input_dir, f"{input_name}_translated.txt")
-
         return None
 
     def run(self, args: argparse.Namespace) -> None:
