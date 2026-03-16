@@ -180,7 +180,20 @@ class SandboxProcessor:
                 raise CLIError(f"Error processing image: {e}") from e
             return
 
-        abstract_text = input('Enter abstract text: ') if abstract else None
+        if abstract:
+            print("Enter abstract text, then type --- on its own line to finish:")
+            abstract_lines: list[str] = []
+            while True:
+                try:
+                    line = input()
+                    if line.strip() == '---':
+                        break
+                    abstract_lines.append(line)
+                except EOFError:
+                    break
+            abstract_text: Optional[str] = '\n'.join(abstract_lines) or None
+        else:
+            abstract_text = None
 
         logger.info(f"Starting translation: {source_language} → {target_language}")
 
