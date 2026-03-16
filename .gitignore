@@ -33,6 +33,7 @@ fonts/*
 token_usage.json
 data/token_usage_*.json
 data/archives/*
+data/usage_report.html
 !data/README.md
 
 # Coverage
@@ -42,3 +43,6 @@ coverage.xml
 
 # OS
 Thumbs.db
+
+# External files
+Sandbox Demo.key
