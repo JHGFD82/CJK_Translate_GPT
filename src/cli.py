@@ -82,6 +82,12 @@ Transcription (OCR):
         metavar=('MODEL', 'INPUT_PRICE', 'OUTPUT_PRICE'),
         help='Update pricing for a specific model',
     )
+    parser.add_argument(
+        '--sync-pricing',
+        dest='sync_pricing',
+        action='store_true',
+        help='Force-sync pricing for all models from llmprices.ai',
+    )
 
     # Professor-based commands use subparsers
     parser.add_argument(
@@ -199,7 +205,7 @@ def main() -> None:
         args = parser.parse_args()
 
         # Handle global commands (no professor required)
-        if args.show_config or args.list_models or args.update_pricing:
+        if args.show_config or args.list_models or args.update_pricing or args.sync_pricing:
             if handle_info_commands(args):
                 return
 

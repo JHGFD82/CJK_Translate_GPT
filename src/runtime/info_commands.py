@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from ..config import load_model_catalog, get_pricing_unit, load_professor_config
+from ..config import load_model_catalog, get_pricing_unit, load_professor_config, force_sync_all_pricing
 from ..errors import CLIError
 from ..tracking.token_tracker import TokenTracker, get_usage_data_path, get_archive_dir
 
@@ -119,6 +119,17 @@ def handle_info_commands(args: argparse.Namespace) -> bool:
         token_tracker.update_pricing(model, input_price_float, output_price_float)
         logger.info(f"Updated pricing for {model}: Input=${input_price_float}, Output=${output_price_float}")
         print(f"Updated pricing for {model}: Input=${input_price_float}, Output=${output_price_float}")
+        return True
+
+    if getattr(args, 'sync_pricing', False):
+        print("Syncing pricing for all models from llmprices.ai...")
+        results = force_sync_all_pricing()
+        for model_name, status in sorted(results.items()):
+            symbol = "✓" if status == "updated" else ("–" if status == "unchanged" else "✗")
+            print(f"  {symbol} {model_name}: {status}")
+        updated = sum(1 for s in results.values() if s == "updated")
+        failed = sum(1 for s in results.values() if s == "failed")
+        print(f"\nDone. {updated} updated, {len(results) - updated - failed} unchanged, {failed} failed.")
         return True
 
     # Usage commands (professor required)

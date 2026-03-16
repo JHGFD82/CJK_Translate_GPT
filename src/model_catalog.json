@@ -5,46 +5,58 @@
   },
   "models": {
     "gpt-5": {
-      "input": 1.38,
-      "output": 11.0,
+      "input": 1.25,
+      "output": 10.0,
       "supports_vision": true,
       "system_role": "developer",
       "use_max_completion_tokens": true,
       "fixed_parameters": true,
-      "max_completion_tokens": 16000
+      "max_completion_tokens": 16000,
+      "llmprices_id": "openai/gpt-5",
+      "last_sync": "2026-03"
     },
     "o3-mini": {
-      "input": 1.21,
-      "output": 4.84,
+      "input": 1.1,
+      "output": 4.4,
       "supports_vision": false,
       "system_role": "developer",
       "use_max_completion_tokens": true,
       "fixed_parameters": true,
-      "max_completion_tokens": 16000
+      "max_completion_tokens": 16000,
+      "llmprices_id": "openai/o3-mini",
+      "last_sync": "2026-03"
     },
     "gpt-4o-mini": {
-      "input": 0.165,
-      "output": 0.66,
-      "supports_vision": true
+      "input": 0.15,
+      "output": 0.6,
+      "supports_vision": true,
+      "llmprices_id": "openai/gpt-4o-mini",
+      "last_sync": "2026-03"
     },
     "gpt-4o": {
-      "input": 2.75,
-      "output": 11.0,
-      "supports_vision": true
+      "input": 2.5,
+      "output": 10.0,
+      "supports_vision": true,
+      "llmprices_id": "openai/gpt-4o",
+      "last_sync": "2026-03"
     },
     "gpt-4-turbo": {
-      "input": 11.0,
-      "output": 11.0,
-      "supports_vision": true
+      "input": 10.0,
+      "output": 30.0,
+      "supports_vision": true,
+      "llmprices_id": "openai/gpt-4-turbo",
+      "last_sync": "2026-03"
     },
     "gpt-35-turbo-16k": {
-      "input": 0.55,
-      "output": 1.65,
-      "supports_vision": false
+      "input": 3.0,
+      "output": 4.0,
+      "supports_vision": false,
+      "llmprices_id": "openai/gpt-3.5-turbo-16k",
+      "last_sync": "2026-03"
     },
     "mistral-small-2503": {
-      "input": 0.10,
-      "output": 0.30,
+      "input": 0.1,
+      "output": 0.3,
       "supports_vision": false
     },
     "Mistral-Large-2411": {
@@ -61,6 +73,52 @@
       "input": 0.78,
       "output": 0.78,
       "supports_vision": false
+    },
+    "gpt-5.4": {
+      "input": 2.5,
+      "output": 15.0,
+      "supports_vision": true,
+      "system_role": "developer",
+      "use_max_completion_tokens": true,
+      "fixed_parameters": true,
+      "max_completion_tokens": 16000,
+      "llmprices_id": "openai/gpt-5.4",
+      "last_sync": "2026-03"
+    },
+    "gpt-5.2": {
+      "input": 1.75,
+      "output": 14.0,
+      "supports_vision": true,
+      "system_role": "developer",
+      "use_max_completion_tokens": true,
+      "fixed_parameters": true,
+      "max_completion_tokens": 16000,
+      "llmprices_id": "openai/gpt-5.2",
+      "last_sync": "2026-03"
+    },
+    "gemini-2.0-flash": {
+      "input": 0.1,
+      "output": 0.4,
+      "supports_vision": true,
+      "llmprices_id": "google/gemini-2.0-flash"
+    },
+    "gemini-2.5-flash": {
+      "input": 0.3,
+      "output": 2.5,
+      "supports_vision": true,
+      "llmprices_id": "google/gemini-2.5-flash"
+    },
+    "gemini-2.5-flash-lite": {
+      "input": 0.1,
+      "output": 0.4,
+      "supports_vision": true,
+      "llmprices_id": "google/gemini-2.5-flash-lite"
+    },
+    "gemini-2.5-pro": {
+      "input": 1.25,
+      "output": 10.0,
+      "supports_vision": true,
+      "llmprices_id": "google/gemini-2.5-pro"
     }
   }
 }

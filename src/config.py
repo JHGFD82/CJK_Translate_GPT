@@ -7,6 +7,8 @@ import logging
 import argparse
 import os
 import re
+import urllib.request
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple, Union
 
@@ -368,6 +370,93 @@ def save_model_catalog(config: Dict[str, Any]) -> None:
     catalog_file = get_model_catalog_path()
     with open(catalog_file, 'w') as f:
         json.dump(config, f, indent=2)
+
+
+LLMPRICES_API_BASE = "https://llmprices.ai/api/pricing"
+
+
+def maybe_sync_model_pricing(model: str) -> None:
+    """Fetch current pricing for a model from llmprices.ai if not yet synced this month.
+
+    Only runs when the model has a 'llmprices_id' field. Silently skips on any
+    network or parse error so the caller is never blocked.
+    """
+    try:
+        catalog = load_model_catalog()
+        model_entry = catalog["models"].get(model, {})
+        llmprices_id = model_entry.get("llmprices_id")
+        if not llmprices_id:
+            return
+
+        current_month = datetime.now().strftime("%Y-%m")
+        if model_entry.get("last_sync") == current_month:
+            return
+
+        url = f"{LLMPRICES_API_BASE}?model={llmprices_id}"
+        with urllib.request.urlopen(url, timeout=5) as response:  # nosec B310
+            data = json.loads(response.read())
+
+        pricing = data.get("pricing", {})
+        prompt_price = float(pricing.get("prompt", 0))
+        completion_price = float(pricing.get("completion", 0))
+
+        if prompt_price > 0 and completion_price > 0:
+            pricing_unit = catalog["config"]["pricing_unit"]
+            catalog["models"][model]["input"] = round(prompt_price * pricing_unit, 4)
+            catalog["models"][model]["output"] = round(completion_price * pricing_unit, 4)
+            catalog["models"][model]["last_sync"] = current_month
+            save_model_catalog(catalog)
+            logging.info(
+                f"Synced pricing for {model} from llmprices.ai: "
+                f"input=${catalog['models'][model]['input']}, "
+                f"output=${catalog['models'][model]['output']}"
+            )
+    except Exception as e:
+        logging.warning(f"Could not sync pricing for {model} from llmprices.ai: {e}")
+
+
+def force_sync_all_pricing() -> dict:
+    """Force-sync pricing for all models that have a llmprices_id, regardless of last_sync.
+
+    Returns a dict mapping model name → 'updated' | 'unchanged' | 'failed'.
+    """
+    catalog = load_model_catalog()
+    pricing_unit = catalog["config"]["pricing_unit"]
+    current_month = datetime.now().strftime("%Y-%m")
+    results: dict = {}
+
+    for model, entry in catalog["models"].items():
+        llmprices_id = entry.get("llmprices_id")
+        if not llmprices_id:
+            continue
+        try:
+            url = f"{LLMPRICES_API_BASE}?model={llmprices_id}"
+            with urllib.request.urlopen(url, timeout=5) as response:  # nosec B310
+                data = json.loads(response.read())
+
+            pricing = data.get("pricing", {})
+            prompt_price = float(pricing.get("prompt", 0))
+            completion_price = float(pricing.get("completion", 0))
+
+            if prompt_price > 0 and completion_price > 0:
+                new_input = round(prompt_price * pricing_unit, 4)
+                new_output = round(completion_price * pricing_unit, 4)
+                old_input = entry.get("input")
+                old_output = entry.get("output")
+                catalog["models"][model]["input"] = new_input
+                catalog["models"][model]["output"] = new_output
+                catalog["models"][model]["last_sync"] = current_month
+                changed = (new_input != old_input or new_output != old_output)
+                results[model] = "updated" if changed else "unchanged"
+            else:
+                results[model] = "unchanged"
+        except Exception as e:
+            logging.warning(f"Could not sync pricing for {model}: {e}")
+            results[model] = "failed"
+
+    save_model_catalog(catalog)
+    return results
+
 
 # Default model used by resolve_model() as the final named fallback
 DEFAULT_MODEL: str = "gpt-4o"
