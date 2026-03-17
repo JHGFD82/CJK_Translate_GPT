@@ -96,7 +96,7 @@ class TestOCRUserPrompt:
 
     def test_contains_do_not_translate(self, ocr_service):
         result = ocr_service._build_user_prompt("Japanese")
-        assert "Do not translate" in result
+        assert "Do NOT translate" in result
 
     def test_no_vertical_note_by_default(self, ocr_service):
         result = ocr_service._build_user_prompt("Japanese")
