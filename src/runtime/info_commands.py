@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from ..config import load_model_catalog, get_pricing_unit, load_professor_config, force_sync_all_pricing, add_model_to_catalog
+from ..config import load_model_catalog, get_pricing_unit, load_professor_config
 from ..errors import CLIError
 from ..tracking.token_tracker import TokenTracker, get_usage_data_path, get_archive_dir
 
@@ -104,64 +104,6 @@ def handle_info_commands(args: argparse.Namespace) -> bool:
 
     if args.list_models:
         list_available_models()
-        return True
-
-    if args.update_pricing:
-        model, input_price, output_price = args.update_pricing
-        try:
-            input_price_float = float(input_price)
-            output_price_float = float(output_price)
-        except ValueError as e:
-            raise CLIError("Prices must be valid numbers") from e
-
-        # Update pricing doesn't need a professor-specific tracker
-        token_tracker = TokenTracker(professor="global")
-        token_tracker.update_pricing(model, input_price_float, output_price_float)
-        logger.info(f"Updated pricing for {model}: Input=${input_price_float}, Output=${output_price_float}")
-        print(f"Updated pricing for {model}: Input=${input_price_float}, Output=${output_price_float}")
-        return True
-
-    if getattr(args, 'sync_pricing', False):
-        print("Syncing pricing for all models from llmprices.ai...")
-        results = force_sync_all_pricing()
-        for model_name, status in sorted(results.items()):
-            symbol = "✓" if status == "updated" else ("–" if status == "unchanged" else "✗")
-            print(f"  {symbol} {model_name}: {status}")
-        updated = sum(1 for s in results.values() if s == "updated")
-        failed = sum(1 for s in results.values() if s == "failed")
-        print(f"\nDone. {updated} updated, {len(results) - updated - failed} unchanged, {failed} failed.")
-        return True
-
-    if getattr(args, 'add_model', None):
-        parts = args.add_model
-        provider_model = parts[0]
-        input_price: Optional[float] = None
-        output_price: Optional[float] = None
-
-        if len(parts) == 3:
-            try:
-                input_price = float(parts[1])
-                output_price = float(parts[2])
-            except ValueError as e:
-                raise CLIError("Prices must be valid numbers") from e
-        elif len(parts) != 1:
-            raise CLIError(
-                "--add-model requires 1 or 3 arguments: "
-                "PROVIDER/MODEL or PROVIDER/MODEL INPUT_PRICE OUTPUT_PRICE"
-            )
-
-        try:
-            model_name, entry = add_model_to_catalog(provider_model, input_price, output_price)
-        except (ValueError, RuntimeError) as e:
-            raise CLIError(str(e)) from e
-
-        source = "(auto-fetched)" if input_price is None else "(manual)"
-        vision = "yes" if entry.get("supports_vision") else "no"
-        print(f"Added '{model_name}' to model_catalog.json {source}")
-        print(f"  Input:  ${entry['input']:.4f} / million tokens")
-        print(f"  Output: ${entry['output']:.4f} / million tokens")
-        print(f"  Vision: {vision}")
-        print(f"  ID:     {entry.get('llmprices_id', provider_model)}")
         return True
 
     # Usage commands (professor required)

@@ -444,10 +444,3 @@ class TokenTracker:
 
         print("=" * 60)
 
-    def update_pricing(self, model: str, input_price: float, output_price: float):
-        """Update pricing for a specific model in the model catalog."""
-        config = load_model_catalog()
-        config.setdefault("models", {})[model] = {"input": input_price, "output": output_price}
-        save_model_catalog(config)
-        logging.info(f"Updated pricing for {model}: input=${input_price}, output=${output_price}")
-

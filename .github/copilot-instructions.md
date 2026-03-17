@@ -44,7 +44,6 @@ PROF_[ID]_BACKUP_KEY=backup_key   # Fallback key
 # Global commands (no professor required)
 python main.py --help
 python main.py --list-models
-python main.py --update-pricing gpt-4o 0.03 0.06
 
 # Usage / reporting
 python main.py heller usage report              # Current month + budget status
@@ -119,10 +118,13 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 ### Model Selection and Configuration
 - **Default Models**: `OCR_MODEL=gpt-4o-mini` for OCR, `DEFAULT_MODEL=gpt-4o` for translation
 - **Custom Model**: Use `-m/--model MODEL_NAME` flag to override defaults for both translation and OCR
-- **List Models**: `python main.py --list-models` shows all available models with pricing and vision support
+- **OpenAI/Google Auto-Registration**: Use `openai/model-name` or `google/model-name` with `-m` — if not already in the catalog, pricing is fetched from [llmprices.ai](https://llmprices.ai) and saved automatically on first use
+- **Other Providers**: Add the model manually to `src/model_catalog.json`; edit the file directly following the template schema
+- **List Models**: `python main.py --list-models` shows all catalog models with pricing and vision support
 - **Vision Validation**: ImageProcessorService automatically validates model supports vision, falls back to defaults if not
 - **Model Priority**: Custom model → OCR_MODEL/DEFAULT_MODEL → first available vision-capable model
-- **Configuration**: Models and pricing defined in `src/model_catalog.json` with `supports_vision` boolean flag
+- **Configuration**: Models and pricing defined in `src/model_catalog.json` (git-ignored; copy from `src/model_catalog.template.json` to set up) with `supports_vision` boolean flag
+- **No CLI catalog management**: There are no CLI commands to add/update/sync models. Use `provider/model` with `-m` for auto-registration, or edit the JSON directly.
 
 ### File Path Handling
 - **Input Path Resolution**: `os.path.abspath()` applied to input files in runtime processing methods

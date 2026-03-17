@@ -316,7 +316,7 @@ class TestResolveModel:
         assert resolve_model(requested_model="gpt-5") == "gpt-5"
 
     def test_requested_model_not_in_catalog_raises(self, mock_catalog):
-        with pytest.raises(ValueError, match="not configured"):
+        with pytest.raises(ValueError, match="not in the catalog"):
             resolve_model(requested_model="unknown-model")
 
     def test_requested_model_not_vision_capable_raises(self, mock_catalog):
@@ -359,6 +359,50 @@ class TestResolveModel:
 
     def test_requested_model_takes_precedence_over_prefer(self, mock_catalog):
         assert resolve_model(requested_model="gpt-5", prefer_model="gpt-4o-mini") == "gpt-5"
+
+    # --- provider/model format ---
+
+    def test_provider_model_already_in_catalog_resolved_without_api(self, mock_catalog):
+        # e.g. "openai/gpt-4o" where "gpt-4o" is already in the catalog
+        result = resolve_model(requested_model="openai/gpt-4o")
+        assert result == "gpt-4o"
+
+    def test_provider_model_not_in_catalog_auto_registers(self, monkeypatch, tmp_path):
+        # Use a real tmp catalog (not mock_catalog) so get_available_models() reflects
+        # changes made by fake_add.
+        import json
+        catalog_file = tmp_path / "model_catalog.json"
+        initial_catalog = {
+            "config": {"pricing_unit": 1_000_000, "monthly_limit": 250.0},
+            "models": {"gpt-4o": {"input": 2.5, "output": 10.0, "supports_vision": True}},
+        }
+        catalog_file.write_text(json.dumps(initial_catalog))
+        monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
+
+        def fake_add(provider_model):
+            cat = json.loads(catalog_file.read_text())
+            cat["models"]["new-gpt"] = {"input": 1.0, "output": 3.0, "supports_vision": False}
+            catalog_file.write_text(json.dumps(cat))
+            return "new-gpt", cat["models"]["new-gpt"]
+
+        monkeypatch.setattr(config_module, "add_model_to_catalog", fake_add)
+        result = resolve_model(requested_model="openai/new-gpt")
+        assert result == "new-gpt"
+
+    def test_unsupported_provider_raises(self, mock_catalog):
+        with pytest.raises(ValueError, match="not supported"):
+            resolve_model(requested_model="mistral/mistral-small")
+
+    def test_provider_model_auto_register_failure_raises(self, mock_catalog, monkeypatch, tmp_path):
+        catalog_file = tmp_path / "model_catalog.json"
+        monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
+
+        def fake_add_fail(provider_model):
+            raise RuntimeError("API down")
+
+        monkeypatch.setattr(config_module, "add_model_to_catalog", fake_add_fail)
+        with pytest.raises(ValueError, match="Could not auto-register"):
+            resolve_model(requested_model="openai/ghost-model")
 
     def test_priority_candidate_skipped_in_fallback_loop_when_incompatible(
         self, monkeypatch
@@ -423,10 +467,10 @@ class TestLoadModelCatalogMissingFileError:
             from src.config import load_model_catalog as lmc
             lmc()
 
-    def test_missing_file_error_mentions_add_model(self, monkeypatch, tmp_path):
+    def test_missing_file_error_mentions_openai_google(self, monkeypatch, tmp_path):
         missing = tmp_path / "model_catalog.json"
         monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: missing)
-        with pytest.raises(FileNotFoundError, match="--add-model"):
+        with pytest.raises(FileNotFoundError, match="openai/model-name"):
             from src.config import load_model_catalog as lmc
             lmc()
 
@@ -438,28 +482,41 @@ class TestLoadModelCatalogMissingFileError:
 from src.config import add_model_to_catalog, _fetch_model_info_from_llmprices  # noqa: E402
 
 
+def _make_fake_fetch(input_price=2.5, output_price=10.0, supports_vision=None):
+    """Return a fake _fetch_model_info_from_llmprices that returns fixed prices."""
+    def fake_fetch(llmprices_id, pricing_unit):
+        result = {"input": input_price, "output": output_price}
+        if supports_vision is not None:
+            result["supports_vision"] = supports_vision
+        return result
+    return fake_fetch
+
+
 class TestAddModelToCatalog:
 
     def test_missing_slash_raises_value_error(self, monkeypatch, tmp_path):
         monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: tmp_path / "model_catalog.json")
+        monkeypatch.setattr(config_module, "_fetch_model_info_from_llmprices", _make_fake_fetch())
         with pytest.raises(ValueError, match="provider/model-name"):
-            add_model_to_catalog("gpt-4o", 2.5, 10.0)
+            add_model_to_catalog("gpt-4o")
 
-    def test_manual_prices_create_new_catalog(self, monkeypatch, tmp_path):
+    def test_creates_new_catalog_when_missing(self, monkeypatch, tmp_path):
         catalog_file = tmp_path / "model_catalog.json"
         monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
-        model_name, entry = add_model_to_catalog("openai/gpt-4o", 2.5, 10.0)
+        monkeypatch.setattr(config_module, "_fetch_model_info_from_llmprices", _make_fake_fetch(2.5, 10.0))
+        model_name, entry = add_model_to_catalog("openai/gpt-4o")
         assert model_name == "gpt-4o"
         assert entry["input"] == 2.5
         assert entry["output"] == 10.0
         assert entry["llmprices_id"] == "openai/gpt-4o"
         assert catalog_file.exists()
 
-    def test_manual_prices_update_existing_catalog(self, monkeypatch, tmp_path):
+    def test_updates_existing_catalog(self, monkeypatch, tmp_path):
         catalog_file = tmp_path / "model_catalog.json"
         catalog_file.write_text(json.dumps(SAMPLE_CATALOG))
         monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
-        model_name, entry = add_model_to_catalog("openai/new-model", 1.0, 3.0)
+        monkeypatch.setattr(config_module, "_fetch_model_info_from_llmprices", _make_fake_fetch(1.0, 3.0))
+        model_name, entry = add_model_to_catalog("openai/new-model")
         assert model_name == "new-model"
         loaded = json.loads(catalog_file.read_text())
         assert "new-model" in loaded["models"]
@@ -468,8 +525,16 @@ class TestAddModelToCatalog:
     def test_vision_defaults_to_false_when_not_in_api_response(self, monkeypatch, tmp_path):
         catalog_file = tmp_path / "model_catalog.json"
         monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
-        model_name, entry = add_model_to_catalog("openai/text-only", 1.0, 3.0)
+        monkeypatch.setattr(config_module, "_fetch_model_info_from_llmprices", _make_fake_fetch())
+        _, entry = add_model_to_catalog("openai/text-only")
         assert entry["supports_vision"] is False
+
+    def test_vision_populated_from_api_response(self, monkeypatch, tmp_path):
+        catalog_file = tmp_path / "model_catalog.json"
+        monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
+        monkeypatch.setattr(config_module, "_fetch_model_info_from_llmprices", _make_fake_fetch(supports_vision=True))
+        _, entry = add_model_to_catalog("openai/gpt-4o")
+        assert entry["supports_vision"] is True
 
     def test_supports_vision_preserved_from_existing_entry(self, monkeypatch, tmp_path):
         catalog_file = tmp_path / "model_catalog.json"
@@ -484,7 +549,9 @@ class TestAddModelToCatalog:
         }
         catalog_file.write_text(json.dumps(existing))
         monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
-        model_name, entry = add_model_to_catalog("openai/gpt-4o", 3.0, 12.0)
+        # API response does not include vision info; existing value should remain True
+        monkeypatch.setattr(config_module, "_fetch_model_info_from_llmprices", _make_fake_fetch(3.0, 12.0))
+        _, entry = add_model_to_catalog("openai/gpt-4o")
         assert entry["supports_vision"] is True
 
     def test_auto_fetch_uses_llmprices(self, monkeypatch, tmp_path):
@@ -512,17 +579,22 @@ class TestAddModelToCatalog:
         with pytest.raises(RuntimeError, match="network error"):
             add_model_to_catalog("openai/gpt-4o")
 
-    def test_prices_are_rounded_to_4_decimal_places(self, monkeypatch, tmp_path):
+    def test_fetched_prices_stored_as_returned(self, monkeypatch, tmp_path):
         catalog_file = tmp_path / "model_catalog.json"
         monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
-        _, entry = add_model_to_catalog("openai/gpt-4o", 2.123456789, 9.987654321)
-        assert entry["input"] == round(2.123456789, 4)
-        assert entry["output"] == round(9.987654321, 4)
+        monkeypatch.setattr(
+            config_module, "_fetch_model_info_from_llmprices",
+            _make_fake_fetch(2.1235, 9.9877),
+        )
+        _, entry = add_model_to_catalog("openai/gpt-4o")
+        assert entry["input"] == 2.1235
+        assert entry["output"] == 9.9877
 
     def test_slash_in_model_name_part_preserved(self, monkeypatch, tmp_path):
         """provider/org/model-name: only the first slash splits provider from model key."""
         catalog_file = tmp_path / "model_catalog.json"
         monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
-        model_name, entry = add_model_to_catalog("google/gemini/2.5-pro", 1.25, 10.0)
+        monkeypatch.setattr(config_module, "_fetch_model_info_from_llmprices", _make_fake_fetch(1.25, 10.0))
+        model_name, entry = add_model_to_catalog("google/gemini/2.5-pro")
         assert model_name == "gemini/2.5-pro"
         assert entry["llmprices_id"] == "google/gemini/2.5-pro"

@@ -168,10 +168,11 @@ def load_model_catalog() -> Dict[str, Any]:
         template_file = catalog_file.parent / "model_catalog.template.json"
         error_msg = (
             f"Model catalog file not found at {catalog_file}. "
-            "Copy the template and add your models:\n"
+            "Copy the template to get started:\n"
             f"  cp {template_file} {catalog_file}\n"
-            "  python main.py --add-model openai/gpt-4o\n"
-            "  python main.py --add-model google/gemini-2.5-pro"
+            "Then edit src/model_catalog.json to configure your models, "
+            "or use 'openai/model-name' or 'google/model-name' with -m to "
+            "auto-register OpenAI/Google models on first use."
         )
         logging.error(error_msg)
         raise FileNotFoundError(error_msg)
@@ -338,9 +339,36 @@ def resolve_model(
         return None
 
     if requested_model:
+        # Handle provider/model format (e.g. "openai/gpt-4o", "google/gemini-2.5-pro")
+        if "/" in requested_model:
+            provider, model_key = requested_model.split("/", 1)
+            _SUPPORTED_PROVIDERS = ("openai", "google")
+            if provider.lower() not in _SUPPORTED_PROVIDERS:
+                raise ValueError(
+                    f"Provider '{provider}' is not supported for auto-registration. "
+                    f"Supported providers: {', '.join(_SUPPORTED_PROVIDERS)}. "
+                    "For other models, add them to model_catalog.json directly."
+                )
+            if model_key not in available_models:
+                try:
+                    add_model_to_catalog(requested_model)
+                    available_models = get_available_models()
+                    logging.info(f"Auto-registered '{model_key}' from '{provider}' into model_catalog.json.")
+                except Exception as e:
+                    raise ValueError(
+                        f"Could not auto-register '{requested_model}' from llmprices.ai: {e}. "
+                        "Add it to model_catalog.json manually instead."
+                    ) from e
+            requested_model = model_key
+
         # 1) requested_model (if provided and valid)
         if requested_model not in available_models:
-            raise ValueError(f"Custom model '{requested_model}' is not configured. {suggestion}")
+            raise ValueError(
+                f"Model '{requested_model}' is not in the catalog. "
+                "Edit model_catalog.json to add it, or use "
+                f"'openai/{requested_model}' or 'google/{requested_model}' "
+                "to auto-register it if it is available from OpenAI or Google."
+            )
         if not is_compatible(requested_model):
             raise ValueError(
                 f"Custom model '{requested_model}' is not {compatibility_label} for this operation. {suggestion}"
@@ -409,19 +437,14 @@ def _fetch_model_info_from_llmprices(llmprices_id: str, pricing_unit: int) -> Di
     return result
 
 
-def add_model_to_catalog(
-    provider_model: str,
-    input_price: Optional[float] = None,
-    output_price: Optional[float] = None,
-) -> Tuple[str, Dict[str, Any]]:
-    """Add or update a model in the local model catalog.
+def add_model_to_catalog(provider_model: str) -> Tuple[str, Dict[str, Any]]:
+    """Add or update a model in the local model catalog by fetching pricing from llmprices.ai.
 
     ``provider_model`` must be in ``provider/model-name`` format
     (e.g. ``openai/gpt-4o``, ``google/gemini-2.5-pro``).  The local
     catalog key will be the part after the slash (e.g. ``gpt-4o``).
 
-    If ``input_price`` / ``output_price`` are omitted the function fetches
-    current pricing from llmprices.ai automatically.  ``supports_vision``
+    Pricing is fetched automatically from llmprices.ai.  ``supports_vision``
     is populated from the API response when available, otherwise defaults
     to ``False`` — edit ``model_catalog.json`` directly to change it.
 
@@ -455,17 +478,12 @@ def add_model_to_catalog(
     entry: Dict[str, Any] = dict(catalog["models"].get(model_name, {}))
     entry["llmprices_id"] = provider_model
 
-    if input_price is None or output_price is None:
-        fetched = _fetch_model_info_from_llmprices(provider_model, pricing_unit)
-        entry["input"] = fetched["input"]
-        entry["output"] = fetched["output"]
-        entry["last_sync"] = current_month
-        if "supports_vision" not in entry and "supports_vision" in fetched:
-            entry["supports_vision"] = fetched["supports_vision"]
-    else:
-        entry["input"] = round(input_price, 4)
-        entry["output"] = round(output_price, 4)
-        entry["last_sync"] = current_month
+    fetched = _fetch_model_info_from_llmprices(provider_model, pricing_unit)
+    entry["input"] = fetched["input"]
+    entry["output"] = fetched["output"]
+    entry["last_sync"] = current_month
+    if "supports_vision" not in entry and "supports_vision" in fetched:
+        entry["supports_vision"] = fetched["supports_vision"]
 
     entry.setdefault("supports_vision", False)
 
@@ -512,49 +530,6 @@ def maybe_sync_model_pricing(model: str) -> None:
             )
     except Exception as e:
         logging.warning(f"Could not sync pricing for {model} from llmprices.ai: {e}")
-
-
-def force_sync_all_pricing() -> dict:
-    """Force-sync pricing for all models that have a llmprices_id, regardless of last_sync.
-
-    Returns a dict mapping model name → 'updated' | 'unchanged' | 'failed'.
-    """
-    catalog = load_model_catalog()
-    pricing_unit = catalog["config"]["pricing_unit"]
-    current_month = datetime.now().strftime("%Y-%m")
-    results: dict = {}
-
-    for model, entry in catalog["models"].items():
-        llmprices_id = entry.get("llmprices_id")
-        if not llmprices_id:
-            continue
-        try:
-            url = f"{LLMPRICES_API_BASE}?model={llmprices_id}"
-            with urllib.request.urlopen(url, timeout=5) as response:  # nosec B310
-                data = json.loads(response.read())
-
-            pricing = data.get("pricing", {})
-            prompt_price = float(pricing.get("prompt", 0))
-            completion_price = float(pricing.get("completion", 0))
-
-            if prompt_price > 0 and completion_price > 0:
-                new_input = round(prompt_price * pricing_unit, 4)
-                new_output = round(completion_price * pricing_unit, 4)
-                old_input = entry.get("input")
-                old_output = entry.get("output")
-                catalog["models"][model]["input"] = new_input
-                catalog["models"][model]["output"] = new_output
-                catalog["models"][model]["last_sync"] = current_month
-                changed = (new_input != old_input or new_output != old_output)
-                results[model] = "updated" if changed else "unchanged"
-            else:
-                results[model] = "unchanged"
-        except Exception as e:
-            logging.warning(f"Could not sync pricing for {model}: {e}")
-            results[model] = "failed"
-
-    save_model_catalog(catalog)
-    return results
 
 
 # Default model used by resolve_model() as the final named fallback

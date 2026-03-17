@@ -45,12 +45,6 @@ class TestMainGlobalCommands:
             main()
         mock_handler.assert_called_once()
 
-    def test_update_pricing_calls_handle_info_commands(self):
-        with patch("src.cli.handle_info_commands", return_value=True) as mock_handler, \
-             patch("sys.argv", ["main.py", "--update-pricing", "gpt-4o", "0.03", "0.06"]):
-            main()
-        mock_handler.assert_called_once()
-
     def test_list_models_returns_without_error(self):
         with patch("src.cli.handle_info_commands", return_value=True), \
              patch("sys.argv", ["main.py", "--list-models"]):
@@ -93,9 +87,6 @@ class TestMainNoCommand:
         return Namespace(
             show_config=False,
             list_models=False,
-            update_pricing=None,
-            sync_pricing=False,
-            add_model=None,
             professor="heller",
             command=None,
         )
@@ -191,9 +182,6 @@ class TestMainUnknownCommand:
         fake_args = Namespace(
             show_config=False,
             list_models=False,
-            update_pricing=None,
-            sync_pricing=False,
-            add_model=None,
             professor="heller",
             command="fly",
             model=None,

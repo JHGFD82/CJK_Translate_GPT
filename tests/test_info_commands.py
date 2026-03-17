@@ -54,7 +54,6 @@ def _make_ns(**kwargs) -> argparse.Namespace:
     attribute that handle_info_commands inspects."""
     defaults = dict(
         list_models=False,
-        update_pricing=None,
         command=None,
         professor=None,
         usage_subcommand=None,
@@ -174,19 +173,6 @@ class TestHandleInfoCommandsGlobal:
         monkeypatch.setattr(info_mod, "get_pricing_unit", lambda: 1_000_000)
         handle_info_commands(_make_ns(list_models=True))
         assert "gpt-4o" in capsys.readouterr().out
-
-    def test_update_pricing_returns_true(self, monkeypatch, capsys, tmp_path):
-        mock_tracker = MagicMock()
-        with patch("src.runtime.info_commands.TokenTracker", return_value=mock_tracker):
-            args = _make_ns(update_pricing=["gpt-4o", "1.50", "6.00"])
-            result = handle_info_commands(args)
-        assert result is True
-        mock_tracker.update_pricing.assert_called_once_with("gpt-4o", 1.50, 6.00)
-
-    def test_update_pricing_invalid_price_raises_cli_error(self):
-        args = _make_ns(update_pricing=["gpt-4o", "not-a-number", "6.00"])
-        with pytest.raises(CLIError, match="valid numbers"):
-            handle_info_commands(args)
 
     def test_no_matching_flag_returns_false(self):
         args = _make_ns()

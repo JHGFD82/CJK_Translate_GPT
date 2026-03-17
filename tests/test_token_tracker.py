@@ -691,47 +691,6 @@ class TestListArchivedMonths:
 
 
 # ---------------------------------------------------------------------------
-# TokenTracker.update_pricing
-# ---------------------------------------------------------------------------
-
-class TestUpdatePricing:
-
-    def test_calls_save_model_catalog_with_updated_entry(self, tracker):
-        existing_catalog = {
-            "config": {"pricing_unit": 1_000_000, "monthly_limit": 250.0},
-            "models": {"gpt-4o": {"input": 2.75, "output": 11.0, "supports_vision": True}},
-        }
-        saved = {}
-
-        def fake_save(cfg):
-            saved.update(cfg)
-
-        with patch("src.tracking.token_tracker.load_model_catalog", return_value=existing_catalog), \
-             patch("src.tracking.token_tracker.save_model_catalog", side_effect=fake_save):
-            tracker.update_pricing("gpt-4o", 1.50, 6.00)
-
-        assert saved["models"]["gpt-4o"]["input"] == pytest.approx(1.50)
-        assert saved["models"]["gpt-4o"]["output"] == pytest.approx(6.00)
-
-    def test_adds_new_model_to_catalog(self, tracker):
-        existing_catalog = {
-            "config": {"pricing_unit": 1_000_000, "monthly_limit": 250.0},
-            "models": {},
-        }
-        saved = {}
-
-        def fake_save(cfg):
-            saved.update(cfg)
-
-        with patch("src.tracking.token_tracker.load_model_catalog", return_value=existing_catalog), \
-             patch("src.tracking.token_tracker.save_model_catalog", side_effect=fake_save):
-            tracker.update_pricing("new-model", 0.50, 2.00)
-
-        assert "new-model" in saved["models"]
-        assert saved["models"]["new-model"]["input"] == pytest.approx(0.50)
-
-
-# ---------------------------------------------------------------------------
 # Shared realistic fixture data (placeholder names, values from real archives)
 # ---------------------------------------------------------------------------
 

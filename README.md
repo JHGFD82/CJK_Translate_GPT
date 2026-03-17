@@ -30,7 +30,7 @@ main.py
        (shared config, model catalog loading, language/page/professor parsing helpers)
   -> src/runtime/
      (runtime orchestration)
-     - info_commands.py: list-models, usage-report, update-pricing
+     - info_commands.py: list-models, usage-report
      - sandbox_processor.py: translation/OCR command orchestration
   -> src/services/
      (API-facing operations)
@@ -100,23 +100,30 @@ python main.py smith translate CE -i document.pdf -o translation.pdf -f AppleGot
 # List all available models with pricing and vision support
 python main.py --list-models
 
-# Use specific model for translation
+# Use a model already in model_catalog.json
 python main.py heller translate CE -i document.pdf -m gpt-4o-mini
 
-# Use specific model for transcription (OCR)
-python main.py smith transcribe E -i image.jpg -o extracted.txt -m gpt-4o
+# First-time use of an OpenAI or Google model not yet in the catalog
+# (auto-fetches pricing from llmprices.ai and adds it to model_catalog.json)
+python main.py heller translate CE -i document.pdf -m openai/gpt-4o-mini
+python main.py heller transcribe E -i image.jpg -m google/gemini-2.5-flash
+
+# After first use the short name works directly
+python main.py heller translate CE -i document.pdf -m gpt-4o-mini
 
 # Use different models for cost optimization
 python main.py heller translate JE -i document.txt -m gpt-4o-mini  # Lower cost
-python main.py smith translate CE -i complex.pdf -m gpt-4o        # Higher quality
+python main.py heller translate CE -i complex.pdf -m gpt-4o        # Higher quality
 ```
 
-**Available Models:**
+**Adding models to the catalog:**
+- **OpenAI or Google models**: Use `openai/model-name` or `google/model-name` with `-m` on the first invocation. Pricing is fetched automatically from [llmprices.ai](https://llmprices.ai) and saved to `src/model_catalog.json`.
+- **All other models** (Mistral, Llama, etc.): Edit `src/model_catalog.json` directly. Copy `src/model_catalog.template.json` as a starting point if you don't have a catalog yet.
+
+**Available models (examples — run `--list-models` for current list):**
 - `gpt-4o-mini` - Most cost-effective, supports vision (recommended for OCR)
 - `gpt-4o` - Balanced performance and cost, supports vision (default for translation)
-- `gpt-4-turbo` - High quality, supports vision
 - `gpt-5` - Latest model, supports vision
-- Plus various non-vision models (see `--list-models` for full list)
 
 **Note:** OCR requires vision-capable models. If you specify a model that doesn't support vision for OCR operations, you'll receive an error.
 
@@ -278,6 +285,31 @@ Each professor has separate token usage tracking and monthly budgets:
 - All totals in each file cover that month only; no single file grows indefinitely
 - Monthly limits are configurable in `src/model_catalog.json`
 - All-time totals are computed on demand by aggregating the active file with all archive files (`usage report --all-time`)
+
+## Model Catalog
+
+Model pricing and capabilities are stored locally in `src/model_catalog.json` (not tracked by git — each installation has its own copy).
+
+**Setting up the catalog:**
+1. Copy the template: `cp src/model_catalog.template.json src/model_catalog.json`
+2. Add models in one of two ways:
+   - **OpenAI or Google models**: Just use `openai/model-name` or `google/model-name` with `-m` on first run — pricing is fetched automatically from [llmprices.ai](https://llmprices.ai) and saved
+   - **All other models**: Edit `src/model_catalog.json` directly, following the schema in the template
+
+**Manual catalog entry format:**
+```json
+{
+  "config": { "pricing_unit": 1000000, "monthly_limit": 250.0 },
+  "models": {
+    "mistral-small": {
+      "input": 0.1,
+      "output": 0.3,
+      "supports_vision": false
+    }
+  }
+}
+```
+Prices are per `pricing_unit` tokens (default 1,000,000).  Set `supports_vision: true` for models that accept image input.
 
 ## Output File Formats
 

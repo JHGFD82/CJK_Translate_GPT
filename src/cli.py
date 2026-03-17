@@ -42,10 +42,12 @@ Usage / reporting:
 Global commands (no professor required):
   python main.py --show-config
   python main.py --list-models
-  python main.py --add-model openai/gpt-4o              Auto-fetch pricing from llmprices.ai
-  python main.py --add-model google/gemini-2.5-pro      Auto-fetch for Google models
-  python main.py --add-model openai/gpt-4o 2.5 10.0    Manual input/output prices (per million tokens)
-  python main.py --update-pricing gpt-4o 0.03 0.06
+
+Using a new model for the first time:
+  python main.py heller translate CE -m openai/gpt-4o-new   Auto-registers from llmprices.ai
+  python main.py heller translate CE -m google/gemini-2.5-pro
+  Use 'provider/model' format for OpenAI or Google models not yet in model_catalog.json.
+  For all other models, add them directly to src/model_catalog.json.
 
 Translation:
   python main.py heller translate CE -i document.pdf
@@ -76,34 +78,6 @@ Transcription (OCR):
         dest='list_models',
         action='store_true',
         help='List all available models and their capabilities',
-    )
-    parser.add_argument(
-        '--update-pricing',
-        dest='update_pricing',
-        type=str,
-        nargs=3,
-        metavar=('MODEL', 'INPUT_PRICE', 'OUTPUT_PRICE'),
-        help='Update pricing for a specific model',
-    )
-    parser.add_argument(
-        '--sync-pricing',
-        dest='sync_pricing',
-        action='store_true',
-        help='Force-sync pricing for all models from llmprices.ai',
-    )
-    parser.add_argument(
-        '--add-model',
-        dest='add_model',
-        type=str,
-        nargs='+',
-        metavar='ARG',
-        help=(
-            'Add or update a model in the catalog. '
-            'Format: PROVIDER/MODEL [INPUT_PRICE OUTPUT_PRICE] '
-            '(e.g. openai/gpt-4o or openai/gpt-4o 2.5 10.0). '
-            'Prices are per million tokens. '
-            'Omit prices to auto-fetch from llmprices.ai.'
-        ),
     )
 
     # Professor-based commands use subparsers
@@ -222,7 +196,7 @@ def main() -> None:
         args = parser.parse_args()
 
         # Handle global commands (no professor required)
-        if args.show_config or args.list_models or args.update_pricing or args.sync_pricing or args.add_model:
+        if args.show_config or args.list_models:
             if handle_info_commands(args):
                 return
 
