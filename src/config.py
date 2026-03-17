@@ -1,16 +1,14 @@
 """
 Configuration constants for the PU AI Sandbox.
+
+Language helpers, CLI argument types, and professor configuration live here.
+Model catalog, pricing, and model resolution are in src/models/.
 """
 
-import json
-import logging
 import argparse
 import os
 import re
-import urllib.request
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple, Union
+from typing import Dict, Optional, Tuple, Union
 
 # Language mapping
 LANGUAGE_MAP: Dict[str, str] = {
@@ -152,387 +150,32 @@ def get_api_key(professor_name: str) -> Tuple[str, str]:
         f"Please set {prof_config['primary_key']} in your .env file."
     )
 
-# Constants
-MODEL_CATALOG_FILE = "model_catalog.json"
-DEFAULT_FALLBACK_MODEL = "gpt-4o-mini"
 
-def get_model_catalog_path() -> Path:
-    """Get the path to the model catalog file."""
-    return Path(__file__).parent / MODEL_CATALOG_FILE
+# ---------------------------------------------------------------------------
+# Re-exports — model catalog, pricing, and resolver live in src/models/
+# ---------------------------------------------------------------------------
+from .models import (  # noqa: E402  (after professor-config code)
+    DEFAULT_FALLBACK_MODEL,
+    DEFAULT_MODEL,
+    MODEL_CATALOG_FILE,
+    PORTKEY_PRICING_API_BASE,
+    _PORTKEY_PROVIDER_MAP,
+    _fetch_model_pricing,
+    add_model_to_catalog,
+    get_available_models,
+    get_model_catalog_path,
+    get_model_max_completion_tokens,
+    get_model_pricing,
+    get_model_system_role,
+    get_monthly_limit,
+    get_pricing_unit,
+    get_vision_capable_models,
+    load_model_catalog,
+    maybe_sync_model_pricing,
+    model_has_fixed_parameters,
+    model_supports_vision,
+    model_uses_max_completion_tokens,
+    resolve_model,
+    save_model_catalog,
+)
 
-def load_model_catalog() -> Dict[str, Any]:
-    """Load model catalog from file with comprehensive validation."""
-    catalog_file = get_model_catalog_path()
-    
-    if not catalog_file.exists():
-        template_file = catalog_file.parent / "model_catalog.template.json"
-        error_msg = (
-            f"Model catalog file not found at {catalog_file}. "
-            "Copy the template to get started:\n"
-            f"  cp {template_file} {catalog_file}\n"
-            "Then edit src/model_catalog.json to configure your models, "
-            "or use 'openai/model-name' or 'google/model-name' with -m to "
-            "auto-register OpenAI/Google models on first use."
-        )
-        logging.error(error_msg)
-        raise FileNotFoundError(error_msg)
-    
-    try:
-        with open(catalog_file, 'r') as f:
-            config = json.load(f)
-    except json.JSONDecodeError as e:
-        error_msg = f"Invalid JSON in model catalog file {catalog_file}: {e}"
-        logging.error(error_msg)
-        raise ValueError(error_msg)
-    
-    # Validate required sections
-    if "config" not in config:
-        error_msg = f"Model catalog file {catalog_file} missing required 'config' section."
-        logging.error(error_msg)
-        raise ValueError(error_msg)
-    
-    if "models" not in config:
-        error_msg = f"Model catalog file {catalog_file} missing required 'models' section."
-        logging.error(error_msg)
-        raise ValueError(error_msg)
-    
-    if not config["models"]:
-        error_msg = f"Model catalog file {catalog_file} has no models configured."
-        logging.error(error_msg)
-        raise ValueError(error_msg)
-    
-    return config
-
-def get_available_models() -> List[str]:
-    """Get available models from the model catalog."""
-    config = load_model_catalog()
-    return list(config["models"].keys())
-
-def get_model_pricing(model: str) -> Dict[str, float]:
-    """Get pricing for a specific model."""
-    config = load_model_catalog()
-    models = config["models"]
-    
-    if model not in models:
-        # Try to find a fallback model
-        if DEFAULT_FALLBACK_MODEL in models:
-            logging.warning(f"Model {model} not found in pricing config. Using {DEFAULT_FALLBACK_MODEL} rates.")
-            return models[DEFAULT_FALLBACK_MODEL]
-        else:
-            # No fallback available - this is a configuration error
-            available_models = list(models.keys())
-            error_msg = (
-                f"Model '{model}' not found in model catalog and no fallback model '{DEFAULT_FALLBACK_MODEL}' available. "
-                f"Available models: {available_models}. "
-                f"Please update your model catalog file."
-            )
-            logging.error(error_msg)
-            raise ValueError(error_msg)
-    
-    return models[model]
-
-def get_pricing_unit() -> int:
-    """Get the pricing unit from the model catalog config."""
-    config = load_model_catalog()
-    return config["config"]["pricing_unit"]
-
-def get_monthly_limit() -> float:
-    """Get the monthly spending limit from the model catalog config."""
-    config = load_model_catalog()
-    return config["config"]["monthly_limit"]
-
-def model_supports_vision(model: str) -> bool:
-    """Check if a model supports vision/image processing."""
-    config = load_model_catalog()
-    models = config["models"]
-    
-    if model not in models:
-        logging.warning(f"Model {model} not found in pricing config. Assuming no vision support.")
-        return False
-    
-    return models[model].get("supports_vision", False)
-
-def get_vision_capable_models() -> List[str]:
-    """Get list of models that support vision/image processing."""
-    config = load_model_catalog()
-    return [model for model, details in config["models"].items() 
-            if details.get("supports_vision", False)]
-
-def get_model_system_role(model: str) -> str:
-    """Get the appropriate system message role for a model.
-    
-    Newer reasoning models (e.g. o3-mini, gpt-5) require 'developer' instead of 'system'.
-    Defaults to 'system' for all other models.
-    """
-    config = load_model_catalog()
-    models = config["models"]
-    return models.get(model, {}).get("system_role", "system")
-
-def model_uses_max_completion_tokens(model: str) -> bool:
-    """Check if a model requires 'max_completion_tokens' instead of 'max_tokens'.
-    
-    Newer reasoning models (e.g. o3-mini, gpt-5) reject 'max_tokens'.
-    """
-    config = load_model_catalog()
-    models = config["models"]
-    return models.get(model, {}).get("use_max_completion_tokens", False)
-
-def model_has_fixed_parameters(model: str) -> bool:
-    """Check if a model only accepts default sampling parameters.
-
-    Reasoning models (e.g. o3-mini, gpt-5) reject temperature, top_p,
-    frequency_penalty, and presence_penalty — only the default values are supported.
-    """
-    config = load_model_catalog()
-    models = config["models"]
-    return models.get(model, {}).get("fixed_parameters", False)
-
-def get_model_max_completion_tokens(model: str, default: int) -> int:
-    """Get per-model max completion tokens override, falling back to the given default.
-
-    Reasoning models (e.g. gpt-5) consume hidden reasoning tokens from the same
-    completion budget, so they need a larger cap than standard models.
-    Set 'max_completion_tokens' in model_catalog.json to override the default.
-    """
-    config = load_model_catalog()
-    return config["models"].get(model, {}).get("max_completion_tokens", default)
-
-def resolve_model(
-    requested_model: Optional[str] = None,
-    *,
-    prefer_model: Optional[str] = None,
-    require_vision: bool = False,
-) -> str:
-    """Resolve a model name from config using deterministic fallback rules.
-
-    Resolution order:
-    1) requested_model (if provided and valid)
-    2) prefer_model (if provided and valid)
-    3) DEFAULT_MODEL (if valid)
-    4) first available compatible model from pricing config
-
-    Args:
-        requested_model: Optional user-specified model
-        prefer_model: Optional mode-specific preferred model (e.g., OCR_MODEL)
-        require_vision: Whether selected model must support vision
-
-    Returns:
-        Resolved model name
-
-    Raises:
-        ValueError: If requested model is invalid/incompatible or no compatible model exists
-    """
-    available_models = get_available_models()
-    compatibility_label = "vision-capable" if require_vision else "configured"
-    suggestion = (
-        "Use --list-models to see which models support vision."
-        if require_vision
-        else "Use --list-models to see available options."
-    )
-
-    def is_compatible(model_name: str) -> bool:
-        return model_supports_vision(model_name) if require_vision else True
-
-    def resolve_candidate(model_name: Optional[str]) -> Optional[str]:
-        if model_name and model_name in available_models and is_compatible(model_name):
-            return model_name
-        return None
-
-    if requested_model:
-        # Handle provider/model format (e.g. "openai/gpt-4o", "google/gemini-2.5-pro")
-        if "/" in requested_model:
-            provider, model_key = requested_model.split("/", 1)
-            if model_key not in available_models:
-                try:
-                    add_model_to_catalog(requested_model)
-                    available_models = get_available_models()
-                    logging.info(f"Auto-registered '{model_key}' from '{provider}' into model_catalog.json.")
-                except Exception as e:
-                    raise ValueError(
-                        f"Could not auto-register '{requested_model}' from PortKey pricing catalog: {e}. "
-                        "Add it to model_catalog.json manually instead."
-                    ) from e
-            requested_model = model_key
-
-        # 1) requested_model (if provided and valid)
-        if requested_model not in available_models:
-            raise ValueError(
-                f"Model '{requested_model}' is not in the catalog. "
-                "Edit model_catalog.json to add it, or use "
-                "'provider/model-name' format (e.g. 'openai/gpt-4o', "
-                "'google/gemini-2.5-pro', 'mistral/mistral-small-latest', "
-                "'azure-ai/Llama-3.3-70B-Instruct') to auto-register it."
-            )
-        if not is_compatible(requested_model):
-            raise ValueError(
-                f"Custom model '{requested_model}' is not {compatibility_label} for this operation. {suggestion}"
-            )
-        return requested_model
-
-    # 2) prefer_model (if provided and valid)
-    # 3) DEFAULT_MODEL (if valid)
-    priority_candidates = [candidate for candidate in (prefer_model, DEFAULT_MODEL) if candidate]
-    for candidate in priority_candidates:
-        resolved = resolve_candidate(candidate)
-        if resolved:
-            return resolved
-
-    # 4) first available compatible model from pricing config
-    for model in available_models:
-        if model in priority_candidates:
-            continue
-        resolved = resolve_candidate(model)
-        if resolved:
-            return resolved
-
-    raise ValueError(
-        f"No {compatibility_label} models available. Available models: {available_models}. "
-        "Please update model_catalog.json."
-    )
-
-def save_model_catalog(config: Dict[str, Any]) -> None:
-    """Save model catalog to file."""
-    catalog_file = get_model_catalog_path()
-    catalog_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(catalog_file, 'w') as f:
-        json.dump(config, f, indent=2)
-
-
-PORTKEY_PRICING_API_BASE = "https://api.portkey.ai/model-configs/pricing"
-
-# Maps user-facing provider prefix to PortKey's API provider slug where they differ
-_PORTKEY_PROVIDER_MAP: Dict[str, str] = {
-    "google": "vertex-ai",
-    "mistral": "mistral-ai",
-}
-
-
-def _fetch_model_pricing(provider_model: str, pricing_unit: int) -> Dict[str, Any]:
-    """Fetch pricing from PortKey's pricing API.
-
-    ``provider_model`` must be in ``provider/model-name`` format.
-    Prices from the API are per 100 tokens; multiply by ``pricing_unit / 100``
-    to get the stored price (e.g. ×10,000 when pricing_unit=1,000,000).
-
-    Returns a dict with at minimum 'input' and 'output' keys.
-    Raises RuntimeError if the fetch fails or returns no usable pricing.
-    """
-    provider, model_key = provider_model.split("/", 1)
-    api_provider = _PORTKEY_PROVIDER_MAP.get(provider.lower(), provider.lower())
-    url = f"{PORTKEY_PRICING_API_BASE}/{api_provider}/{model_key}"
-
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=8) as response:  # nosec B310
-        data = json.loads(response.read())
-
-    pay = data.get("pay_as_you_go", {})
-    input_price = float(pay.get("request_token", {}).get("price", 0))
-    output_price = float(pay.get("response_token", {}).get("price", 0))
-
-    if not (input_price > 0 and output_price > 0):
-        raise RuntimeError(f"No valid pricing data for '{provider_model}' in PortKey pricing catalog")
-
-    # PortKey stores per-100-token prices; convert to our pricing_unit
-    factor = pricing_unit / 100
-    return {
-        "input": round(input_price * factor, 4),
-        "output": round(output_price * factor, 4),
-    }
-
-
-def add_model_to_catalog(provider_model: str) -> Tuple[str, Dict[str, Any]]:
-    """Add or update a model in the local model catalog by fetching pricing from PortKey.
-
-    ``provider_model`` must be in ``provider/model-name`` format
-    (e.g. ``openai/gpt-4o``, ``google/gemini-2.5-pro``, ``azure-ai/Llama-3.3-70B-Instruct``).
-    The local catalog key will be the part after the slash (e.g. ``gpt-4o``).
-
-    Pricing is fetched automatically from PortKey's pricing catalog.  ``supports_vision``
-    defaults to ``False`` — edit ``model_catalog.json`` directly to change it.
-
-    Returns ``(model_name, entry)``.
-    """
-    if "/" not in provider_model:
-        raise ValueError(
-            f"Model '{provider_model}' must be in 'provider/model-name' format "
-            "(e.g. 'openai/gpt-4o', 'google/gemini-2.5-pro')."
-        )
-
-    _provider, model_name = provider_model.split("/", 1)
-
-    # Load or initialize the catalog without requiring models to exist yet
-    catalog_file = get_model_catalog_path()
-    if catalog_file.exists():
-        try:
-            with open(catalog_file, "r") as f:
-                catalog = json.load(f)
-            catalog.setdefault("config", {"pricing_unit": 1_000_000, "monthly_limit": 250.0})
-            catalog.setdefault("models", {})
-        except (json.JSONDecodeError, Exception):
-            catalog = {"config": {"pricing_unit": 1_000_000, "monthly_limit": 250.0}, "models": {}}
-    else:
-        catalog = {"config": {"pricing_unit": 1_000_000, "monthly_limit": 250.0}, "models": {}}
-
-    pricing_unit = catalog["config"]["pricing_unit"]
-
-    # Preserve any existing extra fields (system_role, fixed_parameters, etc.)
-    entry: Dict[str, Any] = dict(catalog["models"].get(model_name, {}))
-    entry["llmprices_id"] = provider_model
-
-    fetched = _fetch_model_pricing(provider_model, pricing_unit)
-    entry["input"] = fetched["input"]
-    entry["output"] = fetched["output"]
-    entry["last_sync"] = datetime.now().isoformat(timespec="seconds")
-    if "supports_vision" not in entry and "supports_vision" in fetched:
-        entry["supports_vision"] = fetched["supports_vision"]
-
-    entry.setdefault("supports_vision", False)
-
-    catalog["models"][model_name] = entry
-    save_model_catalog(catalog)
-    return model_name, entry
-
-
-def maybe_sync_model_pricing(model: str) -> None:
-    """Fetch current pricing for a model from PortKey if not synced within the last hour.
-
-    Only runs when the model has a 'llmprices_id' field. Silently skips on any
-    network or parse error so the caller is never blocked.
-    """
-    try:
-        catalog = load_model_catalog()
-        model_entry = catalog["models"].get(model, {})
-        llmprices_id = model_entry.get("llmprices_id")
-        if not llmprices_id:
-            return
-
-        last_sync_str = model_entry.get("last_sync", "")
-        try:
-            last_sync_dt = datetime.fromisoformat(last_sync_str)
-            if datetime.now() - last_sync_dt < timedelta(hours=1):
-                return
-        except (ValueError, TypeError):
-            # Timestamp absent or in old monthly format — treat as stale and update
-            pass
-
-        pricing_unit = catalog["config"]["pricing_unit"]
-        fetched = _fetch_model_pricing(llmprices_id, pricing_unit)
-        now_iso = datetime.now().isoformat(timespec="seconds")
-        catalog["models"][model]["input"] = fetched["input"]
-        catalog["models"][model]["output"] = fetched["output"]
-        catalog["models"][model]["last_sync"] = now_iso
-        save_model_catalog(catalog)
-        logging.info(
-            f"Synced pricing for {model}: "
-            f"input=${catalog['models'][model]['input']}, "
-            f"output=${catalog['models'][model]['output']}"
-        )
-    except Exception as e:
-        logging.warning(f"Could not sync pricing for {model}: {e}")
-
-
-# Default model used by resolve_model() as the final named fallback
-DEFAULT_MODEL: str = "gpt-4o"

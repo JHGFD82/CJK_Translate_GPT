@@ -31,9 +31,9 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, asdict
 
-from ..config import (
+from ..models.catalog import (
     load_model_catalog, get_model_pricing, get_pricing_unit,
-    get_monthly_limit, save_model_catalog
+    get_monthly_limit, save_model_catalog,
 )
 
 

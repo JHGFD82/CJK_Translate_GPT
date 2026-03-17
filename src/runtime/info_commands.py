@@ -7,7 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from ..config import load_model_catalog, get_pricing_unit, load_professor_config
+from ..config import load_professor_config
+from ..models.catalog import load_model_catalog, get_pricing_unit
 from ..errors import CLIError
 from ..tracking.token_tracker import TokenTracker, get_usage_data_path, get_archive_dir
 

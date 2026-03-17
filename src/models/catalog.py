@@ -1,0 +1,172 @@
+"""Model catalog file I/O and model property queries."""
+
+import json
+import logging
+from pathlib import Path
+from typing import Any, Dict, List
+
+MODEL_CATALOG_FILE = "model_catalog.json"
+DEFAULT_FALLBACK_MODEL = "gpt-4o-mini"
+
+
+def get_model_catalog_path() -> Path:
+    """Get the path to the model catalog file (src/model_catalog.json)."""
+    # __file__ is src/models/catalog.py; parent.parent is src/
+    return Path(__file__).parent.parent / MODEL_CATALOG_FILE
+
+
+def load_model_catalog() -> Dict[str, Any]:
+    """Load model catalog from file with comprehensive validation."""
+    catalog_file = get_model_catalog_path()
+
+    if not catalog_file.exists():
+        template_file = catalog_file.parent / "model_catalog.template.json"
+        error_msg = (
+            f"Model catalog file not found at {catalog_file}. "
+            "Copy the template to get started:\n"
+            f"  cp {template_file} {catalog_file}\n"
+            "Then edit src/model_catalog.json to configure your models, "
+            "or use 'openai/model-name' or 'provider/model-name' with -m to "
+            "auto-register models on first use."
+        )
+        logging.error(error_msg)
+        raise FileNotFoundError(error_msg)
+
+    try:
+        with open(catalog_file, "r") as f:
+            config = json.load(f)
+    except json.JSONDecodeError as e:
+        error_msg = f"Invalid JSON in model catalog file {catalog_file}: {e}"
+        logging.error(error_msg)
+        raise ValueError(error_msg)
+
+    if "config" not in config:
+        error_msg = f"Model catalog file {catalog_file} missing required 'config' section."
+        logging.error(error_msg)
+        raise ValueError(error_msg)
+
+    if "models" not in config:
+        error_msg = f"Model catalog file {catalog_file} missing required 'models' section."
+        logging.error(error_msg)
+        raise ValueError(error_msg)
+
+    if not config["models"]:
+        error_msg = f"Model catalog file {catalog_file} has no models configured."
+        logging.error(error_msg)
+        raise ValueError(error_msg)
+
+    return config
+
+
+def save_model_catalog(config: Dict[str, Any]) -> None:
+    """Save model catalog to file."""
+    catalog_file = get_model_catalog_path()
+    catalog_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(catalog_file, "w") as f:
+        json.dump(config, f, indent=2)
+
+
+def get_available_models() -> List[str]:
+    """Get available models from the model catalog."""
+    config = load_model_catalog()
+    return list(config["models"].keys())
+
+
+def get_model_pricing(model: str) -> Dict[str, float]:
+    """Get pricing for a specific model."""
+    config = load_model_catalog()
+    models = config["models"]
+
+    if model not in models:
+        if DEFAULT_FALLBACK_MODEL in models:
+            logging.warning(
+                f"Model {model} not found in pricing config. Using {DEFAULT_FALLBACK_MODEL} rates."
+            )
+            return models[DEFAULT_FALLBACK_MODEL]
+        available_models = list(models.keys())
+        error_msg = (
+            f"Model '{model}' not found in model catalog and no fallback model "
+            f"'{DEFAULT_FALLBACK_MODEL}' available. "
+            f"Available models: {available_models}. "
+            "Please update your model catalog file."
+        )
+        logging.error(error_msg)
+        raise ValueError(error_msg)
+
+    return models[model]
+
+
+def get_pricing_unit() -> int:
+    """Get the pricing unit from the model catalog config."""
+    config = load_model_catalog()
+    return config["config"]["pricing_unit"]
+
+
+def get_monthly_limit() -> float:
+    """Get the monthly spending limit from the model catalog config."""
+    config = load_model_catalog()
+    return config["config"]["monthly_limit"]
+
+
+def model_supports_vision(model: str) -> bool:
+    """Check if a model supports vision/image processing."""
+    config = load_model_catalog()
+    models = config["models"]
+
+    if model not in models:
+        logging.warning(f"Model {model} not found in pricing config. Assuming no vision support.")
+        return False
+
+    return models[model].get("supports_vision", False)
+
+
+def get_vision_capable_models() -> List[str]:
+    """Get list of models that support vision/image processing."""
+    config = load_model_catalog()
+    return [
+        model for model, details in config["models"].items()
+        if details.get("supports_vision", False)
+    ]
+
+
+def get_model_system_role(model: str) -> str:
+    """Get the appropriate system message role for a model.
+
+    Newer reasoning models (e.g. o3-mini, gpt-5) require 'developer' instead of 'system'.
+    Defaults to 'system' for all other models.
+    """
+    config = load_model_catalog()
+    models = config["models"]
+    return models.get(model, {}).get("system_role", "system")
+
+
+def model_uses_max_completion_tokens(model: str) -> bool:
+    """Check if a model requires 'max_completion_tokens' instead of 'max_tokens'.
+
+    Newer reasoning models (e.g. o3-mini, gpt-5) reject 'max_tokens'.
+    """
+    config = load_model_catalog()
+    models = config["models"]
+    return models.get(model, {}).get("use_max_completion_tokens", False)
+
+
+def model_has_fixed_parameters(model: str) -> bool:
+    """Check if a model only accepts default sampling parameters.
+
+    Reasoning models (e.g. o3-mini, gpt-5) reject temperature, top_p,
+    frequency_penalty, and presence_penalty — only the default values are supported.
+    """
+    config = load_model_catalog()
+    models = config["models"]
+    return models.get(model, {}).get("fixed_parameters", False)
+
+
+def get_model_max_completion_tokens(model: str, default: int) -> int:
+    """Get per-model max completion tokens override, falling back to the given default.
+
+    Reasoning models (e.g. gpt-5) consume hidden reasoning tokens from the same
+    completion budget, so they need a larger cap than standard models.
+    Set 'max_completion_tokens' in model_catalog.json to override the default.
+    """
+    config = load_model_catalog()
+    return config["models"].get(model, {}).get("max_completion_tokens", default)
