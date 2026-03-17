@@ -342,13 +342,6 @@ def resolve_model(
         # Handle provider/model format (e.g. "openai/gpt-4o", "google/gemini-2.5-pro")
         if "/" in requested_model:
             provider, model_key = requested_model.split("/", 1)
-            _SUPPORTED_PROVIDERS = ("openai", "google")
-            if provider.lower() not in _SUPPORTED_PROVIDERS:
-                raise ValueError(
-                    f"Provider '{provider}' is not supported for auto-registration. "
-                    f"Supported providers: {', '.join(_SUPPORTED_PROVIDERS)}. "
-                    "For other models, add them to model_catalog.json directly."
-                )
             if model_key not in available_models:
                 try:
                     add_model_to_catalog(requested_model)
@@ -356,7 +349,7 @@ def resolve_model(
                     logging.info(f"Auto-registered '{model_key}' from '{provider}' into model_catalog.json.")
                 except Exception as e:
                     raise ValueError(
-                        f"Could not auto-register '{requested_model}' from llmprices.ai: {e}. "
+                        f"Could not auto-register '{requested_model}' from PortKey pricing catalog: {e}. "
                         "Add it to model_catalog.json manually instead."
                     ) from e
             requested_model = model_key
@@ -366,8 +359,9 @@ def resolve_model(
             raise ValueError(
                 f"Model '{requested_model}' is not in the catalog. "
                 "Edit model_catalog.json to add it, or use "
-                f"'openai/{requested_model}' or 'google/{requested_model}' "
-                "to auto-register it if it is available from OpenAI or Google."
+                "'provider/model-name' format (e.g. 'openai/gpt-4o', "
+                "'google/gemini-2.5-pro', 'mistral/mistral-small-latest', "
+                "'azure-ai/Llama-3.3-70B-Instruct') to auto-register it."
             )
         if not is_compatible(requested_model):
             raise ValueError(
@@ -404,49 +398,60 @@ def save_model_catalog(config: Dict[str, Any]) -> None:
         json.dump(config, f, indent=2)
 
 
-LLMPRICES_API_BASE = "https://llmprices.ai/api/pricing"
+PORTKEY_PRICING_API_BASE = "https://api.portkey.ai/model-configs/pricing"
+
+# Maps user-facing provider prefix to PortKey's API provider slug where they differ
+_PORTKEY_PROVIDER_MAP: Dict[str, str] = {
+    "google": "vertex-ai",
+    "mistral": "mistral-ai",
+}
 
 
-def _fetch_model_info_from_llmprices(llmprices_id: str, pricing_unit: int) -> Dict[str, Any]:
-    """Fetch pricing (and capabilities if available) from llmprices.ai.
+def _fetch_model_pricing(provider_model: str, pricing_unit: int) -> Dict[str, Any]:
+    """Fetch pricing from PortKey's pricing API.
+
+    ``provider_model`` must be in ``provider/model-name`` format.
+    Prices from the API are per 100 tokens; multiply by ``pricing_unit / 100``
+    to get the stored price (e.g. ×10,000 when pricing_unit=1,000,000).
 
     Returns a dict with at minimum 'input' and 'output' keys.
     Raises RuntimeError if the fetch fails or returns no usable pricing.
     """
-    url = f"{LLMPRICES_API_BASE}?model={llmprices_id}"
-    with urllib.request.urlopen(url, timeout=5) as response:  # nosec B310
+    provider, model_key = provider_model.split("/", 1)
+    api_provider = _PORTKEY_PROVIDER_MAP.get(provider.lower(), provider.lower())
+    url = f"{PORTKEY_PRICING_API_BASE}/{api_provider}/{model_key}"
+
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=8) as response:  # nosec B310
         data = json.loads(response.read())
 
-    pricing = data.get("pricing", {})
-    prompt_price = float(pricing.get("prompt", 0))
-    completion_price = float(pricing.get("completion", 0))
+    pay = data.get("pay_as_you_go", {})
+    input_price = float(pay.get("request_token", {}).get("price", 0))
+    output_price = float(pay.get("response_token", {}).get("price", 0))
 
-    if not (prompt_price > 0 and completion_price > 0):
-        raise RuntimeError(f"llmprices.ai returned no pricing data for '{llmprices_id}'")
+    if not (input_price > 0 and output_price > 0):
+        raise RuntimeError(f"No valid pricing data for '{provider_model}' in PortKey pricing catalog")
 
-    result: Dict[str, Any] = {
-        "input": round(prompt_price * pricing_unit, 4),
-        "output": round(completion_price * pricing_unit, 4),
+    # PortKey stores per-100-token prices; convert to our pricing_unit
+    factor = pricing_unit / 100
+    return {
+        "input": round(input_price * factor, 4),
+        "output": round(output_price * factor, 4),
     }
-
-    # Extract vision support if the API provides capability info
-    capabilities = data.get("capabilities", {})
-    if isinstance(capabilities, dict) and "vision" in capabilities:
-        result["supports_vision"] = bool(capabilities["vision"])
-
-    return result
 
 
 def add_model_to_catalog(provider_model: str) -> Tuple[str, Dict[str, Any]]:
-    """Add or update a model in the local model catalog by fetching pricing from llmprices.ai.
+    """Add or update a model in the local model catalog by fetching pricing from PortKey.
 
     ``provider_model`` must be in ``provider/model-name`` format
-    (e.g. ``openai/gpt-4o``, ``google/gemini-2.5-pro``).  The local
-    catalog key will be the part after the slash (e.g. ``gpt-4o``).
+    (e.g. ``openai/gpt-4o``, ``google/gemini-2.5-pro``, ``azure-ai/Llama-3.3-70B-Instruct``).
+    The local catalog key will be the part after the slash (e.g. ``gpt-4o``).
 
-    Pricing is fetched automatically from llmprices.ai.  ``supports_vision``
-    is populated from the API response when available, otherwise defaults
-    to ``False`` — edit ``model_catalog.json`` directly to change it.
+    Pricing is fetched automatically from PortKey's pricing catalog.  ``supports_vision``
+    defaults to ``False`` — edit ``model_catalog.json`` directly to change it.
 
     Returns ``(model_name, entry)``.
     """
@@ -477,7 +482,7 @@ def add_model_to_catalog(provider_model: str) -> Tuple[str, Dict[str, Any]]:
     entry: Dict[str, Any] = dict(catalog["models"].get(model_name, {}))
     entry["llmprices_id"] = provider_model
 
-    fetched = _fetch_model_info_from_llmprices(provider_model, pricing_unit)
+    fetched = _fetch_model_pricing(provider_model, pricing_unit)
     entry["input"] = fetched["input"]
     entry["output"] = fetched["output"]
     entry["last_sync"] = datetime.now().isoformat(timespec="seconds")
@@ -492,7 +497,7 @@ def add_model_to_catalog(provider_model: str) -> Tuple[str, Dict[str, Any]]:
 
 
 def maybe_sync_model_pricing(model: str) -> None:
-    """Fetch current pricing for a model from llmprices.ai if not synced within the last hour.
+    """Fetch current pricing for a model from PortKey if not synced within the last hour.
 
     Only runs when the model has a 'llmprices_id' field. Silently skips on any
     network or parse error so the caller is never blocked.
@@ -513,28 +518,20 @@ def maybe_sync_model_pricing(model: str) -> None:
             # Timestamp absent or in old monthly format — treat as stale and update
             pass
 
-        url = f"{LLMPRICES_API_BASE}?model={llmprices_id}"
-        with urllib.request.urlopen(url, timeout=5) as response:  # nosec B310
-            data = json.loads(response.read())
-
-        pricing = data.get("pricing", {})
-        prompt_price = float(pricing.get("prompt", 0))
-        completion_price = float(pricing.get("completion", 0))
-
-        if prompt_price > 0 and completion_price > 0:
-            pricing_unit = catalog["config"]["pricing_unit"]
-            now_iso = datetime.now().isoformat(timespec="seconds")
-            catalog["models"][model]["input"] = round(prompt_price * pricing_unit, 4)
-            catalog["models"][model]["output"] = round(completion_price * pricing_unit, 4)
-            catalog["models"][model]["last_sync"] = now_iso
-            save_model_catalog(catalog)
-            logging.info(
-                f"Synced pricing for {model} from llmprices.ai: "
-                f"input=${catalog['models'][model]['input']}, "
-                f"output=${catalog['models'][model]['output']}"
-            )
+        pricing_unit = catalog["config"]["pricing_unit"]
+        fetched = _fetch_model_pricing(llmprices_id, pricing_unit)
+        now_iso = datetime.now().isoformat(timespec="seconds")
+        catalog["models"][model]["input"] = fetched["input"]
+        catalog["models"][model]["output"] = fetched["output"]
+        catalog["models"][model]["last_sync"] = now_iso
+        save_model_catalog(catalog)
+        logging.info(
+            f"Synced pricing for {model}: "
+            f"input=${catalog['models'][model]['input']}, "
+            f"output=${catalog['models'][model]['output']}"
+        )
     except Exception as e:
-        logging.warning(f"Could not sync pricing for {model} from llmprices.ai: {e}")
+        logging.warning(f"Could not sync pricing for {model}: {e}")
 
 
 # Default model used by resolve_model() as the final named fallback
