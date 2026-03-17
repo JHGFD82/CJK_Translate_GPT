@@ -208,7 +208,7 @@ This ensures that temporary API issues or problematic pages don't stop the entir
 - Optical Character Recognition (OCR) using vision-capable models
 - Extracts text from images containing CJK or English text
 - Requires vision-capable models (gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-5)
-- Use single-character language code for target language (E, C, J, K)
+- Use single-character language code for target language (E, C, S, T, J, K)
 - Example: `python main.py heller transcribe E -i photo.jpg -o extracted.txt`
 
 **Note:** For Word document input, only .docx format is supported. Legacy .doc files are not supported.
@@ -216,24 +216,31 @@ This ensures that temporary API issues or problematic pages don't stop the entir
 ## Language Codes
 
 ### For Translation (two-character codes)
-- `C` = Chinese
+- `C` = Chinese (generic)
+- `S` = Simplified Chinese
+- `T` = Traditional Chinese
 - `J` = Japanese
 - `K` = Korean
 - `E` = English
 
 Examples:
 - `CE` = Chinese to English
+- `SE` = Simplified Chinese to English
+- `TE` = Traditional Chinese to English
 - `JK` = Japanese to Korean
 - `EJ` = English to Japanese
+- `ET` = English to Traditional Chinese
 - `KC` = Korean to Chinese
 
 ### For OCR (single-character codes)
 - `E` = Extract as English
-- `C` = Extract as Chinese
+- `C` = Extract as Chinese (generic)
+- `S` = Extract as Simplified Chinese
+- `T` = Extract as Traditional Chinese
 - `J` = Extract as Japanese
 - `K` = Extract as Korean
 
-**Note:** OCR uses single-character codes to specify the target language, while translation uses two-character codes to specify source and target.
+**Note:** OCR uses single-character codes to specify the target language, while translation uses two-character codes to specify source and target. S and T are valid only for OCR (transcription); for translation, use them as part of a two-character code such as `SE`, `TE`, `ES`, or `ET`.
 
 ## Installation
 

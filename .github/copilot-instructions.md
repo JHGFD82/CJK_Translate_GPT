@@ -108,7 +108,7 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 
 ### Image OCR Processing
 - **Automatic Detection**: Image files are detected by extension and routed to OCR automatically
-- **Language Code**: Use single character (E, C, J, K) for target language, not translation pairs (CE, JE)
+- **Language Code**: Use single character (E, C, S, T, J, K) for target language, not translation pairs (CE, JE)
 - **Vision Model Validation**: Automatically selects and validates vision-capable models from `model_catalog.json`
 - **Token Tracking**: OCR usage tracked in same file as translation via shared `TokenTracker`
 - **Output**: Extracted text printed to console and optionally saved to file with `-o` flag
