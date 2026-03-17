@@ -19,6 +19,7 @@ from src.runtime.info_commands import (
     _print_daily_usage,
     handle_info_commands,
     list_available_models,
+    show_professor_config,
 )
 
 # ---------------------------------------------------------------------------
@@ -279,3 +280,86 @@ class TestHandleInfoCommandsUsage:
                             usage_subcommand="unknown")
             with pytest.raises(CLIError, match="Invalid usage subcommand"):
                 handle_info_commands(args)
+
+
+# ---------------------------------------------------------------------------
+# show_professor_config
+# ---------------------------------------------------------------------------
+
+
+class TestShowProfessorConfig:
+
+    def _make_mock_usage(self, exists: bool = False, path_str: str = "/data/token_usage_heller.json") -> MagicMock:
+        m = MagicMock()
+        m.exists.return_value = exists
+        m.__str__ = MagicMock(return_value=path_str)
+        return m
+
+    def test_no_professors_prints_instructions(self, capsys, monkeypatch):
+        monkeypatch.setattr(info_mod, "load_professor_config", lambda: {})
+        show_professor_config()
+        out = capsys.readouterr().out
+        assert "No professors configured" in out
+
+    def test_no_professors_shows_format_hint(self, capsys, monkeypatch):
+        monkeypatch.setattr(info_mod, "load_professor_config", lambda: {})
+        show_professor_config()
+        out = capsys.readouterr().out
+        assert "PROF_[ID]_NAME" in out
+
+    def test_professor_shown_primary_key_set_no_archive(self, capsys, monkeypatch):
+        """Primary key set, backup NOT set, usage file missing, no archive dir."""
+        profs = {"heller": {"name": "Jeff Heller", "primary_key": "KEY_A", "backup_key": "KEY_B"}}
+        monkeypatch.setattr(info_mod, "load_professor_config", lambda: profs)
+        monkeypatch.setattr(info_mod, "get_usage_data_path", lambda _: self._make_mock_usage(exists=False))
+        mock_archive = MagicMock()
+        mock_archive.exists.return_value = False
+        monkeypatch.setattr(info_mod, "get_archive_dir", lambda _: mock_archive)
+        monkeypatch.setenv("KEY_A", "real-key")
+        monkeypatch.delenv("KEY_B", raising=False)
+        show_professor_config()
+        out = capsys.readouterr().out
+        assert "Jeff Heller" in out
+        assert "heller" in out
+        assert "(set)" in out
+        assert "not yet created" in out
+        assert "none" in out
+
+    def test_professor_shown_primary_key_not_set_usage_exists_with_archives(
+            self, capsys, monkeypatch, tmp_path):
+        """Primary NOT SET, backup set, usage file exists, archive dir has months."""
+        profs = {"heller": {"name": "Jeff Heller", "primary_key": "KEY_A", "backup_key": "KEY_B"}}
+        monkeypatch.setattr(info_mod, "load_professor_config", lambda: profs)
+        monkeypatch.setattr(info_mod, "get_usage_data_path", lambda _: self._make_mock_usage(exists=True))
+        archive_dir = tmp_path / "archives"
+        archive_dir.mkdir()
+        (archive_dir / "2026-01.json").write_text("{}")
+        (archive_dir / "2026-02.json").write_text("{}")
+        monkeypatch.setattr(info_mod, "get_archive_dir", lambda _: archive_dir)
+        monkeypatch.delenv("KEY_A", raising=False)
+        monkeypatch.setenv("KEY_B", "backup-key")
+        show_professor_config()
+        out = capsys.readouterr().out
+        assert "NOT SET" in out
+        assert "not yet created" not in out
+        assert "2026-01" in out
+        assert "2026-02" in out
+
+
+# ---------------------------------------------------------------------------
+# handle_info_commands — show_config branch
+# ---------------------------------------------------------------------------
+
+
+class TestHandleInfoCommandsShowConfig:
+
+    def test_show_config_returns_true(self, monkeypatch):
+        monkeypatch.setattr(info_mod, "show_professor_config", lambda: None)
+        args = _make_ns(show_config=True)
+        assert handle_info_commands(args) is True
+
+    def test_show_config_delegates_to_show_professor_config(self, monkeypatch):
+        called = []
+        monkeypatch.setattr(info_mod, "show_professor_config", lambda: called.append(True))
+        handle_info_commands(_make_ns(show_config=True))
+        assert called
