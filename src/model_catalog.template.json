@@ -1,0 +1,20 @@
+{
+  "config": {
+    "pricing_unit": 1000000,
+    "monthly_limit": 250.0
+  },
+  "models": {
+    "gpt-4o": {
+      "input": 0.0,
+      "output": 0.0,
+      "supports_vision": true,
+      "llmprices_id": "openai/gpt-4o"
+    },
+    "gpt-4o-mini": {
+      "input": 0.0,
+      "output": 0.0,
+      "supports_vision": true,
+      "llmprices_id": "openai/gpt-4o-mini"
+    }
+  }
+}

@@ -94,6 +94,8 @@ class TestMainNoCommand:
             show_config=False,
             list_models=False,
             update_pricing=None,
+            sync_pricing=False,
+            add_model=None,
             professor="heller",
             command=None,
         )
@@ -190,6 +192,8 @@ class TestMainUnknownCommand:
             show_config=False,
             list_models=False,
             update_pricing=None,
+            sync_pricing=False,
+            add_model=None,
             professor="heller",
             command="fly",
             model=None,

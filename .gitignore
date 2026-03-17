@@ -29,6 +29,9 @@ example_docs/
 fonts/*
 !fonts/README.md
 
+# Model catalog - local copy with personal pricing is not tracked; use model_catalog.template.json as starting point
+src/model_catalog.json
+
 # Token usage - exclude token tracker files but keep directory structure
 token_usage.json
 data/token_usage_*.json

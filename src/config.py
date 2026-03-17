@@ -165,10 +165,13 @@ def load_model_catalog() -> Dict[str, Any]:
     catalog_file = get_model_catalog_path()
     
     if not catalog_file.exists():
+        template_file = catalog_file.parent / "model_catalog.template.json"
         error_msg = (
             f"Model catalog file not found at {catalog_file}. "
-            "This file is required for the application to function. "
-            "Please create the model catalog file with model pricing and capability information."
+            "Copy the template and add your models:\n"
+            f"  cp {template_file} {catalog_file}\n"
+            "  python main.py --add-model openai/gpt-4o\n"
+            "  python main.py --add-model google/gemini-2.5-pro"
         )
         logging.error(error_msg)
         raise FileNotFoundError(error_msg)
@@ -368,11 +371,107 @@ def resolve_model(
 def save_model_catalog(config: Dict[str, Any]) -> None:
     """Save model catalog to file."""
     catalog_file = get_model_catalog_path()
+    catalog_file.parent.mkdir(parents=True, exist_ok=True)
     with open(catalog_file, 'w') as f:
         json.dump(config, f, indent=2)
 
 
 LLMPRICES_API_BASE = "https://llmprices.ai/api/pricing"
+
+
+def _fetch_model_info_from_llmprices(llmprices_id: str, pricing_unit: int) -> Dict[str, Any]:
+    """Fetch pricing (and capabilities if available) from llmprices.ai.
+
+    Returns a dict with at minimum 'input' and 'output' keys.
+    Raises RuntimeError if the fetch fails or returns no usable pricing.
+    """
+    url = f"{LLMPRICES_API_BASE}?model={llmprices_id}"
+    with urllib.request.urlopen(url, timeout=5) as response:  # nosec B310
+        data = json.loads(response.read())
+
+    pricing = data.get("pricing", {})
+    prompt_price = float(pricing.get("prompt", 0))
+    completion_price = float(pricing.get("completion", 0))
+
+    if not (prompt_price > 0 and completion_price > 0):
+        raise RuntimeError(f"llmprices.ai returned no pricing data for '{llmprices_id}'")
+
+    result: Dict[str, Any] = {
+        "input": round(prompt_price * pricing_unit, 4),
+        "output": round(completion_price * pricing_unit, 4),
+    }
+
+    # Extract vision support if the API provides capability info
+    capabilities = data.get("capabilities", {})
+    if isinstance(capabilities, dict) and "vision" in capabilities:
+        result["supports_vision"] = bool(capabilities["vision"])
+
+    return result
+
+
+def add_model_to_catalog(
+    provider_model: str,
+    input_price: Optional[float] = None,
+    output_price: Optional[float] = None,
+) -> Tuple[str, Dict[str, Any]]:
+    """Add or update a model in the local model catalog.
+
+    ``provider_model`` must be in ``provider/model-name`` format
+    (e.g. ``openai/gpt-4o``, ``google/gemini-2.5-pro``).  The local
+    catalog key will be the part after the slash (e.g. ``gpt-4o``).
+
+    If ``input_price`` / ``output_price`` are omitted the function fetches
+    current pricing from llmprices.ai automatically.  ``supports_vision``
+    is populated from the API response when available, otherwise defaults
+    to ``False`` — edit ``model_catalog.json`` directly to change it.
+
+    Returns ``(model_name, entry)``.
+    """
+    if "/" not in provider_model:
+        raise ValueError(
+            f"Model '{provider_model}' must be in 'provider/model-name' format "
+            "(e.g. 'openai/gpt-4o', 'google/gemini-2.5-pro')."
+        )
+
+    _provider, model_name = provider_model.split("/", 1)
+
+    # Load or initialize the catalog without requiring models to exist yet
+    catalog_file = get_model_catalog_path()
+    if catalog_file.exists():
+        try:
+            with open(catalog_file, "r") as f:
+                catalog = json.load(f)
+            catalog.setdefault("config", {"pricing_unit": 1_000_000, "monthly_limit": 250.0})
+            catalog.setdefault("models", {})
+        except (json.JSONDecodeError, Exception):
+            catalog = {"config": {"pricing_unit": 1_000_000, "monthly_limit": 250.0}, "models": {}}
+    else:
+        catalog = {"config": {"pricing_unit": 1_000_000, "monthly_limit": 250.0}, "models": {}}
+
+    pricing_unit = catalog["config"]["pricing_unit"]
+    current_month = datetime.now().strftime("%Y-%m")
+
+    # Preserve any existing extra fields (system_role, fixed_parameters, etc.)
+    entry: Dict[str, Any] = dict(catalog["models"].get(model_name, {}))
+    entry["llmprices_id"] = provider_model
+
+    if input_price is None or output_price is None:
+        fetched = _fetch_model_info_from_llmprices(provider_model, pricing_unit)
+        entry["input"] = fetched["input"]
+        entry["output"] = fetched["output"]
+        entry["last_sync"] = current_month
+        if "supports_vision" not in entry and "supports_vision" in fetched:
+            entry["supports_vision"] = fetched["supports_vision"]
+    else:
+        entry["input"] = round(input_price, 4)
+        entry["output"] = round(output_price, 4)
+        entry["last_sync"] = current_month
+
+    entry.setdefault("supports_vision", False)
+
+    catalog["models"][model_name] = entry
+    save_model_catalog(catalog)
+    return model_name, entry
 
 
 def maybe_sync_model_pricing(model: str) -> None:

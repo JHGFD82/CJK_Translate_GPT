@@ -408,3 +408,121 @@ class TestSaveModelCatalog:
         save_model_catalog(SAMPLE_CATALOG)
         round_tripped = json.loads(output_file.read_text())
         assert round_tripped == SAMPLE_CATALOG
+
+
+# ---------------------------------------------------------------------------
+# load_model_catalog — missing file error mentions template
+# ---------------------------------------------------------------------------
+
+class TestLoadModelCatalogMissingFileError:
+
+    def test_missing_file_error_mentions_template(self, monkeypatch, tmp_path):
+        missing = tmp_path / "model_catalog.json"
+        monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: missing)
+        with pytest.raises(FileNotFoundError, match="model_catalog.template.json"):
+            from src.config import load_model_catalog as lmc
+            lmc()
+
+    def test_missing_file_error_mentions_add_model(self, monkeypatch, tmp_path):
+        missing = tmp_path / "model_catalog.json"
+        monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: missing)
+        with pytest.raises(FileNotFoundError, match="--add-model"):
+            from src.config import load_model_catalog as lmc
+            lmc()
+
+
+# ---------------------------------------------------------------------------
+# add_model_to_catalog
+# ---------------------------------------------------------------------------
+
+from src.config import add_model_to_catalog, _fetch_model_info_from_llmprices  # noqa: E402
+
+
+class TestAddModelToCatalog:
+
+    def test_missing_slash_raises_value_error(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: tmp_path / "model_catalog.json")
+        with pytest.raises(ValueError, match="provider/model-name"):
+            add_model_to_catalog("gpt-4o", 2.5, 10.0)
+
+    def test_manual_prices_create_new_catalog(self, monkeypatch, tmp_path):
+        catalog_file = tmp_path / "model_catalog.json"
+        monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
+        model_name, entry = add_model_to_catalog("openai/gpt-4o", 2.5, 10.0)
+        assert model_name == "gpt-4o"
+        assert entry["input"] == 2.5
+        assert entry["output"] == 10.0
+        assert entry["llmprices_id"] == "openai/gpt-4o"
+        assert catalog_file.exists()
+
+    def test_manual_prices_update_existing_catalog(self, monkeypatch, tmp_path):
+        catalog_file = tmp_path / "model_catalog.json"
+        catalog_file.write_text(json.dumps(SAMPLE_CATALOG))
+        monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
+        model_name, entry = add_model_to_catalog("openai/new-model", 1.0, 3.0)
+        assert model_name == "new-model"
+        loaded = json.loads(catalog_file.read_text())
+        assert "new-model" in loaded["models"]
+        assert "gpt-4o" in loaded["models"]  # existing model preserved
+
+    def test_vision_defaults_to_false_when_not_in_api_response(self, monkeypatch, tmp_path):
+        catalog_file = tmp_path / "model_catalog.json"
+        monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
+        model_name, entry = add_model_to_catalog("openai/text-only", 1.0, 3.0)
+        assert entry["supports_vision"] is False
+
+    def test_supports_vision_preserved_from_existing_entry(self, monkeypatch, tmp_path):
+        catalog_file = tmp_path / "model_catalog.json"
+        existing = {
+            "config": {"pricing_unit": 1_000_000, "monthly_limit": 250.0},
+            "models": {
+                "gpt-4o": {
+                    "input": 2.5, "output": 10.0,
+                    "supports_vision": True, "llmprices_id": "openai/gpt-4o",
+                }
+            },
+        }
+        catalog_file.write_text(json.dumps(existing))
+        monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
+        model_name, entry = add_model_to_catalog("openai/gpt-4o", 3.0, 12.0)
+        assert entry["supports_vision"] is True
+
+    def test_auto_fetch_uses_llmprices(self, monkeypatch, tmp_path):
+        catalog_file = tmp_path / "model_catalog.json"
+        monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
+
+        def fake_fetch(llmprices_id, pricing_unit):
+            assert llmprices_id == "openai/gpt-4o"
+            return {"input": 2.5, "output": 10.0, "supports_vision": True}
+
+        monkeypatch.setattr(config_module, "_fetch_model_info_from_llmprices", fake_fetch)
+        model_name, entry = add_model_to_catalog("openai/gpt-4o")
+        assert model_name == "gpt-4o"
+        assert entry["input"] == 2.5
+        assert entry["supports_vision"] is True
+
+    def test_auto_fetch_error_propagates(self, monkeypatch, tmp_path):
+        catalog_file = tmp_path / "model_catalog.json"
+        monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
+
+        def fake_fetch_fail(llmprices_id, pricing_unit):
+            raise RuntimeError("network error")
+
+        monkeypatch.setattr(config_module, "_fetch_model_info_from_llmprices", fake_fetch_fail)
+        with pytest.raises(RuntimeError, match="network error"):
+            add_model_to_catalog("openai/gpt-4o")
+
+    def test_prices_are_rounded_to_4_decimal_places(self, monkeypatch, tmp_path):
+        catalog_file = tmp_path / "model_catalog.json"
+        monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
+        _, entry = add_model_to_catalog("openai/gpt-4o", 2.123456789, 9.987654321)
+        assert entry["input"] == round(2.123456789, 4)
+        assert entry["output"] == round(9.987654321, 4)
+
+    def test_slash_in_model_name_part_preserved(self, monkeypatch, tmp_path):
+        """provider/org/model-name: only the first slash splits provider from model key."""
+        catalog_file = tmp_path / "model_catalog.json"
+        monkeypatch.setattr(config_module, "get_model_catalog_path", lambda: catalog_file)
+        model_name, entry = add_model_to_catalog("google/gemini/2.5-pro", 1.25, 10.0)
+        assert model_name == "gemini/2.5-pro"
+        assert entry["llmprices_id"] == "google/gemini/2.5-pro"
