@@ -8,7 +8,7 @@ Model catalog, pricing, and model resolution are in src/models/.
 import argparse
 import os
 import re
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, Tuple, Union
 
 # Language mapping
 LANGUAGE_MAP: Dict[str, str] = {
@@ -149,33 +149,4 @@ def get_api_key(professor_name: str) -> Tuple[str, str]:
         f"No API key found for professor '{prof_config['name']}'. "
         f"Please set {prof_config['primary_key']} in your .env file."
     )
-
-
-# ---------------------------------------------------------------------------
-# Re-exports — model catalog, pricing, and resolver live in src/models/
-# ---------------------------------------------------------------------------
-from .models import (  # noqa: E402  (after professor-config code)
-    DEFAULT_FALLBACK_MODEL,
-    DEFAULT_MODEL,
-    MODEL_CATALOG_FILE,
-    PORTKEY_PRICING_API_BASE,
-    _PORTKEY_PROVIDER_MAP,
-    _fetch_model_pricing,
-    add_model_to_catalog,
-    get_available_models,
-    get_model_catalog_path,
-    get_model_max_completion_tokens,
-    get_model_pricing,
-    get_model_system_role,
-    get_monthly_limit,
-    get_pricing_unit,
-    get_vision_capable_models,
-    load_model_catalog,
-    maybe_sync_model_pricing,
-    model_has_fixed_parameters,
-    model_supports_vision,
-    model_uses_max_completion_tokens,
-    resolve_model,
-    save_model_catalog,
-)
 
