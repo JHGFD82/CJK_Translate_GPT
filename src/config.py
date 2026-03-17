@@ -8,7 +8,7 @@ import argparse
 import os
 import re
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple, Union
 
@@ -472,7 +472,6 @@ def add_model_to_catalog(provider_model: str) -> Tuple[str, Dict[str, Any]]:
         catalog = {"config": {"pricing_unit": 1_000_000, "monthly_limit": 250.0}, "models": {}}
 
     pricing_unit = catalog["config"]["pricing_unit"]
-    current_month = datetime.now().strftime("%Y-%m")
 
     # Preserve any existing extra fields (system_role, fixed_parameters, etc.)
     entry: Dict[str, Any] = dict(catalog["models"].get(model_name, {}))
@@ -481,7 +480,7 @@ def add_model_to_catalog(provider_model: str) -> Tuple[str, Dict[str, Any]]:
     fetched = _fetch_model_info_from_llmprices(provider_model, pricing_unit)
     entry["input"] = fetched["input"]
     entry["output"] = fetched["output"]
-    entry["last_sync"] = current_month
+    entry["last_sync"] = datetime.now().isoformat(timespec="seconds")
     if "supports_vision" not in entry and "supports_vision" in fetched:
         entry["supports_vision"] = fetched["supports_vision"]
 
@@ -493,7 +492,7 @@ def add_model_to_catalog(provider_model: str) -> Tuple[str, Dict[str, Any]]:
 
 
 def maybe_sync_model_pricing(model: str) -> None:
-    """Fetch current pricing for a model from llmprices.ai if not yet synced this month.
+    """Fetch current pricing for a model from llmprices.ai if not synced within the last hour.
 
     Only runs when the model has a 'llmprices_id' field. Silently skips on any
     network or parse error so the caller is never blocked.
@@ -505,9 +504,14 @@ def maybe_sync_model_pricing(model: str) -> None:
         if not llmprices_id:
             return
 
-        current_month = datetime.now().strftime("%Y-%m")
-        if model_entry.get("last_sync") == current_month:
-            return
+        last_sync_str = model_entry.get("last_sync", "")
+        try:
+            last_sync_dt = datetime.fromisoformat(last_sync_str)
+            if datetime.now() - last_sync_dt < timedelta(hours=1):
+                return
+        except (ValueError, TypeError):
+            # Timestamp absent or in old monthly format — treat as stale and update
+            pass
 
         url = f"{LLMPRICES_API_BASE}?model={llmprices_id}"
         with urllib.request.urlopen(url, timeout=5) as response:  # nosec B310
@@ -519,9 +523,10 @@ def maybe_sync_model_pricing(model: str) -> None:
 
         if prompt_price > 0 and completion_price > 0:
             pricing_unit = catalog["config"]["pricing_unit"]
+            now_iso = datetime.now().isoformat(timespec="seconds")
             catalog["models"][model]["input"] = round(prompt_price * pricing_unit, 4)
             catalog["models"][model]["output"] = round(completion_price * pricing_unit, 4)
-            catalog["models"][model]["last_sync"] = current_month
+            catalog["models"][model]["last_sync"] = now_iso
             save_model_catalog(catalog)
             logging.info(
                 f"Synced pricing for {model} from llmprices.ai: "
