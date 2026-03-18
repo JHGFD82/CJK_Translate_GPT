@@ -184,6 +184,37 @@ Transcription (OCR):
         help='Print the prompt(s) that would be sent to the model without making any API calls',
     )
 
+    # ===== PROMPT COMMAND =====
+    prompt_parser = subparsers.add_parser('prompt', help='Send a custom prompt to the AI model')
+    prompt_input_group = prompt_parser.add_mutually_exclusive_group(required=True)
+    prompt_input_group.add_argument(
+        '-u', '--user',
+        dest='user_prompt',
+        type=str,
+        help='User prompt text',
+    )
+    prompt_input_group.add_argument(
+        '-c', '--custom',
+        dest='custom_prompt',
+        action='store_true',
+        help='Enter user prompt interactively',
+    )
+    prompt_parser.add_argument(
+        '-s', '--system',
+        dest='system_prompt',
+        type=str,
+        default=None,
+        help='System (developer) prompt (optional; defaults to a general assistant instruction)',
+    )
+    prompt_parser.add_argument('-o', '--output', dest='output_file', type=str, help='Save response to file')
+    prompt_parser.add_argument('-m', '--model', dest='model', type=str, help='Model to use (e.g., gpt-4o, gpt-4o-mini)')
+    prompt_parser.add_argument(
+        '--dry-run',
+        dest='dry_run',
+        action='store_true',
+        help='Print the prompt(s) that would be sent to the model without making any API calls',
+    )
+
     return parser
 
 
@@ -231,7 +262,7 @@ def main() -> None:
         if args.command == 'usage':
             if handle_info_commands(args):
                 return
-        elif args.command in ('translate', 'transcribe'):
+        elif args.command in ('translate', 'transcribe', 'prompt'):
             model = getattr(args, 'model', None)
             sandbox = SandboxProcessor(args.professor, model=model)
             sandbox.run(args)

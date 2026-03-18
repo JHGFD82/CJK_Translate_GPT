@@ -15,6 +15,7 @@ from ..processors.pdf_processor import PDFProcessor, generate_process_text
 from ..processors.txt_processor import TxtProcessor
 from ..services.image_processor_service import ImageProcessorService
 from ..services.image_translation_service import ImageTranslationService
+from ..services.prompt_service import PromptService
 from ..services.translation_service import TranslationService
 from ..tracking.token_tracker import TokenTracker
 
@@ -53,6 +54,9 @@ class SandboxProcessor:
                 api_key, professor_name, token_tracker=self.token_tracker, model=model
             )
             self.image_translation_service = ImageTranslationService(
+                api_key, professor_name, token_tracker=self.token_tracker, model=model
+            )
+            self.prompt_service = PromptService(
                 api_key, professor_name, token_tracker=self.token_tracker, model=model
             )
 
@@ -406,6 +410,28 @@ class SandboxProcessor:
 
         logger.info("Image translation completed successfully")
 
+    def process_prompt(
+        self,
+        user_prompt: str,
+        system_prompt: Optional[str] = None,
+        output_file: Optional[str] = None,
+    ) -> None:
+        """Send a custom prompt and print (and optionally save) the response."""
+        logger.info("Sending custom prompt")
+        try:
+            response = self.prompt_service.send_prompt(user_prompt, system_prompt)
+            print("\n" + response)
+            if output_file:
+                output_path = os.path.abspath(output_file)
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(response)
+                logger.info(f"Response saved to: {output_path}")
+                print(f"\nResponse saved to: {output_path}")
+            logger.info("Custom prompt completed successfully")
+        except Exception as e:
+            logger.error(f"Error sending prompt: {e}", exc_info=True)
+            raise CLIError(f"Error sending prompt: {e}") from e
+
     @staticmethod
     def _dry_run_display(model: str, system_prompt: str, user_prompt: str, note: Optional[str] = None) -> None:
         """Print prompts in a structured format without making any API calls."""
@@ -515,6 +541,40 @@ class SandboxProcessor:
                 output_file = getattr(args, 'output_file', None)
                 vertical = getattr(args, 'vertical', False)
                 self.process_image(os.path.abspath(args.input_file), target_language, output_file, vertical=vertical)
+
+            elif command == 'prompt':
+                system_prompt_text: Optional[str] = getattr(args, 'system_prompt', None)
+
+                if getattr(args, 'dry_run', False):
+                    user_placeholder = (
+                        args.user_prompt
+                        if getattr(args, 'user_prompt', None)
+                        else "[Interactive prompt — text would be entered at runtime]"
+                    )
+                    model_dr = self.prompt_service._get_model()
+                    sys_p, usr_p = self.prompt_service.build_prompts(user_placeholder, system_prompt_text)
+                    self._dry_run_display(model_dr, sys_p, usr_p)
+                    return
+
+                if getattr(args, 'custom_prompt', False):
+                    print("Enter your prompt (type --- on its own line when done):")
+                    lines: list[str] = []
+                    while True:
+                        try:
+                            line = input()
+                            if line.strip() == '---':
+                                break
+                            lines.append(line)
+                        except EOFError:
+                            break
+                    user_prompt_text = '\n'.join(lines)
+                    if not user_prompt_text.strip():
+                        raise CLIError("No prompt text provided.")
+                else:
+                    user_prompt_text = args.user_prompt
+
+                output_file_p = getattr(args, 'output_file', None)
+                self.process_prompt(user_prompt_text, system_prompt_text, output_file_p)
 
             else:
                 raise CLIError(f"Unknown command: {command}")
