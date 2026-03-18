@@ -23,8 +23,6 @@ from .catalog import (
 )
 from .pricing import (
     PORTKEY_PRICING_API_BASE,
-    _PORTKEY_PROVIDER_MAP,
-    _fetch_model_pricing,
     add_model_to_catalog,
     maybe_sync_model_pricing,
 )
@@ -49,8 +47,6 @@ __all__ = [
     "get_model_max_completion_tokens",
     # pricing
     "PORTKEY_PRICING_API_BASE",
-    "_PORTKEY_PROVIDER_MAP",
-    "_fetch_model_pricing",
     "add_model_to_catalog",
     "maybe_sync_model_pricing",
     # resolver

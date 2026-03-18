@@ -11,7 +11,7 @@ from ..errors import CLIError
 from ..output.file_output import FileOutputHandler
 from ..processors.docx_processor import DocxProcessor
 from ..processors.image_processor import ImageProcessor
-from ..processors.pdf_processor import generate_process_text
+from ..processors.pdf_processor import PDFProcessor, generate_process_text
 from ..processors.txt_processor import TxtProcessor
 from ..services.image_processor_service import ImageProcessorService
 from ..services.image_translation_service import ImageTranslationService
@@ -57,6 +57,7 @@ class SandboxProcessor:
             )
 
             self.image_processor = ImageProcessor()
+            self.pdf_processor = PDFProcessor()
             self.file_output = FileOutputHandler()
         except ValueError as e:
             logger.error(f"Configuration error: {e}")
@@ -201,7 +202,7 @@ class SandboxProcessor:
             if file_type == 'pdf':
                 logger.info(f"Processing PDF file: {file_path}")
                 with open(file_path, 'rb') as f:
-                    pages = self.translation_service.pdf_processor.process_pdf(f)
+                    pages = self.pdf_processor.process_pdf(f)
                     logger.info("Translating PDF pages")
                     start_page, end_page = _parse_page_nums(page_nums)
                     document_text = self.translation_service.translate_document(
