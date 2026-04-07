@@ -185,20 +185,7 @@ class SandboxProcessor:
                 raise CLIError(f"Error processing image: {e}") from e
             return
 
-        if abstract:
-            print("Enter abstract text, then type --- on its own line to finish:")
-            abstract_lines: list[str] = []
-            while True:
-                try:
-                    line = input()
-                    if line.strip() == '---':
-                        break
-                    abstract_lines.append(line)
-                except EOFError:
-                    break
-            abstract_text: Optional[str] = '\n'.join(abstract_lines) or None
-        else:
-            abstract_text = None
+        abstract_text: Optional[str] = self._collect_multiline("Abstract text") or None if abstract else None
 
         logger.info(f"Starting translation: {source_language} → {target_language}")
 
@@ -275,34 +262,10 @@ class SandboxProcessor:
         custom_font: Optional[str] = None,
     ) -> None:
         """Translate custom text input by the user."""
-        abstract_text: Optional[str] = None
-        if abstract:
-            print("Enter abstract text, then type --- on its own line to finish:")
-            lines: list[str] = []
-            while True:
-                try:
-                    line = input()
-                    if line.strip() == '---':
-                        break
-                    lines.append(line)
-                except EOFError:
-                    break
-            abstract_text = '\n'.join(lines) or None
-
-        print(f"Enter the {source_language} text you want to translate to {target_language}:")
-        print("(Type --- on its own line when done)")
+        abstract_text: Optional[str] = self._collect_multiline("Abstract text") or None if abstract else None
 
         try:
-            lines2: list[str] = []
-            while True:
-                try:
-                    line = input()
-                    if line.strip() == '---':
-                        break
-                    lines2.append(line)
-                except EOFError:
-                    break
-            custom_text = '\n'.join(lines2)
+            custom_text = self._collect_multiline(f"Enter the {source_language} text you want to translate to {target_language}")
 
             if not custom_text.strip():
                 logger.warning("No text provided for translation")
@@ -433,6 +396,21 @@ class SandboxProcessor:
             raise CLIError(f"Error sending prompt: {e}") from e
 
     @staticmethod
+    def _collect_multiline(label: str) -> str:
+        """Print a prompt label and collect lines until '---' or EOF."""
+        print(f"{label} (type --- on its own line when done):")
+        lines: list[str] = []
+        while True:
+            try:
+                line = input()
+                if line.strip() == '---':
+                    break
+                lines.append(line)
+            except EOFError:
+                break
+        return '\n'.join(lines)
+
+    @staticmethod
     def _dry_run_display(model: str, system_prompt: str, user_prompt: str, note: Optional[str] = None) -> None:
         """Print prompts in a structured format without making any API calls."""
         sep = "=" * 70
@@ -543,22 +521,9 @@ class SandboxProcessor:
                 self.process_image(os.path.abspath(args.input_file), target_language, output_file, vertical=vertical)
 
             elif command == 'prompt':
-                def _collect_multiline(label: str) -> str:
-                    print(f"{label} (type --- on its own line when done):")
-                    lines: list[str] = []
-                    while True:
-                        try:
-                            line = input()
-                            if line.strip() == '---':
-                                break
-                            lines.append(line)
-                        except EOFError:
-                            break
-                    return '\n'.join(lines)
-
                 system_prompt_text: Optional[str] = None
                 if getattr(args, 'include_system_prompt', False):
-                    system_prompt_text = _collect_multiline("System prompt") or None
+                    system_prompt_text = self._collect_multiline("System prompt") or None
 
                 if getattr(args, 'dry_run', False):
                     model_dr = self.prompt_service._get_model()
@@ -569,7 +534,7 @@ class SandboxProcessor:
                     self._dry_run_display(model_dr, sys_p, usr_p)
                     return
 
-                user_prompt_text = _collect_multiline("User prompt")
+                user_prompt_text = self._collect_multiline("User prompt")
                 if not user_prompt_text.strip():
                     raise CLIError("No prompt text provided.")
 
