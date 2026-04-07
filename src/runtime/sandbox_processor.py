@@ -556,22 +556,7 @@ class SandboxProcessor:
                     self._dry_run_display(model_dr, sys_p, usr_p)
                     return
 
-                if getattr(args, 'custom_prompt', False):
-                    print("Enter your prompt (type --- on its own line when done):")
-                    lines: list[str] = []
-                    while True:
-                        try:
-                            line = input()
-                            if line.strip() == '---':
-                                break
-                            lines.append(line)
-                        except EOFError:
-                            break
-                    user_prompt_text = '\n'.join(lines)
-                    if not user_prompt_text.strip():
-                        raise CLIError("No prompt text provided.")
-                else:
-                    user_prompt_text = args.user_prompt
+                user_prompt_text = args.user_prompt
 
                 output_file_p = getattr(args, 'output_file', None)
                 self.process_prompt(user_prompt_text, system_prompt_text, output_file_p)

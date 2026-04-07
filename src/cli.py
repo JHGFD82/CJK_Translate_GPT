@@ -186,18 +186,12 @@ Transcription (OCR):
 
     # ===== PROMPT COMMAND =====
     prompt_parser = subparsers.add_parser('prompt', help='Send a custom prompt to the AI model')
-    prompt_input_group = prompt_parser.add_mutually_exclusive_group(required=True)
-    prompt_input_group.add_argument(
+    prompt_parser.add_argument(
         '-u', '--user',
         dest='user_prompt',
         type=str,
+        required=True,
         help='User prompt text',
-    )
-    prompt_input_group.add_argument(
-        '-c', '--custom',
-        dest='custom_prompt',
-        action='store_true',
-        help='Enter user prompt interactively',
     )
     prompt_parser.add_argument(
         '-s', '--system',
