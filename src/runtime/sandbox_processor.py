@@ -543,20 +543,35 @@ class SandboxProcessor:
                 self.process_image(os.path.abspath(args.input_file), target_language, output_file, vertical=vertical)
 
             elif command == 'prompt':
-                system_prompt_text: Optional[str] = getattr(args, 'system_prompt', None)
+                def _collect_multiline(label: str) -> str:
+                    print(f"{label} (type --- on its own line when done):")
+                    lines: list[str] = []
+                    while True:
+                        try:
+                            line = input()
+                            if line.strip() == '---':
+                                break
+                            lines.append(line)
+                        except EOFError:
+                            break
+                    return '\n'.join(lines)
+
+                system_prompt_text: Optional[str] = None
+                if getattr(args, 'include_system_prompt', False):
+                    system_prompt_text = _collect_multiline("System prompt") or None
 
                 if getattr(args, 'dry_run', False):
-                    user_placeholder = (
-                        args.user_prompt
-                        if getattr(args, 'user_prompt', None)
-                        else "[Interactive prompt — text would be entered at runtime]"
-                    )
                     model_dr = self.prompt_service._get_model()
-                    sys_p, usr_p = self.prompt_service.build_prompts(user_placeholder, system_prompt_text)
+                    sys_p, usr_p = self.prompt_service.build_prompts(
+                        "[Interactive prompt — text would be entered at runtime]",
+                        system_prompt_text,
+                    )
                     self._dry_run_display(model_dr, sys_p, usr_p)
                     return
 
-                user_prompt_text = args.user_prompt
+                user_prompt_text = _collect_multiline("User prompt")
+                if not user_prompt_text.strip():
+                    raise CLIError("No prompt text provided.")
 
                 output_file_p = getattr(args, 'output_file', None)
                 self.process_prompt(user_prompt_text, system_prompt_text, output_file_p)

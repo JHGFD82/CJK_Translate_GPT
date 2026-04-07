@@ -187,18 +187,10 @@ Transcription (OCR):
     # ===== PROMPT COMMAND =====
     prompt_parser = subparsers.add_parser('prompt', help='Send a custom prompt to the AI model')
     prompt_parser.add_argument(
-        '-u', '--user',
-        dest='user_prompt',
-        type=str,
-        required=True,
-        help='User prompt text',
-    )
-    prompt_parser.add_argument(
         '-s', '--system',
-        dest='system_prompt',
-        type=str,
-        default=None,
-        help='System (developer) prompt (optional; defaults to a general assistant instruction)',
+        dest='include_system_prompt',
+        action='store_true',
+        help='Prompt for a system (developer) prompt before the user prompt',
     )
     prompt_parser.add_argument('-o', '--output', dest='output_file', type=str, help='Save response to file')
     prompt_parser.add_argument('-m', '--model', dest='model', type=str, help='Model to use (e.g., gpt-4o, gpt-4o-mini)')
