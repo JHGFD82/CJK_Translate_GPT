@@ -142,6 +142,28 @@ python main.py heller transcribe C -i scan.jpg -o chinese_text.txt -m gpt-4o
 python main.py smith transcribe E -i receipt.jpg -o receipt.txt -m gpt-4o-mini
 ```
 
+### Custom Prompts
+Send a freeform prompt to the AI without any translation or OCR framing:
+
+```bash
+# Send a prompt (text entered interactively, end with ---)
+python main.py heller prompt
+
+# Include a system prompt first, then enter the user prompt
+python main.py heller prompt -s
+
+# Save the response to a file
+python main.py heller prompt -o response.txt
+
+# Use a specific model
+python main.py heller prompt -m gpt-4o-mini
+
+# Dry run — preview the prompts without making an API call
+python main.py heller prompt -s --dry-run
+```
+
+When you run `prompt`, you are asked to type your input and finish with `---` on its own line. If `-s` is given, the system prompt is collected first, then the user prompt. Token usage is tracked the same way as translation.
+
 ### Token Usage Tracking
 ```bash
 # Current month report + budget status

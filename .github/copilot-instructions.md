@@ -65,6 +65,13 @@ python main.py heller translate CE -i test.pdf -o out.docx   # Output as Word
 python main.py heller transcribe E -i test.jpg               # OCR to console
 python main.py heller transcribe E -i test.jpg -o output.txt # OCR to file
 python main.py heller transcribe E -i test.jpg -m gpt-4o-mini # Specific model
+
+# Custom prompts (fully interactive — text entered at runtime, end with ---)
+python main.py heller prompt                                  # User prompt only
+python main.py heller prompt -s                               # System prompt first, then user prompt
+python main.py heller prompt -o response.txt                  # Save response to file
+python main.py heller prompt -m gpt-4o-mini                   # Use specific model
+python main.py heller prompt -s --dry-run                     # Preview prompts without API call
 ```
 
 ### Language Code Pattern
@@ -120,6 +127,7 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 - **Custom Model**: Use `-m/--model MODEL_NAME` flag to override defaults for both translation and OCR
 - **OpenAI/Google Auto-Registration**: Use `openai/model-name` or `google/model-name` with `-m` — if not already in the catalog, pricing is fetched from [llmprices.ai](https://llmprices.ai) and saved automatically on first use
 - **Other Providers**: Add the model manually to `src/model_catalog.json`; edit the file directly following the template schema
+- **Provider Slug Mapping**: PortKey uses different slugs for some providers (e.g. `google` → `vertex-ai`). These mappings live in `model_catalog.json` under `config.provider_map`, not in code.
 - **List Models**: `python main.py --list-models` shows all catalog models with pricing and vision support
 - **Vision Validation**: ImageProcessorService automatically validates model supports vision, falls back to defaults if not
 - **Model Priority**: Custom model → OCR_MODEL/DEFAULT_MODEL → first available vision-capable model
@@ -130,6 +138,15 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 - **Input Path Resolution**: `os.path.abspath()` applied to input files in runtime processing methods
 - **Output Path Resolution**: User-specified output paths converted to absolute paths in CLI `run()` method
 - **Directory Placement**: Output files placed in same directory as source file via `generate_output_filename()`
+
+## Custom Prompt Command
+- **Command**: `python main.py <professor> prompt` — sends a freeform prompt without translation framing
+- **Fully interactive**: no text arguments; user types input at runtime and ends with `---` on its own line
+- **System prompt**: `-s/--system` is a boolean flag; when set, the system prompt is collected first, then the user prompt
+- **Output**: response printed to console; optionally saved with `-o`
+- **Dry run**: `--dry-run` shows prompt structure without making an API call
+- **Token tracking**: usage tracked via the same `TokenTracker` as translation
+- **Interactive helper**: `SandboxProcessor._collect_multiline(label)` is the shared static method used by all interactive `---`-terminated input (translate `-c`, prompt, and abstract input)
 
 ## External Dependencies
 - **PortKey**: Uses `SANDBOX_ENDPOINT` and `SANDBOX_API_VERSION` from config
