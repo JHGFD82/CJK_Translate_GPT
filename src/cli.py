@@ -212,12 +212,6 @@ Transcription (OCR):
         action='store_true',
         help='Print the prompt(s) that would be sent to the model without making any API calls',
     )
-    prompt_parser.add_argument(
-        '--notes',
-        dest='notes',
-        action='store_true',
-        help='Interactively append ad-hoc notes to the system prompt, user prompt, or both before sending',
-    )
 
     return parser
 

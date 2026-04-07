@@ -558,31 +558,18 @@ class SandboxProcessor:
                 if getattr(args, 'include_system_prompt', False):
                     system_prompt_text = self._collect_multiline("System prompt") or None
 
-                sys_note_p: Optional[str] = None
-                usr_note_p: Optional[str] = None
-                if getattr(args, 'notes', False):
-                    sys_note_p, usr_note_p = self._collect_notes()
-                    if sys_note_p:
-                        system_prompt_text = (
-                            system_prompt_text + f"\n\nADDITIONAL INSTRUCTIONS:\n{sys_note_p}"
-                            if system_prompt_text else sys_note_p
-                        )
-
                 if getattr(args, 'dry_run', False):
                     model_dr = self.prompt_service._get_model()
-                    dry_user = "[Interactive prompt — text would be entered at runtime]"
-                    if usr_note_p:
-                        dry_user += f"\n\nADDITIONAL NOTES:\n{usr_note_p}"
-                    sys_p, usr_p = self.prompt_service.build_prompts(dry_user, system_prompt_text)
+                    sys_p, usr_p = self.prompt_service.build_prompts(
+                        "[Interactive prompt — text would be entered at runtime]",
+                        system_prompt_text,
+                    )
                     self._dry_run_display(model_dr, sys_p, usr_p)
                     return
 
                 user_prompt_text = self._collect_multiline("User prompt")
                 if not user_prompt_text.strip():
                     raise CLIError("No prompt text provided.")
-
-                if usr_note_p:
-                    user_prompt_text += f"\n\nADDITIONAL NOTES:\n{usr_note_p}"
 
                 output_file_p = getattr(args, 'output_file', None)
                 self.process_prompt(user_prompt_text, system_prompt_text, output_file_p)
