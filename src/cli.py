@@ -165,6 +165,12 @@ Transcription (OCR):
         action='store_true',
         help='Print the prompt(s) that would be sent to the model without making any API calls',
     )
+    translate_parser.add_argument(
+        '--notes',
+        dest='notes',
+        action='store_true',
+        help='Interactively append ad-hoc notes to the system prompt, user prompt, or both before sending',
+    )
 
     # ===== TRANSCRIBE COMMAND =====
     transcribe_parser = subparsers.add_parser('transcribe', help='Transcribe images using OCR')
@@ -183,6 +189,12 @@ Transcription (OCR):
         action='store_true',
         help='Print the prompt(s) that would be sent to the model without making any API calls',
     )
+    transcribe_parser.add_argument(
+        '--notes',
+        dest='notes',
+        action='store_true',
+        help='Interactively append ad-hoc notes to the system prompt, user prompt, or both before sending',
+    )
 
     # ===== PROMPT COMMAND =====
     prompt_parser = subparsers.add_parser('prompt', help='Send a custom prompt to the AI model')
@@ -199,6 +211,12 @@ Transcription (OCR):
         dest='dry_run',
         action='store_true',
         help='Print the prompt(s) that would be sent to the model without making any API calls',
+    )
+    prompt_parser.add_argument(
+        '--notes',
+        dest='notes',
+        action='store_true',
+        help='Interactively append ad-hoc notes to the system prompt, user prompt, or both before sending',
     )
 
     return parser

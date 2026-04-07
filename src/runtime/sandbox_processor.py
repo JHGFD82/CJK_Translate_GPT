@@ -411,6 +411,27 @@ class SandboxProcessor:
         return '\n'.join(lines)
 
     @staticmethod
+    def _collect_notes() -> Tuple[Optional[str], Optional[str]]:
+        """Ask the user which prompt(s) to annotate, collect their note text, and return
+        (system_note, user_note).  Either value is None if not requested."""
+        while True:
+            try:
+                target = input("Add notes to (system / user / both): ").strip().lower()
+            except EOFError:
+                return None, None
+            if target in ('system', 'user', 'both'):
+                break
+            print("Please enter 'system', 'user', or 'both'.")
+
+        note_text = SandboxProcessor._collect_multiline("Notes")
+        if not note_text.strip():
+            return None, None
+
+        system_note = note_text if target in ('system', 'both') else None
+        user_note   = note_text if target in ('user',   'both') else None
+        return system_note, user_note
+
+    @staticmethod
     def _dry_run_display(model: str, system_prompt: str, user_prompt: str, note: Optional[str] = None) -> None:
         """Print prompts in a structured format without making any API calls."""
         sep = "=" * 70
@@ -460,6 +481,13 @@ class SandboxProcessor:
                 source_language: str = lang_tuple[0]
                 target_language: str = lang_tuple[1]
 
+                if getattr(args, 'notes', False):
+                    sys_note, usr_note = self._collect_notes()
+                    self.translation_service.system_note = sys_note
+                    self.translation_service.user_note = usr_note
+                    self.image_translation_service.system_note = sys_note
+                    self.image_translation_service.user_note = usr_note
+
                 if getattr(args, 'dry_run', False):
                     model_dr = self.translation_service._get_model()
                     page_placeholder = f"[{source_language} text to translate]"
@@ -500,6 +528,11 @@ class SandboxProcessor:
                 # language_code is already resolved to a full name by parse_single_language_code
                 target_language = args.language_code
 
+                if getattr(args, 'notes', False):
+                    sys_note, usr_note = self._collect_notes()
+                    self.image_processor_service.system_note = sys_note
+                    self.image_processor_service.user_note = usr_note
+
                 if getattr(args, 'dry_run', False):
                     vertical_dr = getattr(args, 'vertical', False)
                     model_dr = self.image_processor_service._get_model()
@@ -525,18 +558,31 @@ class SandboxProcessor:
                 if getattr(args, 'include_system_prompt', False):
                     system_prompt_text = self._collect_multiline("System prompt") or None
 
+                sys_note_p: Optional[str] = None
+                usr_note_p: Optional[str] = None
+                if getattr(args, 'notes', False):
+                    sys_note_p, usr_note_p = self._collect_notes()
+                    if sys_note_p:
+                        system_prompt_text = (
+                            system_prompt_text + f"\n\nADDITIONAL INSTRUCTIONS:\n{sys_note_p}"
+                            if system_prompt_text else sys_note_p
+                        )
+
                 if getattr(args, 'dry_run', False):
                     model_dr = self.prompt_service._get_model()
-                    sys_p, usr_p = self.prompt_service.build_prompts(
-                        "[Interactive prompt — text would be entered at runtime]",
-                        system_prompt_text,
-                    )
+                    dry_user = "[Interactive prompt — text would be entered at runtime]"
+                    if usr_note_p:
+                        dry_user += f"\n\nADDITIONAL NOTES:\n{usr_note_p}"
+                    sys_p, usr_p = self.prompt_service.build_prompts(dry_user, system_prompt_text)
                     self._dry_run_display(model_dr, sys_p, usr_p)
                     return
 
                 user_prompt_text = self._collect_multiline("User prompt")
                 if not user_prompt_text.strip():
                     raise CLIError("No prompt text provided.")
+
+                if usr_note_p:
+                    user_prompt_text += f"\n\nADDITIONAL NOTES:\n{usr_note_p}"
 
                 output_file_p = getattr(args, 'output_file', None)
                 self.process_prompt(user_prompt_text, system_prompt_text, output_file_p)
