@@ -10,12 +10,6 @@ from . import catalog as _catalog
 
 PORTKEY_PRICING_API_BASE = "https://api.portkey.ai/model-configs/pricing"
 
-# Maps user-facing provider prefix to PortKey's API provider slug where they differ
-_PORTKEY_PROVIDER_MAP: Dict[str, str] = {
-    "google": "vertex-ai",
-    "mistral": "mistral-ai",
-}
-
 
 def _fetch_model_pricing(provider_model: str, pricing_unit: int) -> Dict[str, Any]:
     """Fetch pricing from PortKey's pricing API.
@@ -28,7 +22,9 @@ def _fetch_model_pricing(provider_model: str, pricing_unit: int) -> Dict[str, An
     Raises RuntimeError if the fetch fails or returns no usable pricing.
     """
     provider, model_key = provider_model.split("/", 1)
-    api_provider = _PORTKEY_PROVIDER_MAP.get(provider.lower(), provider.lower())
+    catalog = _catalog.load_model_catalog()
+    provider_map = catalog.get("config", {}).get("provider_map", {})
+    api_provider = provider_map.get(provider.lower(), provider.lower())
     url = f"{PORTKEY_PRICING_API_BASE}/{api_provider}/{model_key}"
 
     req = urllib.request.Request(

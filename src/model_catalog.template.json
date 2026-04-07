@@ -1,7 +1,11 @@
 {
   "config": {
     "pricing_unit": 1000000,
-    "monthly_limit": 250.0
+    "monthly_limit": 250.0,
+    "provider_map": {
+      "google": "vertex-ai",
+      "mistral": "mistral-ai"
+    }
   },
   "models": {
     "gpt-4o": {
