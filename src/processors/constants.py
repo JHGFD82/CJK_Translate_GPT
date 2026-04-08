@@ -1,6 +1,4 @@
-"""
-Shared constants for all processor modules.
-"""
+"""Shared constants for all processor modules."""
 
 # Default target number of characters per logical "page" when splitting documents
 DEFAULT_PAGE_SIZE: int = 2000

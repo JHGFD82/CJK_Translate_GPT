@@ -1,6 +1,4 @@
-"""
-File output utilities for the PU AI Sandbox.
-"""
+"""File output handler: writes translations to .txt, .pdf, or .docx with CJK font support."""
 
 import logging
 from pathlib import Path

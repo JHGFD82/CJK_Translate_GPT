@@ -1,6 +1,4 @@
-"""
-Image file processing utilities for the PU AI Sandbox.
-"""
+"""Image file processor: converts image files to base64 data URLs for vision API calls."""
 
 import os
 import base64

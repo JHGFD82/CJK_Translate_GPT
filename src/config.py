@@ -1,9 +1,4 @@
-"""
-Configuration constants for the PU AI Sandbox.
-
-Language helpers, CLI argument types, and professor configuration live here.
-Model catalog, pricing, and model resolution are in src/models/.
-"""
+"""Language helpers, CLI argument types, and professor configuration; model catalog and pricing live in src/models/."""
 
 import argparse
 import os

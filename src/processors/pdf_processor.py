@@ -1,9 +1,4 @@
-"""
-PDF processing utilities for the PU AI Sandbox.
-
-This module provides functionality to extract and process text from PDF files,
-including support for CJK (Chinese, Japanese, Korean) text extraction.
-"""
+"""PDF processor: extracts text page-by-page with CJK-optimised LAParams and page-range support."""
 
 from typing import Iterator, BinaryIO
 from pdfminer.converter import PDFPageAggregator

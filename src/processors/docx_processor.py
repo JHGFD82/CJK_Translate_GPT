@@ -1,6 +1,4 @@
-"""
-Word document processing utilities for the PU AI Sandbox.
-"""
+"""Word document processor: extracts text from .docx files into logical sections."""
 
 import logging
 from typing import List, BinaryIO

@@ -1,28 +1,4 @@
-"""
-Token usage tracking system for the PU AI Sandbox.
-
-Storage layout
---------------
-data/
-  token_usage_{safe_name}.json          ← current-month active file
-  archives/
-    {safe_name}/
-      2026-02.json                       ← one file per past month
-      2026-03.json
-      ...
-
-Each JSON file (active or archive) is self-contained for that month:
-  {
-    "month": "2026-03",
-    "total_usage": { ... },    ← totals for THAT month only
-    "model_usage":  { ... },
-    "daily_usage":  { ... },
-    "session_history": [ ... ]
-  }
-
-All-time totals are computed on demand by aggregating the current file
-plus every file in the archives folder.
-"""
+"""Per-professor token usage tracking with monthly isolation and automatic archive rollover."""
 
 import json
 import logging

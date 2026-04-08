@@ -1,6 +1,4 @@
-"""
-Shared constants for all service modules (rate limiting, retry behaviour, script guidance).
-"""
+"""Shared constants for all service modules (rate limiting, retry behaviour, script guidance)."""
 
 # Rate limiting and retry configuration
 PAGE_DELAY_SECONDS: float = 3.0  # Delay between pages to prevent content filter triggers

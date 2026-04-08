@@ -1,28 +1,4 @@
-"""
-PU AI Sandbox
-
-This package provides tools for translating documents and custom text
-between Chinese, Japanese, Korean, and English using the Princeton AI Sandbox.
-
-Supported input formats:
-- PDF documents (.pdf)
-- Word documents (.docx)
-- Text files (.txt)
-- Custom text input
-
-Supported output formats:
-- Plain text (.txt)
-- PDF documents (.pdf)
-- Word documents (.docx)
-
-Features:
-- Professor-specific API key management
-- Token usage tracking and cost reporting
-- Page range selection for all document types
-- Progressive saving for error recovery
-- Custom font support for CJK text
-- Multi-format document processing
-"""
+"""PU AI Sandbox: CJK/English document translation and OCR tools for Princeton University."""
 
 from .cli import main
 from .runtime import SandboxProcessor

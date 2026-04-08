@@ -1,7 +1,4 @@
-"""
-Base text processing utilities for the PU AI Sandbox.
-Contains shared functionality for processing text-based documents.
-"""
+"""Abstract base class for text-based document processors with shared section-splitting logic."""
 
 import logging
 from typing import List

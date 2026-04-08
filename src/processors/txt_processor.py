@@ -1,6 +1,4 @@
-"""
-Text file processing utilities for the PU AI Sandbox.
-"""
+"""Text file processor: reads .txt files and splits into paragraph-delimited sections."""
 
 import logging
 from typing import List, TextIO
