@@ -21,6 +21,7 @@ No API calls, no cloud I/O; disk writes are directed to tmp_path.
 """
 
 import json
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -694,9 +695,11 @@ class TestListArchivedMonths:
 # Shared realistic fixture data (placeholder names, values from real archives)
 # ---------------------------------------------------------------------------
 
-# Represents a current-month active file (professor "testprof", March 2026)
+# Represents a current-month active file (professor "testprof")
+_THIS_MONTH = datetime.now().strftime("%Y-%m")
+
 CURRENT_MONTH_DATA = {
-    "month": "2026-03",
+    "month": _THIS_MONTH,
     "total_usage": {
         "total_tokens": 18177,
         "total_input_tokens": 13878,
