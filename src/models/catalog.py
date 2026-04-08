@@ -3,7 +3,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 MODEL_CATALOG_FILE = "model_catalog.json"
 DEFAULT_FALLBACK_MODEL = "gpt-4o-mini"
@@ -170,3 +170,14 @@ def get_model_max_completion_tokens(model: str, default: int) -> int:
     """
     config = load_model_catalog()
     return config["models"].get(model, {}).get("max_completion_tokens", default)
+
+
+def get_default_model(role: str) -> Optional[str]:
+    """Get the default model name for a given role from config.defaults.
+
+    Roles: 'translation', 'ocr', 'image_translation'.
+    Returns None if the defaults section or the specific role is absent from
+    the catalog, allowing callers to apply their own fallback logic.
+    """
+    config = load_model_catalog()
+    return config.get("config", {}).get("defaults", {}).get(role)

@@ -6,9 +6,6 @@ from typing import Optional
 from . import catalog as _catalog
 from . import pricing as _pricing
 
-# Default model used as the final named fallback
-DEFAULT_MODEL: str = "gpt-4o"
-
 
 def resolve_model(
     requested_model: Optional[str] = None,
@@ -21,12 +18,12 @@ def resolve_model(
     Resolution order:
     1) requested_model (if provided and valid)
     2) prefer_model (if provided and valid)
-    3) DEFAULT_MODEL (if valid)
+    3) config.defaults.translation from the model catalog (if valid)
     4) first available compatible model from pricing config
 
     Args:
         requested_model: Optional user-specified model
-        prefer_model: Optional mode-specific preferred model (e.g., OCR_MODEL)
+        prefer_model: Optional mode-specific preferred model (e.g., from config.defaults.ocr)
         require_vision: Whether selected model must support vision
 
     Returns:
@@ -86,8 +83,9 @@ def resolve_model(
         return requested_model
 
     # 2) prefer_model (if provided and valid)
-    # 3) DEFAULT_MODEL (if valid)
-    priority_candidates = [candidate for candidate in (prefer_model, DEFAULT_MODEL) if candidate]
+    # 3) config.defaults.translation (if valid), falling back to DEFAULT_FALLBACK_MODEL
+    translation_default = _catalog.get_default_model("translation") or _catalog.DEFAULT_FALLBACK_MODEL
+    priority_candidates = [candidate for candidate in (prefer_model, translation_default) if candidate]
     for candidate in priority_candidates:
         resolved = resolve_candidate(candidate)
         if resolved:

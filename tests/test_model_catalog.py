@@ -9,6 +9,7 @@ import src.models.pricing as pricing_module
 import src.models.resolver as resolver_module
 from src.models import (
     get_available_models,
+    get_default_model,
     get_model_catalog_path,
     get_model_max_completion_tokens,
     get_model_pricing,
@@ -32,6 +33,11 @@ SAMPLE_CATALOG = {
     "config": {
         "pricing_unit": 1_000_000,
         "monthly_limit": 250.0,
+        "defaults": {
+            "translation": "gpt-4o",
+            "ocr": "gpt-4o",
+            "image_translation": "gpt-5",
+        },
     },
     "models": {
         "gpt-5": {
@@ -186,8 +192,32 @@ class TestConfigValues:
 
 
 # ---------------------------------------------------------------------------
-# model_supports_vision
+# get_default_model
 # ---------------------------------------------------------------------------
+
+class TestGetDefaultModel:
+
+    def test_translation_default(self, mock_catalog):
+        assert get_default_model("translation") == "gpt-4o"
+
+    def test_ocr_default(self, mock_catalog):
+        assert get_default_model("ocr") == "gpt-4o"
+
+    def test_image_translation_default(self, mock_catalog):
+        assert get_default_model("image_translation") == "gpt-5"
+
+    def test_unknown_role_returns_none(self, mock_catalog):
+        assert get_default_model("nonexistent_role") is None
+
+    def test_missing_defaults_section_returns_none(self, monkeypatch):
+        catalog_without_defaults = {
+            "config": {"pricing_unit": 1_000_000, "monthly_limit": 250.0},
+            "models": {"gpt-4o": {"input": 2.75, "output": 11.0, "supports_vision": True}},
+        }
+        monkeypatch.setattr(catalog_module, "load_model_catalog", lambda: catalog_without_defaults)
+        assert get_default_model("translation") is None
+
+
 
 class TestModelSupportsVision:
 
@@ -295,7 +325,7 @@ class TestGetModelMaxCompletionTokens:
 class TestResolveModel:
 
     def test_no_args_returns_default_model(self, mock_catalog):
-        # DEFAULT_MODEL = "gpt-4o" which is in SAMPLE_CATALOG
+        # config.defaults.translation = "gpt-4o" which is in SAMPLE_CATALOG
         assert resolve_model() == "gpt-4o"
 
     def test_requested_model_returned(self, mock_catalog):
@@ -310,22 +340,22 @@ class TestResolveModel:
             resolve_model(requested_model="text-only-model", require_vision=True)
 
     def test_prefer_model_used_when_default_skipped(self, mock_catalog, monkeypatch):
-        # Patch DEFAULT_MODEL to something not in catalog so prefer_model wins
-        monkeypatch.setattr(resolver_module, "DEFAULT_MODEL", "nonexistent")
+        # Patch get_default_model so the translation default is unavailable
+        monkeypatch.setattr(catalog_module, "get_default_model", lambda role: "nonexistent")
         assert resolve_model(prefer_model="gpt-4o-mini") == "gpt-4o-mini"
 
     def test_prefer_model_ignored_if_not_vision_capable(self, mock_catalog, monkeypatch):
-        # prefer_model has no vision, DEFAULT_MODEL "gpt-4o" does → falls through to gpt-4o
+        # prefer_model has no vision, translation default "gpt-4o" does → falls through to gpt-4o
         assert resolve_model(prefer_model="text-only-model", require_vision=True) == "gpt-4o"
 
     def test_require_vision_skips_non_vision_models(self, mock_catalog, monkeypatch):
-        # Remove DEFAULT_MODEL from catalog so it falls through to first vision model
-        monkeypatch.setattr(resolver_module, "DEFAULT_MODEL", "nonexistent")
+        # Patch get_default_model so the translation default is unavailable
+        monkeypatch.setattr(catalog_module, "get_default_model", lambda role: "nonexistent")
         result = resolve_model(require_vision=True)
         assert result in {"gpt-5", "gpt-4o", "gpt-4o-mini"}
 
     def test_falls_through_to_first_available_when_defaults_missing(self, mock_catalog, monkeypatch):
-        monkeypatch.setattr(resolver_module, "DEFAULT_MODEL", "nonexistent")
+        monkeypatch.setattr(catalog_module, "get_default_model", lambda role: "nonexistent")
         result = resolve_model()
         # Should be the first model in SAMPLE_CATALOG that isn't "nonexistent"
         assert result in {"gpt-5", "gpt-4o", "gpt-4o-mini", "text-only-model"}
@@ -339,7 +369,6 @@ class TestResolveModel:
             },
         }
         monkeypatch.setattr(catalog_module, "load_model_catalog", lambda: all_text_catalog)
-        monkeypatch.setattr(resolver_module, "DEFAULT_MODEL", "nonexistent")
         with pytest.raises(ValueError, match="No vision-capable models"):
             resolve_model(require_vision=True)
 
@@ -397,7 +426,6 @@ class TestResolveModel:
             },
         }
         monkeypatch.setattr(catalog_module, "load_model_catalog", lambda: ordered_catalog)
-        monkeypatch.setattr(resolver_module, "DEFAULT_MODEL", "nonexistent")
         result = resolve_model(prefer_model="text-only-model", require_vision=True)
         assert result == "vision-model"
 

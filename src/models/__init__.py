@@ -8,6 +8,7 @@ from .catalog import (
     DEFAULT_FALLBACK_MODEL,
     MODEL_CATALOG_FILE,
     get_available_models,
+    get_default_model,
     get_model_catalog_path,
     get_model_max_completion_tokens,
     get_model_pricing,
@@ -26,7 +27,7 @@ from .pricing import (
     add_model_to_catalog,
     maybe_sync_model_pricing,
 )
-from .resolver import DEFAULT_MODEL, resolve_model
+from .resolver import resolve_model
 
 __all__ = [
     # catalog
@@ -36,6 +37,7 @@ __all__ = [
     "load_model_catalog",
     "save_model_catalog",
     "get_available_models",
+    "get_default_model",
     "get_model_pricing",
     "get_pricing_unit",
     "get_monthly_limit",
@@ -50,6 +52,5 @@ __all__ = [
     "add_model_to_catalog",
     "maybe_sync_model_pricing",
     # resolver
-    "DEFAULT_MODEL",
     "resolve_model",
 ]
