@@ -490,9 +490,44 @@ class SandboxProcessor:
 
                 if getattr(args, 'dry_run', False):
                     model_dr = self.translation_service._get_model()
-                    page_placeholder = f"[{source_language} text to translate]"
-                    abstract_placeholder = f"[{source_language} abstract text]" if getattr(args, 'abstract', False) else ""
-                    combined = generate_process_text(abstract_placeholder, page_placeholder, "")
+                    abstract_text_dr: Optional[str] = None
+                    if getattr(args, 'abstract', False):
+                        abstract_text_dr = self._collect_multiline("Abstract text") or None
+
+                    if args.input_file:
+                        file_path_dr = os.path.abspath(args.input_file)
+                        file_type_dr = self._detect_and_validate_file(file_path_dr)
+                        if file_type_dr == 'image':
+                            sys_p, usr_p = self.image_translation_service.build_prompts(source_language, target_language)
+                            self._dry_run_display(
+                                self.image_translation_service._get_model(), sys_p, usr_p,
+                                note="Image content would be base64-encoded and attached to the user message",
+                            )
+                            return
+                        elif file_type_dr == 'pdf':
+                            with open(file_path_dr, 'rb') as f:
+                                first_page = next(iter(self.pdf_processor.process_pdf(f)), None)
+                                page_text_dr = self.pdf_processor.process_page(first_page) if first_page else "[no text found in PDF]"
+                        elif file_type_dr == 'docx':
+                            with open(file_path_dr, 'rb') as f:
+                                pages_dr = DocxProcessor.process_docx_with_pages(f, target_page_size=2000)
+                                page_text_dr = pages_dr[0] if pages_dr else "[no text found in document]"
+                        elif file_type_dr == 'txt':
+                            with open(file_path_dr, 'r', encoding='utf-8') as f:
+                                pages_dr = TxtProcessor.process_txt_with_pages(f, target_page_size=2000)
+                                page_text_dr = pages_dr[0] if pages_dr else "[no text found in file]"
+                        else:
+                            page_text_dr = f"[{source_language} text to translate]"
+                    elif args.custom_text:
+                        page_text_dr = self._collect_multiline(
+                            f"Enter the {source_language} text you want to translate to {target_language}"
+                        )
+                        if not page_text_dr.strip():
+                            page_text_dr = f"[{source_language} text to translate]"
+                    else:
+                        page_text_dr = f"[{source_language} text to translate]"
+
+                    combined = generate_process_text(abstract_text_dr or "", page_text_dr, "")
                     sys_p, usr_p = self.translation_service.build_prompts(combined, source_language, target_language)
                     self._dry_run_display(model_dr, sys_p, usr_p)
                     return
