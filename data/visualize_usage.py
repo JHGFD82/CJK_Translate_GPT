@@ -22,6 +22,9 @@ from collections import defaultdict
 DATA_DIR = Path(__file__).parent
 ARCHIVES_DIR = DATA_DIR / "archives"
 
+# Professors excluded from all reports (test/dev accounts)
+EXCLUDED_PROFESSORS = {"testprof", "warntest"}
+
 # --- Color palettes -----------------------------------------------------------
 
 PROF_COLORS = [
@@ -48,6 +51,8 @@ def load_all_data() -> dict:
     # Active (current-month) files
     for active_file in sorted(DATA_DIR.glob("token_usage_*.json")):
         prof = active_file.stem.replace("token_usage_", "")
+        if prof in EXCLUDED_PROFESSORS:
+            continue
         with open(active_file, encoding="utf-8") as f:
             data = json.load(f)
         result.setdefault(prof, {})[data["month"]] = data
@@ -58,6 +63,8 @@ def load_all_data() -> dict:
             if not prof_dir.is_dir():
                 continue
             prof = prof_dir.name
+            if prof in EXCLUDED_PROFESSORS:
+                continue
             for archive_file in sorted(prof_dir.glob("*.json")):
                 month = archive_file.stem
                 with open(archive_file, encoding="utf-8") as f:
