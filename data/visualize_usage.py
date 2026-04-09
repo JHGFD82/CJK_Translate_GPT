@@ -144,10 +144,12 @@ def build_charts_data(all_data: dict) -> dict:
     daily_cost_by_prof: dict = {}
     for prof in professors:
         daily = all_data[prof].get(current_month, {}).get("daily_usage", {})
-        daily_cost_by_prof[prof] = [
-            round(daily.get(d, {}).get("total_cost", 0), 4)
-            for d in daily_dates_sorted
-        ]
+        cumulative = 0.0
+        series = []
+        for d in daily_dates_sorted:
+            cumulative += daily.get(d, {}).get("total_cost", 0)
+            series.append(round(cumulative, 4))
+        daily_cost_by_prof[prof] = series
 
     # 4. Model share — all-time cost per model
     model_totals: dict = defaultdict(float)
@@ -293,7 +295,7 @@ HTML_TEMPLATE = """\
   </div>
 
   <div class="chart-card">
-    <h2>Daily cost — {current_month}</h2>
+    <h2>Month-to-date cost — {current_month}</h2>
     <canvas id="dailyCostChart"></canvas>
   </div>
 
