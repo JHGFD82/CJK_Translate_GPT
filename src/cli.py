@@ -43,11 +43,15 @@ Global commands (no professor required):
   python main.py --show-config
   python main.py --list-models
 
-Using a new model for the first time:
-  python main.py heller translate CE -m openai/gpt-4o-new   Auto-registers from llmprices.ai
-  python main.py heller translate CE -m google/gemini-2.5-pro
-  Use 'provider/model' format for OpenAI or Google models not yet in model_catalog.json.
-  For all other models, add them directly to src/model_catalog.json.
+Specifying a model (-m / --model):
+  Already in catalog — use the bare model name:
+    python main.py heller translate CE -m gpt-4o
+    python main.py heller translate CE -m gpt-4o-mini
+  Not yet in catalog — use 'provider/model' to auto-register from llmprices.ai:
+    python main.py heller translate CE -m openai/gpt-4o-new
+    python main.py heller translate CE -m google/gemini-2.5-pro
+  Supported auto-register providers: openai, google.
+  For all other providers, add the model directly to src/model_catalog.json.
 
 Translation:
   python main.py heller translate CE -i document.pdf
