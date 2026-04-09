@@ -51,18 +51,34 @@ Using a new model for the first time:
 
 Translation:
   python main.py heller translate CE -i document.pdf
-  python main.py heller translate JE -i document.docx -p 1-5
-  python main.py heller translate KE -c
-  python main.py heller translate CE -i doc.pdf -o translated.docx    Save as Word document
-  python main.py heller translate CE -i doc.pdf --progressive-save    Save each page immediately
+  python main.py heller translate JE -i document.docx -p 1-5   Specific page range
+  python main.py heller translate KE -c                         Custom text input
+  python main.py heller translate CE -i doc.pdf -a              Supply an abstract for context
+  python main.py heller translate CE -i doc.pdf -o out.docx     Save as Word document
+  python main.py heller translate CE -i doc.pdf --auto-save     Auto-save with timestamp
+  python main.py heller translate CE -i doc.pdf --progressive-save  Save each page immediately
+  python main.py heller translate CE -i doc.pdf -f MyFont       Custom font (must be in fonts/)
+  python main.py heller translate CE -i doc.pdf -m gpt-4o       Use a specific model
+  python main.py heller translate CE -i doc.pdf --dry-run       Preview prompt without API call
+  python main.py heller translate CE -i doc.pdf --notes         Append ad-hoc notes to prompt
 
 Transcription (OCR):
   python main.py heller transcribe E -i image.jpg
   python main.py heller transcribe E -i image.jpg -o output.txt
-  python main.py heller transcribe S -i scan.png                     Simplified Chinese
-  python main.py heller transcribe T -i scan.png -m gpt-4o-mini      Traditional Chinese
-  python main.py heller transcribe J -i scan.png                     Japanese (kanji + kana)
-  python main.py heller transcribe C -i scan.png -m gpt-4o-mini      Generic Chinese
+  python main.py heller transcribe S -i scan.png                Simplified Chinese
+  python main.py heller transcribe T -i scan.png                Traditional Chinese
+  python main.py heller transcribe J -i scan.png                Japanese (kanji + kana)
+  python main.py heller transcribe C -i scan.png -m gpt-4o-mini Use a specific model
+  python main.py heller transcribe J -i scan.png -v             Vertical text layout
+  python main.py heller transcribe E -i image.jpg --dry-run     Preview prompt without API call
+  python main.py heller transcribe E -i image.jpg --notes       Append ad-hoc notes to prompt
+
+Custom prompt:
+  python main.py heller prompt                   Interactive user prompt
+  python main.py heller prompt -s                System prompt first, then user prompt
+  python main.py heller prompt -o response.txt   Save response to file
+  python main.py heller prompt -m gpt-4o-mini    Use a specific model
+  python main.py heller prompt --dry-run         Preview prompt without API call
         """,
     )
 
