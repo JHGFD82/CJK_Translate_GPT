@@ -47,7 +47,7 @@ Specifying a model (-m / --model):
   Already in catalog — use the bare model name:
     python main.py heller translate CE -m gpt-4o
     python main.py heller translate CE -m gpt-4o-mini
-  Not yet in catalog — use 'provider/model' to auto-register from llmprices.ai:
+  Not yet in catalog — use 'provider/model' to auto-register from PortKey:
     python main.py heller translate CE -m openai/gpt-4o-new
     python main.py heller translate CE -m google/gemini-2.5-pro
   Supported auto-register providers: openai, google.

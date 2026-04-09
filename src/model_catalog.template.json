@@ -17,13 +17,13 @@
       "input": 0.0,
       "output": 0.0,
       "supports_vision": true,
-      "llmprices_id": "openai/gpt-4o"
+      "portkey_id": "openai/gpt-4o"
     },
     "gpt-4o-mini": {
       "input": 0.0,
       "output": 0.0,
       "supports_vision": true,
-      "llmprices_id": "openai/gpt-4o-mini"
+      "portkey_id": "openai/gpt-4o-mini"
     }
   }
 }

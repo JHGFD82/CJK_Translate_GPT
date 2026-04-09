@@ -86,7 +86,7 @@ def add_model_to_catalog(provider_model: str) -> Tuple[str, Dict[str, Any]]:
 
     # Preserve any existing extra fields (system_role, fixed_parameters, etc.)
     entry: Dict[str, Any] = dict(catalog["models"].get(model_name, {}))
-    entry["llmprices_id"] = provider_model
+    entry["portkey_id"] = provider_model
 
     fetched = _fetch_model_pricing(provider_model, pricing_unit)
     entry["input"] = fetched["input"]
@@ -105,14 +105,14 @@ def add_model_to_catalog(provider_model: str) -> Tuple[str, Dict[str, Any]]:
 def maybe_sync_model_pricing(model: str) -> None:
     """Fetch current pricing for a model from PortKey if not synced within the last hour.
 
-    Only runs when the model has a 'llmprices_id' field. Silently skips on any
+    Only runs when the model has a 'portkey_id' field. Silently skips on any
     network or parse error so the caller is never blocked.
     """
     try:
         catalog = _catalog.load_model_catalog()
         model_entry = catalog["models"].get(model, {})
-        llmprices_id = model_entry.get("llmprices_id")
-        if not llmprices_id:
+        portkey_id = model_entry.get("portkey_id")
+        if not portkey_id:
             return
 
         last_sync_str = model_entry.get("last_sync", "")
@@ -125,7 +125,7 @@ def maybe_sync_model_pricing(model: str) -> None:
             pass
 
         pricing_unit = catalog["config"]["pricing_unit"]
-        fetched = _fetch_model_pricing(llmprices_id, pricing_unit)
+        fetched = _fetch_model_pricing(portkey_id, pricing_unit)
         now_iso = datetime.now().isoformat(timespec="seconds")
         catalog["models"][model]["input"] = fetched["input"]
         catalog["models"][model]["output"] = fetched["output"]

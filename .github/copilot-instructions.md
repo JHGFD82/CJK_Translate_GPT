@@ -125,7 +125,7 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 ### Model Selection and Configuration
 - **Default Models**: `OCR_MODEL=gpt-4o-mini` for OCR, `DEFAULT_MODEL=gpt-4o` for translation
 - **Custom Model**: Use `-m/--model MODEL_NAME` flag to override defaults for both translation and OCR
-- **OpenAI/Google Auto-Registration**: Use `openai/model-name` or `google/model-name` with `-m` — if not already in the catalog, pricing is fetched from [llmprices.ai](https://llmprices.ai) and saved automatically on first use
+- **OpenAI/Google Auto-Registration**: Use `openai/model-name` or `google/model-name` with `-m` — if not already in the catalog, pricing is fetched from [PortKey](https://api.portkey.ai) and saved automatically on first use
 - **Other Providers**: Add the model manually to `src/model_catalog.json`; edit the file directly following the template schema
 - **Provider Slug Mapping**: PortKey uses different slugs for some providers (e.g. `google` → `vertex-ai`). These mappings live in `model_catalog.json` under `config.provider_map`, not in code.
 - **List Models**: `python main.py --list-models` shows all catalog models with pricing and vision support

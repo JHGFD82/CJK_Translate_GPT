@@ -104,7 +104,7 @@ python main.py --list-models
 python main.py heller translate CE -i document.pdf -m gpt-4o-mini
 
 # First-time use of an OpenAI or Google model not yet in the catalog
-# (auto-fetches pricing from llmprices.ai and adds it to model_catalog.json)
+# (auto-fetches pricing from PortKey and adds it to model_catalog.json)
 python main.py heller translate CE -i document.pdf -m openai/gpt-4o-mini
 python main.py heller transcribe E -i image.jpg -m google/gemini-2.5-flash
 
@@ -117,7 +117,7 @@ python main.py heller translate CE -i complex.pdf -m gpt-4o        # Higher qual
 ```
 
 **Adding models to the catalog:**
-- **OpenAI or Google models**: Use `openai/model-name` or `google/model-name` with `-m` on the first invocation. Pricing is fetched automatically from [llmprices.ai](https://llmprices.ai) and saved to `src/model_catalog.json`.
+- **OpenAI or Google models**: Use `openai/model-name` or `google/model-name` with `-m` on the first invocation. Pricing is fetched automatically from [PortKey](https://api.portkey.ai) and saved to `src/model_catalog.json`.
 - **All other models** (Mistral, Llama, etc.): Edit `src/model_catalog.json` directly. Copy `src/model_catalog.template.json` as a starting point if you don't have a catalog yet.
 
 **Available models (examples — run `--list-models` for current list):**
@@ -322,7 +322,7 @@ Model pricing and capabilities are stored locally in `src/model_catalog.json` (n
 **Setting up the catalog:**
 1. Copy the template: `cp src/model_catalog.template.json src/model_catalog.json`
 2. Add models in one of two ways:
-   - **OpenAI or Google models**: Just use `openai/model-name` or `google/model-name` with `-m` on first run — pricing is fetched automatically from [llmprices.ai](https://llmprices.ai) and saved
+   - **OpenAI or Google models**: Just use `openai/model-name` or `google/model-name` with `-m` on first run — pricing is fetched automatically from [PortKey](https://api.portkey.ai) and saved
    - **All other models**: Edit `src/model_catalog.json` directly, following the schema in the template
 
 **Manual catalog entry format:**

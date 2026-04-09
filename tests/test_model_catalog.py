@@ -508,7 +508,7 @@ class TestAddModelToCatalog:
         assert model_name == "gpt-4o"
         assert entry["input"] == 2.5
         assert entry["output"] == 10.0
-        assert entry["llmprices_id"] == "openai/gpt-4o"
+        assert entry["portkey_id"] == "openai/gpt-4o"
         assert catalog_file.exists()
 
     def test_updates_existing_catalog(self, monkeypatch, tmp_path):
@@ -543,7 +543,7 @@ class TestAddModelToCatalog:
             "models": {
                 "gpt-4o": {
                     "input": 2.5, "output": 10.0,
-                    "supports_vision": True, "llmprices_id": "openai/gpt-4o",
+                    "supports_vision": True, "portkey_id": "openai/gpt-4o",
                 }
             },
         }
@@ -597,4 +597,4 @@ class TestAddModelToCatalog:
         monkeypatch.setattr(pricing_module, "_fetch_model_pricing", _make_fake_fetch(1.25, 10.0))
         model_name, entry = add_model_to_catalog("google/gemini/2.5-pro")
         assert model_name == "gemini/2.5-pro"
-        assert entry["llmprices_id"] == "google/gemini/2.5-pro"
+        assert entry["portkey_id"] == "google/gemini/2.5-pro"
