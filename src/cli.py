@@ -64,7 +64,7 @@ Translation:
   python main.py heller translate CE -i doc.pdf -f MyFont       Custom font (must be in fonts/)
   python main.py heller translate CE -i doc.pdf -m gpt-4o       Use a specific model
   python main.py heller translate CE -i doc.pdf --dry-run       Preview prompt without API call
-  python main.py heller translate CE -i doc.pdf --notes         Append ad-hoc notes to prompt
+  python main.py heller translate CE -i doc.pdf -n              Append ad-hoc notes to prompt
 
 Transcription (OCR):
   python main.py heller transcribe E -i image.jpg
@@ -75,7 +75,7 @@ Transcription (OCR):
   python main.py heller transcribe C -i scan.png -m gpt-4o-mini Use a specific model
   python main.py heller transcribe J -i scan.png -v             Vertical text layout
   python main.py heller transcribe E -i image.jpg --dry-run     Preview prompt without API call
-  python main.py heller transcribe E -i image.jpg --notes       Append ad-hoc notes to prompt
+  python main.py heller transcribe E -i image.jpg -n            Append ad-hoc notes to prompt
 
 Custom prompt:
   python main.py heller prompt                   Interactive user prompt
@@ -186,7 +186,7 @@ Custom prompt:
         help='Print the prompt(s) that would be sent to the model without making any API calls',
     )
     translate_parser.add_argument(
-        '--notes',
+        '-n', '--notes',
         dest='notes',
         action='store_true',
         help='Interactively append ad-hoc notes to the system prompt, user prompt, or both before sending',
@@ -210,7 +210,7 @@ Custom prompt:
         help='Print the prompt(s) that would be sent to the model without making any API calls',
     )
     transcribe_parser.add_argument(
-        '--notes',
+        '-n', '--notes',
         dest='notes',
         action='store_true',
         help='Interactively append ad-hoc notes to the system prompt, user prompt, or both before sending',
