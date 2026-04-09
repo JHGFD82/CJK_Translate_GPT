@@ -132,34 +132,36 @@ def build_charts_data(all_data: dict) -> dict:
         monthly_input.append(round(inp / 1000, 1))
         monthly_output.append(round(out / 1000, 1))
 
-    # 3. Month-to-date cost — use most recent month with any daily data,
-    #    falling back to the current calendar month if none found yet.
-    current_month = datetime.now().strftime("%Y-%m")
-    display_month = current_month
-    for candidate in sorted(months, reverse=True):
-        if any(
-            all_data[p].get(candidate, {}).get("daily_usage")
-            for p in professors
-        ):
-            display_month = candidate
-            break
+    # 3. Rolling 30-day cumulative cost — spans month boundaries naturally.
+    from datetime import timedelta, date as date_type
+    today = date_type.today()
+    rolling_dates_sorted = [
+        (today - timedelta(days=i)).strftime("%Y-%m-%d")
+        for i in range(29, -1, -1)
+    ]
 
-    daily_dates: set = set()
-    for prof in professors:
-        daily_dates.update(
-            all_data[prof].get(display_month, {}).get("daily_usage", {}).keys()
+    # Look up per-day cost across whichever month the day falls in
+    def _day_cost(prof: str, day: str) -> float:
+        month = day[:7]
+        return (
+            all_data[prof]
+            .get(month, {})
+            .get("daily_usage", {})
+            .get(day, {})
+            .get("total_cost", 0.0)
         )
-    daily_dates_sorted = sorted(daily_dates)
 
     daily_cost_by_prof: dict = {}
     for prof in professors:
-        daily = all_data[prof].get(display_month, {}).get("daily_usage", {})
         cumulative = 0.0
         series = []
-        for d in daily_dates_sorted:
-            cumulative += daily.get(d, {}).get("total_cost", 0)
+        for d in rolling_dates_sorted:
+            cumulative += _day_cost(prof, d)
             series.append(round(cumulative, 4))
         daily_cost_by_prof[prof] = series
+
+    daily_dates_sorted = rolling_dates_sorted
+    display_month = f"{rolling_dates_sorted[0][5:]} \u2192 {rolling_dates_sorted[-1][5:]}"
 
     # 4. Model share — all-time cost per model
     model_totals: dict = defaultdict(float)
@@ -177,7 +179,7 @@ def build_charts_data(all_data: dict) -> dict:
         "monthly_input": monthly_input,
         "monthly_output": monthly_output,
         "current_month": display_month,
-        "daily_dates": [d[5:] for d in daily_dates_sorted],   # strip YYYY- prefix
+        "daily_dates": [d[5:] for d in daily_dates_sorted],   # strip YYYY- → MM-DD
         "daily_cost_by_prof": daily_cost_by_prof,
         "model_labels": model_labels,
         "model_values": model_values,
@@ -305,7 +307,7 @@ HTML_TEMPLATE = """\
   </div>
 
   <div class="chart-card">
-    <h2>Month-to-date cost — {current_month}</h2>
+    <h2>Cumulative cost — last 30 days ({current_month})</h2>
     <canvas id="dailyCostChart"></canvas>
   </div>
 
