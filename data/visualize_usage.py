@@ -132,18 +132,28 @@ def build_charts_data(all_data: dict) -> dict:
         monthly_input.append(round(inp / 1000, 1))
         monthly_output.append(round(out / 1000, 1))
 
-    # 3. Daily cost for current month — one series per professor
+    # 3. Month-to-date cost — use most recent month with any daily data,
+    #    falling back to the current calendar month if none found yet.
     current_month = datetime.now().strftime("%Y-%m")
+    display_month = current_month
+    for candidate in sorted(months, reverse=True):
+        if any(
+            all_data[p].get(candidate, {}).get("daily_usage")
+            for p in professors
+        ):
+            display_month = candidate
+            break
+
     daily_dates: set = set()
     for prof in professors:
         daily_dates.update(
-            all_data[prof].get(current_month, {}).get("daily_usage", {}).keys()
+            all_data[prof].get(display_month, {}).get("daily_usage", {}).keys()
         )
     daily_dates_sorted = sorted(daily_dates)
 
     daily_cost_by_prof: dict = {}
     for prof in professors:
-        daily = all_data[prof].get(current_month, {}).get("daily_usage", {})
+        daily = all_data[prof].get(display_month, {}).get("daily_usage", {})
         cumulative = 0.0
         series = []
         for d in daily_dates_sorted:
@@ -166,7 +176,7 @@ def build_charts_data(all_data: dict) -> dict:
         "monthly_cost_by_prof": monthly_cost_by_prof,
         "monthly_input": monthly_input,
         "monthly_output": monthly_output,
-        "current_month": current_month,
+        "current_month": display_month,
         "daily_dates": [d[5:] for d in daily_dates_sorted],   # strip YYYY- prefix
         "daily_cost_by_prof": daily_cost_by_prof,
         "model_labels": model_labels,
