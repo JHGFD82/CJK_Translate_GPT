@@ -325,6 +325,52 @@ class SandboxProcessor:
             logger.error(f"Error processing image: {e}", exc_info=True)
             raise CLIError(f"Error processing image: {e}") from e
 
+    def process_image_folder(self, folder_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False) -> None:
+        """Process all images in a folder with OCR, printing each result and optionally saving combined output."""
+        from ..processors.constants import IMAGE_EXTENSIONS
+
+        folder_path = os.path.abspath(folder_path)
+        all_entries = sorted(os.listdir(folder_path))
+        image_files = [
+            os.path.join(folder_path, name)
+            for name in all_entries
+            if name.lower().endswith(IMAGE_EXTENSIONS) and os.path.isfile(os.path.join(folder_path, name))
+        ]
+
+        if not image_files:
+            raise CLIError(f"No image files found in folder '{folder_path}'.")
+
+        logger.info(f"Processing {len(image_files)} image(s) in folder: {folder_path}")
+        print(f"Found {len(image_files)} image(s) to process.\n")
+
+        combined_parts: List[str] = []
+
+        for idx, img_path in enumerate(image_files, start=1):
+            filename = os.path.basename(img_path)
+            print(f"[{idx}/{len(image_files)}] {filename}")
+            try:
+                extracted_text = self.image_processor_service.process_image_ocr(
+                    img_path, target_language, output_format="console", vertical=vertical
+                )
+            except Exception as e:
+                logger.error(f"Error processing '{filename}': {e}", exc_info=True)
+                print(f"  ERROR: {e}")
+                extracted_text = f"[Error processing {filename}: {e}]"
+
+            print("\n=== Extracted Text ===")
+            print(extracted_text)
+            print("======================\n")
+
+            combined_parts.append(f"=== {filename} ===\n{extracted_text}")
+
+        if output_file:
+            output_path = os.path.abspath(output_file)
+            combined_text = "\n\n".join(combined_parts)
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(combined_text)
+            logger.info(f"Combined OCR output saved to: {output_path}")
+            print(f"Combined output saved to: {output_path}")
+
     def process_image_translation(
         self,
         file_path: str,
@@ -579,14 +625,18 @@ class SandboxProcessor:
                 if not args.input_file:
                     raise CLIError("Input file is required for transcribe command. Use -i option.")
 
-                # Validate it's an image file
-                file_type = self._detect_and_validate_file(args.input_file)
-                if file_type != 'image':
-                    raise CLIError(f"Transcribe command requires an image file, but got {file_type}.")
-
+                input_path = os.path.abspath(args.input_file)
                 output_file = getattr(args, 'output_file', None)
                 vertical = getattr(args, 'vertical', False)
-                self.process_image(os.path.abspath(args.input_file), target_language, output_file, vertical=vertical)
+
+                if os.path.isdir(input_path):
+                    self.process_image_folder(input_path, target_language, output_file, vertical=vertical)
+                else:
+                    # Validate it's an image file
+                    file_type = self._detect_and_validate_file(input_path)
+                    if file_type != 'image':
+                        raise CLIError(f"Transcribe command requires an image file or folder, but got {file_type}.")
+                    self.process_image(input_path, target_language, output_file, vertical=vertical)
 
             elif command == 'prompt':
                 system_prompt_text: Optional[str] = None

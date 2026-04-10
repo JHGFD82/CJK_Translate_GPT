@@ -69,6 +69,8 @@ Translation:
 Transcription (OCR):
   python main.py heller transcribe E -i image.jpg
   python main.py heller transcribe E -i image.jpg -o output.txt
+  python main.py heller transcribe E -i ./scans/                Folder of images (sorted by name)
+  python main.py heller transcribe E -i ./scans/ -o combined.txt  Combine all results into one file
   python main.py heller transcribe S -i scan.png                Simplified Chinese
   python main.py heller transcribe T -i scan.png                Traditional Chinese
   python main.py heller transcribe J -i scan.png                Japanese (kanji + kana)
@@ -199,7 +201,7 @@ Custom prompt:
         type=parse_single_language_code,
         help='Target language: E (English), C (Chinese), S (Simplified Chinese), T (Traditional Chinese), J (Japanese), K (Korean)',
     )
-    transcribe_parser.add_argument('-i', '--input', dest='input_file', type=str, required=False, help='Input image file path')
+    transcribe_parser.add_argument('-i', '--input', dest='input_file', type=str, required=False, help='Input image file path, or a folder of images to process in order')
     transcribe_parser.add_argument('-o', '--output', dest='output_file', type=str, help='Output file path')
     transcribe_parser.add_argument('-m', '--model', dest='model', type=str, help='Model to use (e.g., gpt-4o, gpt-4o-mini)')
     transcribe_parser.add_argument('-v', '--vertical', dest='vertical', action='store_true', help='Text is predominantly vertical (top-to-bottom, right-to-left columns)')
