@@ -16,10 +16,12 @@ from .catalog import (
     get_monthly_limit,
     get_pricing_unit,
     get_vision_capable_models,
+    is_model_access_error,
     load_model_catalog,
     model_has_fixed_parameters,
     model_supports_vision,
     model_uses_max_completion_tokens,
+    remove_model_from_catalog,
     save_model_catalog,
 )
 from .pricing import (
@@ -47,6 +49,9 @@ __all__ = [
     "model_uses_max_completion_tokens",
     "model_has_fixed_parameters",
     "get_model_max_completion_tokens",
+    # catalog (continued)
+    "is_model_access_error",
+    "remove_model_from_catalog",
     # pricing
     "PORTKEY_PRICING_API_BASE",
     "add_model_to_catalog",

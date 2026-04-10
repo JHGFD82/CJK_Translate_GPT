@@ -181,3 +181,24 @@ def get_default_model(role: str) -> Optional[str]:
     """
     config = load_model_catalog()
     return config.get("config", {}).get("defaults", {}).get(role)
+
+
+def remove_model_from_catalog(model_name: str) -> bool:
+    """Remove a model from the catalog by key name.
+
+    Returns True if the model was removed, False if it was not present.
+    """
+    catalog = load_model_catalog()
+    if model_name not in catalog["models"]:
+        return False
+    del catalog["models"][model_name]
+    save_model_catalog(catalog)
+    logging.warning(f"Removed inaccessible model '{model_name}' from catalog.")
+    return True
+
+
+def is_model_access_error(error_message: str) -> bool:
+    """Return True if the error message indicates the model is not accessible
+    in the Princeton AI Sandbox (PortKey router cannot find it).
+    """
+    return "invalid target name found in the query router" in error_message.lower()
