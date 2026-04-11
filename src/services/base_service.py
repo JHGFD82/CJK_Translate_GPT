@@ -75,23 +75,23 @@ class BaseService:
             "messages": messages,
             **extra_kwargs,
         }
+        if temperature is not None:
+            base_kwargs["temperature"] = temperature
+        if top_p is not None:
+            base_kwargs["top_p"] = top_p
 
         if use_completion_tokens and fixed_params:
             return self.client.chat.completions.create(  # type: ignore[misc]
                 max_completion_tokens=max_tokens,
-                **base_kwargs,
+                **{k: v for k, v in base_kwargs.items() if k not in ("temperature", "top_p")},
             )
         if use_completion_tokens:
             return self.client.chat.completions.create(  # type: ignore[misc]
-                temperature=temperature,
                 max_completion_tokens=max_tokens,
-                top_p=top_p,
                 **base_kwargs,
             )
         return self.client.chat.completions.create(  # type: ignore[misc]
-            temperature=temperature,
             max_tokens=max_tokens,
-            top_p=top_p,
             **base_kwargs,
         )
 
