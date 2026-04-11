@@ -1,8 +1,15 @@
 """Shared API error classification utilities for all service modules."""
 
 import logging
+from enum import Enum
 
 from ..models import is_model_access_error, remove_model_from_catalog
+
+
+class TranslationSignal(str, Enum):
+    """Sentinel values returned by translation calls to signal non-content outcomes."""
+    CONTEXT_LENGTH_EXCEEDED = "context_length_exceeded"
+    CONTENT_FILTER = "content_filter_triggered"
 
 
 def is_content_filter_error(error: Exception) -> bool:
@@ -52,3 +59,23 @@ def handle_common_api_errors(error: Exception, model: str) -> None:
     if "authentication" in msg or "unauthorized" in msg:
         logging.error(f"Authentication error: {error}")
         raise Exception(f"Authentication error: {error}") from error
+
+
+def handle_translation_api_error(error: Exception, model: str) -> TranslationSignal:
+    """Classify a translation API error into a TranslationSignal or raise.
+
+    Calls handle_common_api_errors first (covering model-access, rate-limit,
+    invalid-request, and authentication), then maps context-length and
+    content-filter errors to their respective signals. Any unrecognised error
+    is re-raised with a generic message.
+    """
+    handle_common_api_errors(error, model)
+    msg = str(error).lower()
+    if "context_length_exceeded" in msg or "maximum context length" in msg:
+        logging.error(f"Context length exceeded: {error}")
+        return TranslationSignal.CONTEXT_LENGTH_EXCEEDED
+    if is_content_filter_error(error):
+        logging.error(f"Content filter triggered: {error}")
+        return TranslationSignal.CONTENT_FILTER
+    logging.error(f"API call failed with {type(error).__name__}: {error}")
+    raise Exception(f"API call failed with {type(error).__name__}: {error}") from error
