@@ -1,0 +1,134 @@
+"""Base class shared by all AI service modules."""
+
+import logging
+from typing import Any, Optional
+
+from portkey_ai import Portkey
+from collections.abc import Iterator as ABCIterator
+
+from ..models import (
+    model_uses_max_completion_tokens, model_has_fixed_parameters,
+)
+from ..tracking.token_tracker import TokenTracker
+
+
+class BaseService:
+    """Common foundation for all PortKey-backed AI services.
+
+    Subclasses inherit:
+      - Portkey client initialisation
+      - Shared TokenTracker setup (accept existing or create new)
+      - system_note / user_note attributes for runtime --notes injection
+      - _create_completion() for the 3-branch max_tokens API call
+      - _record_response_usage() for token tracking + logging
+
+    Each subclass is still responsible for its own _get_model(), prompt
+    construction, and the main request/retry loop.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        professor: Optional[str] = None,
+        token_tracker: Optional[TokenTracker] = None,
+        token_tracker_file: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> None:
+        self.api_key = api_key
+        self.professor = professor
+        self.custom_model = model
+        self.client = Portkey(api_key=api_key)
+        self.token_tracker = (
+            token_tracker
+            if token_tracker is not None
+            else TokenTracker(professor=professor or "", data_file=token_tracker_file)
+        )
+        self.system_note: Optional[str] = None
+        self.user_note: Optional[str] = None
+
+    def _create_completion(
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        max_tokens: int,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        **extra_kwargs: Any,
+    ) -> Any:
+        """Call the chat completions API using the correct token-limit parameter for the model.
+
+        Uses max_completion_tokens for reasoning/o-series models and max_tokens
+        for all others. When the model has fixed parameters (e.g. o1), temperature
+        and top_p are omitted entirely. Any additional keyword arguments are
+        forwarded directly to the API call.
+        """
+        use_completion_tokens = model_uses_max_completion_tokens(model)
+        fixed_params = model_has_fixed_parameters(model)
+
+        base_kwargs: dict[str, Any] = {
+            "model": model,
+            "stream": False,
+            "messages": messages,
+            **extra_kwargs,
+        }
+
+        if use_completion_tokens and fixed_params:
+            return self.client.chat.completions.create(  # type: ignore[misc]
+                max_completion_tokens=max_tokens,
+                **base_kwargs,
+            )
+        if use_completion_tokens:
+            return self.client.chat.completions.create(  # type: ignore[misc]
+                temperature=temperature,
+                max_completion_tokens=max_tokens,
+                top_p=top_p,
+                **base_kwargs,
+            )
+        return self.client.chat.completions.create(  # type: ignore[misc]
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=top_p,
+            **base_kwargs,
+        )
+
+    def _record_response_usage(self, response: Any, model: str, critical: bool = False) -> None:
+        """Record token usage from an API response and log a summary.
+
+        Args:
+            response: The raw API response object.
+            model: The model name used for the request (fallback if response.model is absent).
+            critical: When True, logs a CRITICAL error instead of a warning when usage is missing.
+                      Set this for operations (e.g. OCR, image translation) where missing billing
+                      data indicates a serious configuration problem.
+        """
+        assert not isinstance(response, ABCIterator), "Unexpected stream response received."
+
+        if response.id:
+            logging.info(f"API call successful. Response ID: {response.id}")
+        if response.model:
+            logging.info(f"Model used: {response.model}")
+
+        if (
+            response.usage
+            and response.usage.prompt_tokens is not None
+            and response.usage.completion_tokens is not None
+            and response.usage.total_tokens is not None
+        ):
+            usage = self.token_tracker.record_usage(
+                model=response.model or model,
+                prompt_tokens=response.usage.prompt_tokens,
+                completion_tokens=response.usage.completion_tokens,
+                total_tokens=response.usage.total_tokens,
+                requested_model=model,
+            )
+            logging.info(
+                f"Tokens used — prompt: {response.usage.prompt_tokens}, "
+                f"completion: {response.usage.completion_tokens}, "
+                f"total: {response.usage.total_tokens}, "
+                f"cost: ${usage.total_cost:.4f}"
+            )
+        else:
+            if critical:
+                logging.error("CRITICAL: No token usage in response. Token tracking failed!")
+            else:
+                logging.warning("No token usage information available in response.")

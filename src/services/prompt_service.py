@@ -2,18 +2,15 @@
 
 import logging
 from typing import Any, Optional
-from collections.abc import Iterator as ABCIterator
-
-from portkey_ai import Portkey
 
 from ..models import (
     resolve_model, get_model_system_role,
-    model_uses_max_completion_tokens, model_has_fixed_parameters,
     maybe_sync_model_pricing,
 )
 from ..tracking.token_tracker import TokenTracker
 from .api_errors import handle_api_errors
-from .constants import MAX_RETRIES, BASE_RETRY_DELAY
+from .base_service import BaseService
+
 
 DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
 
@@ -23,7 +20,7 @@ PROMPT_TEMPERATURE: float = 0.7
 PROMPT_TOP_P: float = 1.0
 
 
-class PromptService:
+class PromptService(BaseService):
     """Sends custom prompts to the AI model and returns the response."""
 
     def __init__(
@@ -33,15 +30,7 @@ class PromptService:
         token_tracker: Optional[TokenTracker] = None,
         model: Optional[str] = None,
     ):
-        self.api_key = api_key
-        self.professor = professor
-        self.custom_model = model
-        self.client = Portkey(api_key=api_key)
-        self.token_tracker = (
-            token_tracker
-            if token_tracker is not None
-            else TokenTracker(professor=professor or "")
-        )
+        super().__init__(api_key, professor, token_tracker, None, model)
 
     def _get_model(self) -> str:
         """Resolve model, syncing pricing if needed."""
@@ -55,31 +44,9 @@ class PromptService:
             {"role": system_role, "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
-        use_completion_tokens = model_uses_max_completion_tokens(model)
-        fixed_params = model_has_fixed_parameters(model)
-        if use_completion_tokens and fixed_params:
-            return self.client.chat.completions.create(  # type: ignore[misc]
-                model=model,
-                max_completion_tokens=PROMPT_MAX_TOKENS,
-                stream=False,
-                messages=messages,
-            )
-        if use_completion_tokens:
-            return self.client.chat.completions.create(  # type: ignore[misc]
-                model=model,
-                temperature=PROMPT_TEMPERATURE,
-                max_completion_tokens=PROMPT_MAX_TOKENS,
-                top_p=PROMPT_TOP_P,
-                stream=False,
-                messages=messages,
-            )
-        return self.client.chat.completions.create(  # type: ignore[misc]
-            model=model,
-            temperature=PROMPT_TEMPERATURE,
-            max_tokens=PROMPT_MAX_TOKENS,
-            top_p=PROMPT_TOP_P,
-            stream=False,
-            messages=messages,
+        return self._create_completion(
+            model, messages, PROMPT_MAX_TOKENS,
+            temperature=PROMPT_TEMPERATURE, top_p=PROMPT_TOP_P,
         )
 
     def build_prompts(
@@ -110,28 +77,7 @@ class PromptService:
             handle_api_errors(e, model)
             raise
 
-        assert not isinstance(response, ABCIterator), "Unexpected stream response received."
-
-        if (
-            response.usage
-            and response.usage.prompt_tokens is not None
-            and response.usage.completion_tokens is not None
-            and response.usage.total_tokens is not None
-        ):
-            usage = self.token_tracker.record_usage(
-                model=response.model or model,
-                prompt_tokens=response.usage.prompt_tokens,
-                completion_tokens=response.usage.completion_tokens,
-                total_tokens=response.usage.total_tokens,
-                requested_model=model,
-            )
-            logging.info(
-                f"Tokens — prompt: {response.usage.prompt_tokens}, "
-                f"completion: {response.usage.completion_tokens}, "
-                f"cost: ${usage.total_cost:.4f}"
-            )
-        else:
-            logging.warning("No token usage information available in response.")
+        self._record_response_usage(response, model)
 
         if response.choices and response.choices[0].message:
             content = response.choices[0].message.content
