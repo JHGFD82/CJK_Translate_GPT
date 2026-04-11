@@ -1,8 +1,15 @@
-"""Service layer modules for translation and OCR."""
+"""Service layer — AI API services for translation, OCR, image translation, and custom prompts."""
 
+from .api_errors import APISignal
 from .translation_service import TranslationService
 from .image_processor_service import ImageProcessorService
 from .image_translation_service import ImageTranslationService
 from .prompt_service import PromptService
 
-__all__ = ["TranslationService", "ImageProcessorService", "ImageTranslationService", "PromptService"]
+__all__ = [
+    "APISignal",
+    "TranslationService",
+    "ImageProcessorService",
+    "ImageTranslationService",
+    "PromptService",
+]
