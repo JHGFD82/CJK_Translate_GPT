@@ -1,7 +1,8 @@
 """Base class shared by all AI service modules."""
 
 import logging
-from typing import Any, Optional
+import time
+from typing import Any, Callable, Optional
 
 from portkey_ai import Portkey
 from collections.abc import Iterator as ABCIterator
@@ -10,6 +11,8 @@ from ..models import (
     model_uses_max_completion_tokens, model_has_fixed_parameters,
 )
 from ..tracking.token_tracker import TokenTracker
+from .api_errors import APISignal, classify_api_error
+from .constants import MAX_RETRIES, BASE_RETRY_DELAY
 
 
 class BaseService:
@@ -21,9 +24,10 @@ class BaseService:
       - system_note / user_note attributes for runtime --notes injection
       - _create_completion() for the 3-branch max_tokens API call
       - _record_response_usage() for token tracking + logging
+      - _run_with_retry() for exponential-backoff retry with classify_api_error
 
-    Each subclass is still responsible for its own _get_model(), prompt
-    construction, and the main request/retry loop.
+    Each subclass is still responsible for its own _get_model() and prompt
+    construction.
     """
 
     def __init__(
@@ -132,3 +136,67 @@ class BaseService:
                 logging.error("CRITICAL: No token usage in response. Token tracking failed!")
             else:
                 logging.warning("No token usage information available in response.")
+
+    def _run_with_retry(
+        self,
+        body_fn: Callable[[int], Any],
+        model: str,
+        operation: str = "API call",
+        timeout_msg: Optional[str] = None,
+        return_signal_on_error: bool = False,
+    ) -> Any:
+        """Run a request in a retry loop with exponential backoff and error classification.
+
+        Args:
+            body_fn: Called on each attempt with the attempt index (0-based).
+                     Return any non-None value to signal success and exit the loop.
+                     Return None to signal \"no usable content — retry\".
+            model: Model name forwarded to classify_api_error.
+            operation: Human-readable label used in log messages (e.g. \"OCR\", \"translation\").
+            timeout_msg: RuntimeError message when all retries are exhausted without
+                         an exception. Defaults to a generic message.
+            return_signal_on_error: When True, return the APISignal on error or retry
+                                    exhaustion instead of raising (translation pattern).
+                                    When False (default), raise (OCR / image pattern).
+        Returns:
+            The non-None value returned by body_fn, or an APISignal when
+            return_signal_on_error=True and an unresolvable error occurred.
+        Raises:
+            RuntimeError: All retries exhausted with return_signal_on_error=False.
+            Exception: Propagated from classify_api_error for non-retryable errors
+                       when return_signal_on_error=False.
+        """
+        if timeout_msg is None:
+            timeout_msg = f"{operation} returned no content after {MAX_RETRIES} retries."
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                if attempt > 0:
+                    delay = BASE_RETRY_DELAY * (2 ** attempt) + (0.1 * attempt)
+                    logging.info(
+                        f"Retrying {operation} "
+                        f"(attempt {attempt + 1}/{MAX_RETRIES}) after {delay:.1f}s..."
+                    )
+                    time.sleep(delay)
+                result = body_fn(attempt)
+                if result is not None:
+                    return result
+            except Exception as e:
+                signal = classify_api_error(e, model)
+                if signal == APISignal.CONTENT_FILTER and attempt < MAX_RETRIES - 1:
+                    logging.warning(
+                        f"Content filter triggered on {operation} "
+                        f"(attempt {attempt + 1}/{MAX_RETRIES}). Retrying..."
+                    )
+                    continue
+                logging.error(f"{operation} error: {e}")
+                if return_signal_on_error:
+                    return signal
+                raise
+
+        if return_signal_on_error:
+            logging.error(
+                f"Content filter triggered on {operation} after {MAX_RETRIES} attempts, skipping."
+            )
+            return APISignal.CONTENT_FILTER
+        raise RuntimeError(timeout_msg)
