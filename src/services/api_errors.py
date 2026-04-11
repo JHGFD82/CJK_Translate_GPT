@@ -6,8 +6,8 @@ from enum import Enum
 from ..models import is_model_access_error, remove_model_from_catalog
 
 
-class TranslationSignal(str, Enum):
-    """Sentinel values returned by translation calls to signal non-content outcomes."""
+class APISignal(str, Enum):
+    """Sentinel values returned by service calls to signal non-content outcomes."""
     CONTEXT_LENGTH_EXCEEDED = "context_length_exceeded"
     CONTENT_FILTER = "content_filter_triggered"
 
@@ -37,13 +37,13 @@ def raise_for_model_access_error(error: Exception, model: str) -> None:
     ) from error
 
 
-def handle_common_api_errors(error: Exception, model: str) -> None:
-    """Raise a user-friendly exception for common PortKey/OpenAI API errors.
+def handle_api_errors(error: Exception, model: str) -> None:
+    """Raise a user-friendly exception for PortKey/OpenAI API errors.
 
     Covers model-access denial, rate limits, invalid requests, and
     authentication failures. Content-filter and context-length errors are
-    intentionally excluded — callers that need signal-based handling (e.g.
-    TranslationService) deal with those themselves.
+    intentionally excluded — callers that need signal-based handling
+    should use classify_api_error() instead.
 
     If none of the known patterns match, this function returns without raising
     so the caller can decide how to handle the remaining error.
@@ -61,21 +61,23 @@ def handle_common_api_errors(error: Exception, model: str) -> None:
         raise Exception(f"Authentication error: {error}") from error
 
 
-def handle_translation_api_error(error: Exception, model: str) -> TranslationSignal:
-    """Classify a translation API error into a TranslationSignal or raise.
+def classify_api_error(error: Exception, model: str) -> APISignal:
+    """Classify an API error into an APISignal or raise.
 
-    Calls handle_common_api_errors first (covering model-access, rate-limit,
+    Calls handle_api_errors first (covering model-access, rate-limit,
     invalid-request, and authentication), then maps context-length and
     content-filter errors to their respective signals. Any unrecognised error
     is re-raised with a generic message.
+
+    Applicable to any service — translation, OCR, prompt, or otherwise.
     """
-    handle_common_api_errors(error, model)
+    handle_api_errors(error, model)
     msg = str(error).lower()
     if "context_length_exceeded" in msg or "maximum context length" in msg:
         logging.error(f"Context length exceeded: {error}")
-        return TranslationSignal.CONTEXT_LENGTH_EXCEEDED
+        return APISignal.CONTEXT_LENGTH_EXCEEDED
     if is_content_filter_error(error):
         logging.error(f"Content filter triggered: {error}")
-        return TranslationSignal.CONTENT_FILTER
+        return APISignal.CONTENT_FILTER
     logging.error(f"API call failed with {type(error).__name__}: {error}")
     raise Exception(f"API call failed with {type(error).__name__}: {error}") from error
