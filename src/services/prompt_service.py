@@ -12,7 +12,7 @@ from ..models import (
     maybe_sync_model_pricing,
 )
 from ..tracking.token_tracker import TokenTracker
-from .api_errors import raise_for_model_access_error
+from .api_errors import handle_common_api_errors
 from .constants import MAX_RETRIES, BASE_RETRY_DELAY
 
 DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
@@ -107,7 +107,7 @@ class PromptService:
         try:
             response = self._call_api(model, system_role, effective_system, user_prompt)
         except Exception as e:
-            raise_for_model_access_error(e, model)
+            handle_common_api_errors(e, model)
             raise
 
         assert not isinstance(response, ABCIterator), "Unexpected stream response received."

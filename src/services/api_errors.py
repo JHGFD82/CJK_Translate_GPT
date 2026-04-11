@@ -28,3 +28,27 @@ def raise_for_model_access_error(error: Exception, model: str) -> None:
         f"you do not have access to this model.{removed_note} "
         "Please use a different model or contact your sandbox administrator."
     ) from error
+
+
+def handle_common_api_errors(error: Exception, model: str) -> None:
+    """Raise a user-friendly exception for common PortKey/OpenAI API errors.
+
+    Covers model-access denial, rate limits, invalid requests, and
+    authentication failures. Content-filter and context-length errors are
+    intentionally excluded — callers that need signal-based handling (e.g.
+    TranslationService) deal with those themselves.
+
+    If none of the known patterns match, this function returns without raising
+    so the caller can decide how to handle the remaining error.
+    """
+    msg = str(error).lower()
+    raise_for_model_access_error(error, model)
+    if "rate_limit" in msg:
+        logging.error(f"Rate limit exceeded: {error}")
+        raise Exception(f"Rate limit exceeded: {error}") from error
+    if "invalid_request" in msg:
+        logging.error(f"Invalid request: {error}")
+        raise Exception(f"Invalid request: {error}") from error
+    if "authentication" in msg or "unauthorized" in msg:
+        logging.error(f"Authentication error: {error}")
+        raise Exception(f"Authentication error: {error}") from error
