@@ -116,6 +116,46 @@ class TestTranslateSubcommand:
         args = parser.parse_args(["heller", "translate", "JE", "-i", "doc.pdf", "-a"])
         assert args.abstract is True
 
+    def test_dry_run_defaults_false(self, parser):
+        args = parser.parse_args(["heller", "translate", "JE", "-i", "doc.pdf"])
+        assert args.dry_run is False
+
+    def test_dry_run_sets_true(self, parser):
+        args = parser.parse_args(["heller", "translate", "JE", "-i", "doc.pdf", "--dry-run"])
+        assert args.dry_run is True
+
+    def test_notes_flag_defaults_false(self, parser):
+        args = parser.parse_args(["heller", "translate", "JE", "-i", "doc.pdf"])
+        assert args.notes is False
+
+    def test_notes_short_flag_sets_true(self, parser):
+        args = parser.parse_args(["heller", "translate", "JE", "-i", "doc.pdf", "-n"])
+        assert args.notes is True
+
+    def test_notes_long_flag_sets_true(self, parser):
+        args = parser.parse_args(["heller", "translate", "JE", "-i", "doc.pdf", "--notes"])
+        assert args.notes is True
+
+    def test_temperature_defaults_none(self, parser):
+        args = parser.parse_args(["heller", "translate", "JE", "-i", "doc.pdf"])
+        assert args.temperature is None
+
+    def test_temperature_short_flag_stored(self, parser):
+        args = parser.parse_args(["heller", "translate", "JE", "-i", "doc.pdf", "-t", "0.3"])
+        assert args.temperature == pytest.approx(0.3)
+
+    def test_top_p_defaults_none(self, parser):
+        args = parser.parse_args(["heller", "translate", "JE", "-i", "doc.pdf"])
+        assert args.top_p is None
+
+    def test_top_p_short_flag_stored(self, parser):
+        args = parser.parse_args(["heller", "translate", "JE", "-i", "doc.pdf", "-T", "0.8"])
+        assert args.top_p == pytest.approx(0.8)
+
+    def test_top_p_long_flag_stored(self, parser):
+        args = parser.parse_args(["heller", "translate", "JE", "-i", "doc.pdf", "--top-p", "0.5"])
+        assert args.top_p == pytest.approx(0.5)
+
 
 # ---------------------------------------------------------------------------
 # prompt subcommand
@@ -167,11 +207,66 @@ class TestPromptSubcommand:
         args = parser.parse_args(["heller", "prompt", "--dry-run"])
         assert args.dry_run is True
 
+    def test_temperature_defaults_none(self, parser):
+        args = parser.parse_args(["heller", "prompt"])
+        assert args.temperature is None
+
+    def test_temperature_short_flag_stored(self, parser):
+        args = parser.parse_args(["heller", "prompt", "-t", "0.7"])
+        assert args.temperature == pytest.approx(0.7)
+
+    def test_top_p_defaults_none(self, parser):
+        args = parser.parse_args(["heller", "prompt"])
+        assert args.top_p is None
+
+    def test_top_p_short_flag_stored(self, parser):
+        args = parser.parse_args(["heller", "prompt", "-T", "1.0"])
+        assert args.top_p == pytest.approx(1.0)
+
     def test_all_flags_together(self, parser):
         args = parser.parse_args(["heller", "prompt", "-s", "-o", "resp.txt", "-m", "gpt-4o-mini"])
         assert args.include_system_prompt is True
         assert args.output_file == "resp.txt"
         assert args.model == "gpt-4o-mini"
+
+
+# ---------------------------------------------------------------------------
+# transcribe subcommand — sampling flags
+# ---------------------------------------------------------------------------
+
+class TestTranscribeSamplingFlags:
+
+    def test_temperature_defaults_none(self, parser):
+        args = parser.parse_args(["heller", "transcribe", "J", "-i", "scan.png"])
+        assert args.temperature is None
+
+    def test_temperature_short_flag_stored(self, parser):
+        args = parser.parse_args(["heller", "transcribe", "J", "-i", "scan.png", "-t", "0.1"])
+        assert args.temperature == pytest.approx(0.1)
+
+    def test_top_p_defaults_none(self, parser):
+        args = parser.parse_args(["heller", "transcribe", "J", "-i", "scan.png"])
+        assert args.top_p is None
+
+    def test_top_p_short_flag_stored(self, parser):
+        args = parser.parse_args(["heller", "transcribe", "J", "-i", "scan.png", "-T", "0.2"])
+        assert args.top_p == pytest.approx(0.2)
+
+    def test_dry_run_defaults_false(self, parser):
+        args = parser.parse_args(["heller", "transcribe", "J", "-i", "scan.png"])
+        assert args.dry_run is False
+
+    def test_dry_run_sets_true(self, parser):
+        args = parser.parse_args(["heller", "transcribe", "J", "-i", "scan.png", "--dry-run"])
+        assert args.dry_run is True
+
+    def test_notes_flag_defaults_false(self, parser):
+        args = parser.parse_args(["heller", "transcribe", "J", "-i", "scan.png"])
+        assert args.notes is False
+
+    def test_notes_short_flag_sets_true(self, parser):
+        args = parser.parse_args(["heller", "transcribe", "J", "-i", "scan.png", "-n"])
+        assert args.notes is True
 
 
 # ---------------------------------------------------------------------------
