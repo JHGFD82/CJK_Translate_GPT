@@ -23,6 +23,7 @@ def setup_logging() -> None:
 
 def _add_common_flags(parser: argparse.ArgumentParser) -> None:
     """Add flags shared by translate, transcribe, and prompt subparsers."""
+    parser.add_argument('-o', '--output', dest='output_file', type=str, help='Output file path')
     parser.add_argument('-m', '--model', dest='model', type=str, help='Model to use (e.g., gpt-4o, gpt-4o-mini)')
     parser.add_argument('-t', '--temperature', dest='temperature', type=float, default=None, help='Sampling temperature override (0.0–2.0)')
     parser.add_argument('-T', '--top-p', dest='top_p', type=float, default=None, help='Nucleus sampling top-p override (0.0–1.0)')
@@ -179,7 +180,6 @@ Custom prompt:
         help='Page numbers to process (e.g., "1" or "1-5")',
     )
     translate_parser.add_argument('-a', '--abstract', dest='abstract', action='store_true', help='Text has an abstract')
-    translate_parser.add_argument('-o', '--output', dest='output_file', type=str, help='Output file path (.txt, .pdf, or .docx)')
     translate_parser.add_argument('--auto-save', dest='auto_save', action='store_true', help='Auto-save with timestamp')
     translate_parser.add_argument(
         '--progressive-save',
@@ -204,7 +204,6 @@ Custom prompt:
         help='Target language: E (English), C (Chinese), S (Simplified Chinese), T (Traditional Chinese), J (Japanese), K (Korean)',
     )
     transcribe_parser.add_argument('-i', '--input', dest='input_file', type=str, required=False, help='Input image file path, or a folder of images to process in order')
-    transcribe_parser.add_argument('-o', '--output', dest='output_file', type=str, help='Output file path')
     transcribe_parser.add_argument('-v', '--vertical', dest='vertical', action='store_true', help='Text is predominantly vertical (top-to-bottom, right-to-left columns)')
     _add_common_flags(transcribe_parser)
     transcribe_parser.add_argument(
@@ -222,7 +221,6 @@ Custom prompt:
         action='store_true',
         help='Prompt for a system (developer) prompt before the user prompt',
     )
-    prompt_parser.add_argument('-o', '--output', dest='output_file', type=str, help='Save response to file')
     _add_common_flags(prompt_parser)
 
     return parser
