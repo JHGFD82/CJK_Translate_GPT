@@ -175,6 +175,20 @@ class TestDocxProcessor:
         for word in ("Alpha", "Beta", "Gamma"):
             assert word in combined
 
+    def test_extract_raw_content_raises_import_error_when_docx_not_installed(self, monkeypatch):
+        import sys
+        buf = _make_docx_bytes(["Hello"])  # build before patching
+        monkeypatch.setitem(sys.modules, "docx", None)
+        p = DocxProcessor()
+        with pytest.raises(ImportError, match="python-docx is required"):
+            p.extract_raw_content(buf)
+
+    def test_process_docx_with_pages_wraps_exception_on_error(self):
+        buf = _make_docx_bytes(["Hello"])
+        with patch.object(DocxProcessor, "extract_raw_content", side_effect=RuntimeError("disk error")):
+            with pytest.raises(Exception, match="Failed to process Word document"):
+                DocxProcessor.process_docx_with_pages(buf)
+
 
 # ---------------------------------------------------------------------------
 # ImageProcessor
