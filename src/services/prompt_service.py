@@ -29,8 +29,10 @@ class PromptService(BaseService):
         professor: Optional[str] = None,
         token_tracker: Optional[TokenTracker] = None,
         model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
     ):
-        super().__init__(api_key, professor, token_tracker, None, model)
+        super().__init__(api_key, professor, token_tracker, None, model, temperature, top_p)
 
     def _get_model(self) -> str:
         """Resolve model, syncing pricing if needed."""
@@ -40,13 +42,17 @@ class PromptService(BaseService):
 
     def _call_api(self, model: str, system_role: str, system_prompt: str, user_prompt: str) -> Any:
         """Call the API with parameters appropriate for the given model."""
+        temperature = self.custom_temperature if self.custom_temperature is not None else PROMPT_TEMPERATURE
+        top_p = self.custom_top_p if self.custom_top_p is not None else PROMPT_TOP_P
+        if self.custom_temperature is not None or self.custom_top_p is not None:
+            logging.info(f"Prompt API params: temperature={temperature}, top_p={top_p}")
         messages = [
             {"role": system_role, "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
         return self._create_completion(
             model, messages, PROMPT_MAX_TOKENS,
-            temperature=PROMPT_TEMPERATURE, top_p=PROMPT_TOP_P,
+            temperature=temperature, top_p=top_p,
         )
 
     def build_prompts(

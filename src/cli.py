@@ -181,6 +181,8 @@ Custom prompt:
     )
     translate_parser.add_argument('-f', '--font', dest='custom_font', type=str, help='Custom font name (must be in fonts/)')
     translate_parser.add_argument('-m', '--model', dest='model', type=str, help='Model to use (e.g., gpt-4o, gpt-4o-mini)')
+    translate_parser.add_argument('-t', '--temperature', dest='temperature', type=float, default=None, help='Sampling temperature (0.0–2.0). Overrides service default.')
+    translate_parser.add_argument('--top-p', dest='top_p', type=float, default=None, help='Nucleus sampling top-p (0.0–1.0). Overrides service default.')
     translate_parser.add_argument(
         '--dry-run',
         dest='dry_run',
@@ -204,6 +206,8 @@ Custom prompt:
     transcribe_parser.add_argument('-i', '--input', dest='input_file', type=str, required=False, help='Input image file path, or a folder of images to process in order')
     transcribe_parser.add_argument('-o', '--output', dest='output_file', type=str, help='Output file path')
     transcribe_parser.add_argument('-m', '--model', dest='model', type=str, help='Model to use (e.g., gpt-4o, gpt-4o-mini)')
+    transcribe_parser.add_argument('-t', '--temperature', dest='temperature', type=float, default=None, help='Sampling temperature (0.0–2.0). Overrides OCR default of 0.0.')
+    transcribe_parser.add_argument('--top-p', dest='top_p', type=float, default=None, help='Nucleus sampling top-p (0.0–1.0). Overrides OCR default of 0.1.')
     transcribe_parser.add_argument('-v', '--vertical', dest='vertical', action='store_true', help='Text is predominantly vertical (top-to-bottom, right-to-left columns)')
     transcribe_parser.add_argument(
         '--dry-run',
@@ -228,6 +232,8 @@ Custom prompt:
     )
     prompt_parser.add_argument('-o', '--output', dest='output_file', type=str, help='Save response to file')
     prompt_parser.add_argument('-m', '--model', dest='model', type=str, help='Model to use (e.g., gpt-4o, gpt-4o-mini)')
+    prompt_parser.add_argument('-t', '--temperature', dest='temperature', type=float, default=None, help='Sampling temperature (0.0–2.0). Overrides service default of 0.7.')
+    prompt_parser.add_argument('--top-p', dest='top_p', type=float, default=None, help='Nucleus sampling top-p (0.0–1.0). Overrides service default of 1.0.')
     prompt_parser.add_argument(
         '--dry-run',
         dest='dry_run',
@@ -284,7 +290,9 @@ def main() -> None:
                 return
         elif args.command in ('translate', 'transcribe', 'prompt'):
             model = getattr(args, 'model', None)
-            sandbox = SandboxProcessor(args.professor, model=model)
+            temperature = getattr(args, 'temperature', None)
+            top_p = getattr(args, 'top_p', None)
+            sandbox = SandboxProcessor(args.professor, model=model, temperature=temperature, top_p=top_p)
             sandbox.run(args)
         else:
             raise CLIError(f"Unknown command: {args.command}")

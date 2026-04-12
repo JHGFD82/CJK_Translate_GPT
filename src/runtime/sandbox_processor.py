@@ -38,7 +38,8 @@ def _parse_page_nums(page_nums_str: Optional[str]) -> Tuple[int, int]:
 class SandboxProcessor:
     """Main application class for processing inputs to the Princeton AI Sandbox."""
 
-    def __init__(self, professor_name: str, model: Optional[str] = None):
+    def __init__(self, professor_name: str, model: Optional[str] = None,
+                 temperature: Optional[float] = None, top_p: Optional[float] = None):
         """Initialize the processor for the specified professor."""
         try:
             api_key, self.professor_display_name = get_api_key(professor_name)
@@ -48,16 +49,20 @@ class SandboxProcessor:
 
             self.token_tracker = TokenTracker(professor=professor_name)
             self.translation_service = TranslationService(
-                api_key, professor_name, token_tracker=self.token_tracker, model=model
+                api_key, professor_name, token_tracker=self.token_tracker, model=model,
+                temperature=temperature, top_p=top_p,
             )
             self.image_processor_service = ImageProcessorService(
-                api_key, professor_name, token_tracker=self.token_tracker, model=model
+                api_key, professor_name, token_tracker=self.token_tracker, model=model,
+                temperature=temperature, top_p=top_p,
             )
             self.image_translation_service = ImageTranslationService(
-                api_key, professor_name, token_tracker=self.token_tracker, model=model
+                api_key, professor_name, token_tracker=self.token_tracker, model=model,
+                temperature=temperature, top_p=top_p,
             )
             self.prompt_service = PromptService(
-                api_key, professor_name, token_tracker=self.token_tracker, model=model
+                api_key, professor_name, token_tracker=self.token_tracker, model=model,
+                temperature=temperature, top_p=top_p,
             )
 
             self.image_processor = ImageProcessor()

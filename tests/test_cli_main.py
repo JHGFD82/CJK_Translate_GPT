@@ -143,7 +143,7 @@ class TestMainTranslateCommand:
         with patch("src.cli.SandboxProcessor", return_value=mock_sandbox) as mock_cls, \
              patch("sys.argv", ["main.py", "heller", "translate", "CE", "-c"]):
             main()
-        mock_cls.assert_called_once_with("heller", model=None)
+        mock_cls.assert_called_once_with("heller", model=None, temperature=None, top_p=None)
         mock_sandbox.run.assert_called_once()
 
     def test_translate_passes_custom_model_to_sandbox(self):
@@ -151,7 +151,7 @@ class TestMainTranslateCommand:
         with patch("src.cli.SandboxProcessor", return_value=mock_sandbox) as mock_cls, \
              patch("sys.argv", ["main.py", "heller", "translate", "CE", "-c", "-m", "gpt-4o-mini"]):
             main()
-        mock_cls.assert_called_once_with("heller", model="gpt-4o-mini")
+        mock_cls.assert_called_once_with("heller", model="gpt-4o-mini", temperature=None, top_p=None)
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +166,7 @@ class TestMainTranscribeCommand:
         with patch("src.cli.SandboxProcessor", return_value=mock_sandbox) as mock_cls, \
              patch("sys.argv", ["main.py", "heller", "transcribe", "E"]):
             main()
-        mock_cls.assert_called_once_with("heller", model=None)
+        mock_cls.assert_called_once_with("heller", model=None, temperature=None, top_p=None)
         mock_sandbox.run.assert_called_once()
 
 

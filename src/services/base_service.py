@@ -37,10 +37,14 @@ class BaseService:
         token_tracker: Optional[TokenTracker] = None,
         token_tracker_file: Optional[str] = None,
         model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
     ) -> None:
         self.api_key = api_key
         self.professor = professor
         self.custom_model = model
+        self.custom_temperature = temperature
+        self.custom_top_p = top_p
         self.client = Portkey(api_key=api_key)
         self.token_tracker = (
             token_tracker
