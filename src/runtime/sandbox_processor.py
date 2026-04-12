@@ -22,10 +22,10 @@ from ..tracking.token_tracker import TokenTracker
 logger = logging.getLogger(__name__)
 
 
-def _parse_page_nums(page_nums_str: Optional[str]) -> Tuple[int, int]:
+def _parse_page_nums(page_nums_str: Optional[str]) -> Tuple[int, Optional[int]]:
     """Parse a page selection string into zero-based (start, end) indices."""
     if page_nums_str is None:
-        return 0, 0
+        return 0, None
     if '-' in page_nums_str:
         start, end = map(int, page_nums_str.split('-'))
         return start - 1, end - 1
