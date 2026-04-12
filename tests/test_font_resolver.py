@@ -8,7 +8,7 @@ Tests for font resolution utilities (no API calls, no PDF generation):
 
 import logging
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -119,3 +119,169 @@ class TestGetPdfFontImportError:
                                         "reportlab.pdfbase.ttfonts": None}):
             result = fr.get_pdf_font()
         assert result == "Times-Roman"
+
+
+# ---------------------------------------------------------------------------
+# get_pdf_font (with reportlab available — mock pdfmetrics registration)
+# ---------------------------------------------------------------------------
+
+
+class TestGetPdfFontWithReportlab:
+    """Tests for get_pdf_font() code paths that run when reportlab is installed."""
+
+    @staticmethod
+    def _pdf_patches(tmp_path, registered=None):
+        """Return a list of context managers that mock font registration."""
+        registered = registered or []
+        return [
+            patch.object(fr, "_fonts_dir", return_value=tmp_path),
+            patch("reportlab.pdfbase.pdfmetrics.getRegisteredFontNames", return_value=registered),
+            patch("reportlab.pdfbase.pdfmetrics.registerFont"),
+            patch("reportlab.pdfbase.ttfonts.TTFont"),
+        ]
+
+    def test_custom_font_found_returns_custom_name(self, tmp_path):
+        (tmp_path / "MyFont.ttf").touch()
+        with (
+            patch.object(fr, "_fonts_dir", return_value=tmp_path),
+            patch("reportlab.pdfbase.pdfmetrics.getRegisteredFontNames", return_value=[]),
+            patch("reportlab.pdfbase.pdfmetrics.registerFont"),
+            patch("reportlab.pdfbase.ttfonts.TTFont"),
+        ):
+            result = fr.get_pdf_font("MyFont")
+        assert result == "CustomFont_MyFont"
+
+    def test_custom_font_already_registered_skips_registration(self, tmp_path):
+        (tmp_path / "MyFont.ttf").touch()
+        with (
+            patch.object(fr, "_fonts_dir", return_value=tmp_path),
+            patch("reportlab.pdfbase.pdfmetrics.getRegisteredFontNames",
+                  return_value=["CustomFont_MyFont"]),
+            patch("reportlab.pdfbase.pdfmetrics.registerFont") as mock_reg,
+            patch("reportlab.pdfbase.ttfonts.TTFont"),
+        ):
+            result = fr.get_pdf_font("MyFont")
+        mock_reg.assert_not_called()
+        assert result == "CustomFont_MyFont"
+
+    def test_custom_font_registration_error_warns_and_falls_through(self, tmp_path, capsys):
+        (tmp_path / "BadFont.ttf").touch()
+        with (
+            patch.object(fr, "_fonts_dir", return_value=tmp_path),
+            patch("reportlab.pdfbase.pdfmetrics.getRegisteredFontNames", return_value=[]),
+            patch("reportlab.pdfbase.pdfmetrics.registerFont", side_effect=OSError("bad")),
+            patch("reportlab.pdfbase.ttfonts.TTFont"),
+        ):
+            result = fr.get_pdf_font("BadFont")
+        out = capsys.readouterr().out
+        assert "Warning" in out
+        # Falls through to preferred/glob loops; empty tmp_path → Times-Roman
+        assert result == "Times-Roman"
+
+    def test_custom_font_file_not_found_warns_and_continues(self, tmp_path, capsys):
+        # No file in tmp_path matching the requested font
+        with (
+            patch.object(fr, "_fonts_dir", return_value=tmp_path),
+            patch("reportlab.pdfbase.pdfmetrics.getRegisteredFontNames", return_value=[]),
+            patch("reportlab.pdfbase.pdfmetrics.registerFont"),
+            patch("reportlab.pdfbase.ttfonts.TTFont"),
+        ):
+            result = fr.get_pdf_font("MissingFont")
+        out = capsys.readouterr().out
+        assert "Warning" in out
+        assert result == "Times-Roman"
+
+    def test_preferred_font_found_returns_name(self, tmp_path):
+        (tmp_path / "Arial Unicode.ttf").touch()
+        with (
+            patch.object(fr, "_fonts_dir", return_value=tmp_path),
+            patch("reportlab.pdfbase.pdfmetrics.getRegisteredFontNames", return_value=[]),
+            patch("reportlab.pdfbase.pdfmetrics.registerFont"),
+            patch("reportlab.pdfbase.ttfonts.TTFont"),
+        ):
+            result = fr.get_pdf_font()
+        assert result == "ArialUnicode"
+
+    def test_preferred_font_error_skips_to_next(self, tmp_path):
+        # AppleGothic fails, AppleMyungjo succeeds
+        (tmp_path / "AppleGothic.ttf").touch()
+        (tmp_path / "AppleMyungjo.ttf").touch()
+
+        call_count = {"n": 0}
+
+        def maybe_fail(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise OSError("bad ttf")
+
+        with (
+            patch.object(fr, "_fonts_dir", return_value=tmp_path),
+            patch("reportlab.pdfbase.pdfmetrics.getRegisteredFontNames", return_value=[]),
+            patch("reportlab.pdfbase.pdfmetrics.registerFont", side_effect=maybe_fail),
+            patch("reportlab.pdfbase.ttfonts.TTFont"),
+        ):
+            result = fr.get_pdf_font()
+        assert result == "AppleMyungjo"
+
+    def test_glob_fallback_returns_non_preferred_font(self, tmp_path):
+        # Only a non-preferred font is available → glob fallback picks it
+        (tmp_path / "UnknownFont.ttf").touch()
+        with (
+            patch.object(fr, "_fonts_dir", return_value=tmp_path),
+            patch("reportlab.pdfbase.pdfmetrics.getRegisteredFontNames", return_value=[]),
+            patch("reportlab.pdfbase.pdfmetrics.registerFont"),
+            patch("reportlab.pdfbase.ttfonts.TTFont"),
+        ):
+            result = fr.get_pdf_font()
+        assert result == "UnknownFont"
+
+    def test_no_fonts_available_warns_and_returns_times_roman(self, tmp_path, capsys):
+        # fonts_dir exists but is totally empty
+        with (
+            patch.object(fr, "_fonts_dir", return_value=tmp_path),
+            patch("reportlab.pdfbase.pdfmetrics.getRegisteredFontNames", return_value=[]),
+            patch("reportlab.pdfbase.pdfmetrics.registerFont"),
+            patch("reportlab.pdfbase.ttfonts.TTFont"),
+        ):
+            result = fr.get_pdf_font()
+        out = capsys.readouterr().out
+        assert "No CJK fonts available" in out or "Warning" in out
+        assert result == "Times-Roman"
+
+    def test_fonts_dir_not_exist_returns_times_roman(self, tmp_path, capsys):
+        non_existent = tmp_path / "no_such_dir"
+        with (
+            patch.object(fr, "_fonts_dir", return_value=non_existent),
+            patch("reportlab.pdfbase.pdfmetrics.getRegisteredFontNames", return_value=[]),
+            patch("reportlab.pdfbase.pdfmetrics.registerFont"),
+            patch("reportlab.pdfbase.ttfonts.TTFont"),
+        ):
+            result = fr.get_pdf_font()
+        assert result == "Times-Roman"
+
+    def test_oserror_during_font_check_returns_times_roman(self):
+        mock_path = MagicMock()
+        mock_path.exists.side_effect = OSError("permission denied")
+        with (
+            patch.object(fr, "_fonts_dir", return_value=mock_path),
+            patch("reportlab.pdfbase.pdfmetrics.getRegisteredFontNames", return_value=[]),
+            patch("reportlab.pdfbase.pdfmetrics.registerFont"),
+            patch("reportlab.pdfbase.ttfonts.TTFont"),
+        ):
+            result = fr.get_pdf_font()
+        assert result == "Times-Roman"
+
+
+# ---------------------------------------------------------------------------
+# get_docx_font — OSError branch
+# ---------------------------------------------------------------------------
+
+
+class TestGetDocxFontOSError:
+
+    def test_os_error_returns_times_new_roman(self):
+        mock_path = MagicMock()
+        mock_path.exists.side_effect = OSError("disk error")
+        with patch.object(fr, "_fonts_dir", return_value=mock_path):
+            result = fr.get_docx_font()
+        assert result == "Times New Roman"

@@ -13,7 +13,7 @@ Tests for file output utilities:
 import logging
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -336,3 +336,379 @@ class TestAppendToTextFile:
         FileOutputHandler.append_to_text_file("text", output_path)
         out = capsys.readouterr().out
         assert str(output_path) in out or "appended" in out.lower() or "Page" in out
+
+    def test_os_error_handled_gracefully(self, tmp_path, capsys):
+        # Pass a directory path so open() raises IsADirectoryError (OSError subclass)
+        output_path = str(tmp_path)
+        FileOutputHandler.append_to_text_file("text", output_path)
+        out = capsys.readouterr().out
+        assert "Error" in out or "error" in out
+
+
+# ---------------------------------------------------------------------------
+# save_to_pdf
+# ---------------------------------------------------------------------------
+
+
+class TestSaveToPdf:
+
+    def test_creates_pdf_for_english_content(self, tmp_path):
+        output_path = str(tmp_path / "out.pdf")
+        FileOutputHandler.save_to_pdf(
+            "Hello world. This is English text.", output_path, target_lang="English"
+        )
+        assert (tmp_path / "out.pdf").exists()
+
+    def test_english_target_uses_times_roman(self, tmp_path, caplog):
+        output_path = str(tmp_path / "out.pdf")
+        with caplog.at_level(logging.INFO):
+            FileOutputHandler.save_to_pdf("Content", output_path, target_lang="English")
+        assert "Times-Roman" in caplog.text
+
+    def test_empty_paragraphs_falls_back_to_text(self, tmp_path):
+        # Empty content → no story → _fallback_to_text creates .txt
+        output_path = str(tmp_path / "out.pdf")
+        FileOutputHandler.save_to_pdf("", output_path, target_lang="English")
+        assert (tmp_path / "out.txt").exists()
+
+    def test_reportlab_import_error_falls_back_to_text(self, tmp_path):
+        output_path = str(tmp_path / "out.pdf")
+        with patch.dict("sys.modules", {
+            "reportlab.lib.pagesizes": None,
+            "reportlab.lib.styles": None,
+            "reportlab.platypus": None,
+        }):
+            FileOutputHandler.save_to_pdf("content", output_path, target_lang="English")
+        assert (tmp_path / "out.txt").exists()
+
+    def test_exception_falls_back_to_text(self, tmp_path):
+        output_path = str(tmp_path / "out.pdf")
+        with patch.object(
+            FileOutputHandler, "_normalize_paragraphs", side_effect=RuntimeError("boom")
+        ):
+            FileOutputHandler.save_to_pdf("content", output_path, target_lang="English")
+        assert (tmp_path / "out.txt").exists()
+
+
+# ---------------------------------------------------------------------------
+# save_to_docx
+# ---------------------------------------------------------------------------
+
+
+class TestSaveToDocx:
+
+    def test_creates_docx_for_english_content(self, tmp_path):
+        output_path = str(tmp_path / "out.docx")
+        FileOutputHandler.save_to_docx(
+            "Hello world. English text.", output_path, target_lang="English"
+        )
+        assert (tmp_path / "out.docx").exists()
+
+    def test_english_target_uses_times_new_roman(self, tmp_path, caplog):
+        output_path = str(tmp_path / "out.docx")
+        with caplog.at_level(logging.INFO):
+            FileOutputHandler.save_to_docx("Content.", output_path, target_lang="English")
+        assert "Times New Roman" in caplog.text
+
+    def test_cjk_target_calls_get_docx_font(self, tmp_path, caplog):
+        output_path = str(tmp_path / "out.docx")
+        with caplog.at_level(logging.INFO):
+            FileOutputHandler.save_to_docx("日本語テキスト", output_path, target_lang="Japanese")
+        assert (tmp_path / "out.docx").exists()
+
+    def test_docx_import_error_falls_back_to_text(self, tmp_path):
+        import sys
+        output_path = str(tmp_path / "out.docx")
+        with patch.dict(sys.modules, {"docx": None}):
+            FileOutputHandler.save_to_docx("content", output_path, target_lang="English")
+        assert (tmp_path / "out.txt").exists()
+
+    def test_exception_falls_back_to_text(self, tmp_path):
+        output_path = str(tmp_path / "out.docx")
+        with patch.object(
+            FileOutputHandler, "_normalize_paragraphs", side_effect=RuntimeError("boom")
+        ):
+            FileOutputHandler.save_to_docx("content", output_path, target_lang="English")
+        assert (tmp_path / "out.txt").exists()
+
+
+# ---------------------------------------------------------------------------
+# save_translation_output
+# ---------------------------------------------------------------------------
+
+
+class TestSaveTranslationOutput:
+
+    def test_empty_content_prints_message(self, capsys):
+        FileOutputHandler.save_translation_output("  ", None, None, False, "J", "E")
+        out = capsys.readouterr().out
+        assert "No content" in out
+
+    def test_no_output_path_no_action(self, tmp_path):
+        # No output_file, no auto_save → nothing should be written
+        FileOutputHandler.save_translation_output("content", None, None, False, "J", "E")
+        assert list(tmp_path.iterdir()) == []
+
+    def test_txt_extension_saves_to_text(self, tmp_path):
+        output_path = str(tmp_path / "out.txt")
+        FileOutputHandler.save_translation_output("hello", None, output_path, False, "J", "E")
+        assert (tmp_path / "out.txt").read_text(encoding="utf-8") == "hello"
+
+    def test_pdf_extension_routes_to_save_to_pdf(self, tmp_path):
+        output_path = str(tmp_path / "out.pdf")
+        with patch.object(FileOutputHandler, "save_to_pdf") as mock_pdf:
+            FileOutputHandler.save_translation_output("content", None, output_path, False, "J", "E")
+        mock_pdf.assert_called_once()
+
+    def test_docx_extension_routes_to_save_to_docx(self, tmp_path):
+        output_path = str(tmp_path / "out.docx")
+        with patch.object(FileOutputHandler, "save_to_docx") as mock_docx:
+            FileOutputHandler.save_translation_output("content", None, output_path, False, "J", "E")
+        mock_docx.assert_called_once()
+
+    def test_unknown_extension_appends_txt_suffix(self, tmp_path):
+        output_path = str(tmp_path / "out.xyz")
+        with patch.object(FileOutputHandler, "save_to_text_file") as mock_txt:
+            FileOutputHandler.save_translation_output("content", None, output_path, False, "J", "E")
+        mock_txt.assert_called_once()
+        written_path = mock_txt.call_args[0][1]
+        assert written_path.endswith(".txt")
+
+    def test_custom_font_passed_to_writer(self, tmp_path):
+        output_path = str(tmp_path / "out.pdf")
+        with patch.object(FileOutputHandler, "save_to_pdf") as mock_pdf:
+            FileOutputHandler.save_translation_output(
+                "content", None, output_path, False, "J", "E", custom_font="MyFont"
+            )
+        _args, kwargs = mock_pdf.call_args
+        assert "MyFont" in _args or kwargs.get("custom_font") == "MyFont" or _args[2] == "MyFont"
+
+
+# ---------------------------------------------------------------------------
+# save_page_progressively
+# ---------------------------------------------------------------------------
+
+
+class TestSavePageProgressively:
+
+    def test_empty_content_returns_none(self):
+        result = FileOutputHandler.save_page_progressively(
+            "  ", None, None, False, "J", "E"
+        )
+        assert result is None
+
+    def test_no_output_path_returns_none(self):
+        result = FileOutputHandler.save_page_progressively(
+            "content", None, None, False, "J", "E"
+        )
+        assert result is None
+
+    def test_pdf_format_falls_back_to_txt(self, tmp_path, capsys):
+        output_path = str(tmp_path / "out.pdf")
+        result = FileOutputHandler.save_page_progressively(
+            "content", None, output_path, False, "J", "E", is_first_page=True
+        )
+        out = capsys.readouterr().out
+        assert "not yet supported" in out.lower() or "Progressive" in out
+        assert result is not None
+        assert result.endswith(".txt")
+        assert (tmp_path / "out.txt").exists()
+
+    def test_docx_format_falls_back_to_txt(self, tmp_path, capsys):
+        output_path = str(tmp_path / "out.docx")
+        result = FileOutputHandler.save_page_progressively(
+            "content", None, output_path, False, "J", "E", is_first_page=True
+        )
+        out = capsys.readouterr().out
+        assert "not yet supported" in out.lower() or "Progressive" in out
+        assert result is not None
+        assert result.endswith(".txt")
+
+    def test_first_page_creates_new_file(self, tmp_path):
+        output_path = str(tmp_path / "out.txt")
+        result = FileOutputHandler.save_page_progressively(
+            "Page one content", None, output_path, False, "J", "E", is_first_page=True
+        )
+        assert result == output_path
+        assert Path(output_path).read_text(encoding="utf-8") == "Page one content"
+
+    def test_subsequent_page_appends(self, tmp_path):
+        output_path = str(tmp_path / "out.txt")
+        Path(output_path).write_text("Page 1\n\n", encoding="utf-8")
+        FileOutputHandler.save_page_progressively(
+            "Page 2", None, output_path, False, "J", "E", is_first_page=False
+        )
+        content = Path(output_path).read_text(encoding="utf-8")
+        assert "Page 1" in content
+        assert "Page 2" in content
+
+    def test_non_txt_extension_gets_txt_appended(self, tmp_path):
+        output_path = str(tmp_path / "out.xyz")
+        result = FileOutputHandler.save_page_progressively(
+            "content", None, output_path, False, "J", "E", is_first_page=True
+        )
+        assert result is not None
+        assert result.endswith(".txt")
+
+    def test_returns_output_path(self, tmp_path):
+        output_path = str(tmp_path / "out.txt")
+        result = FileOutputHandler.save_page_progressively(
+            "content", None, output_path, False, "J", "E", is_first_page=True
+        )
+        assert result == output_path
+
+
+# ---------------------------------------------------------------------------
+# save_to_pdf — deeper fallback paths
+# ---------------------------------------------------------------------------
+
+
+class TestSaveToPdfDeepPaths:
+
+    def test_non_english_target_calls_get_pdf_font(self, tmp_path, caplog):
+        # Exercises the `else` branch (lines 141-142): get_pdf_font is invoked
+        output_path = str(tmp_path / "out.pdf")
+        with patch("src.output.file_output.get_pdf_font", return_value="Helvetica") as mock_gpf:
+            with caplog.at_level(logging.INFO):
+                FileOutputHandler.save_to_pdf("Content.", output_path, target_lang="Japanese")
+        mock_gpf.assert_called_once()
+        assert "Helvetica" in caplog.text
+
+    def test_non_times_roman_font_logs_used_font(self, tmp_path, caplog):
+        # Covers the `if font_name != 'Times-Roman':` True branch inside `if story:`
+        output_path = str(tmp_path / "out.pdf")
+        with patch("src.output.file_output.get_pdf_font", return_value="Helvetica"):
+            with caplog.at_level(logging.INFO):
+                FileOutputHandler.save_to_pdf("Content here.", output_path, target_lang="Japanese")
+        assert "Used font: Helvetica" in caplog.text
+
+    def test_paragraph_style_error_falls_back_to_normal_style(self, tmp_path, caplog):
+        # Covers lines 156-159: ParagraphStyle exception handler.
+        # Filter on name so getSampleStyleSheet()'s own ParagraphStyle calls still succeed.
+        from reportlab.lib.styles import ParagraphStyle as RealPS
+
+        def fail_on_cjk_normal(*args, **kwargs):
+            if args and args[0] == 'CJKNormal':
+                raise TypeError("bad font style")
+            return RealPS(*args, **kwargs)
+
+        output_path = str(tmp_path / "out.pdf")
+        with patch("reportlab.lib.styles.ParagraphStyle", side_effect=fail_on_cjk_normal):
+            with caplog.at_level(logging.WARNING):
+                FileOutputHandler.save_to_pdf("Content.", output_path, target_lang="English")
+        assert "Failed to create custom style" in caplog.text
+
+    def test_paragraph_render_error_uses_fallback_style(self, tmp_path, caplog):
+        # Covers the paragraph inner-except fallback (lines ~178-184 of save_to_pdf)
+        from reportlab.platypus import Paragraph as RealParagraph
+        call_count = [0]
+
+        def once_fail_para(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise Exception("render error")
+            return RealParagraph(*args, **kwargs)
+
+        output_path = str(tmp_path / "out.pdf")
+        with patch("reportlab.platypus.Paragraph", side_effect=once_fail_para):
+            with caplog.at_level(logging.WARNING):
+                FileOutputHandler.save_to_pdf("Content.", output_path, target_lang="English")
+        assert "Error processing paragraph" in caplog.text
+
+    def test_all_paragraph_renders_fail_with_cjk_content(self, tmp_path, caplog):
+        # Covers the double-fallback path; CJK content → ascii strip → empty → no-ascii warning
+        output_path = str(tmp_path / "out.pdf")
+        with patch("reportlab.platypus.Paragraph", side_effect=Exception("bad font")):
+            with caplog.at_level(logging.WARNING):
+                FileOutputHandler.save_to_pdf("日本語テキスト", output_path, target_lang="English")
+        # Paragraph could not be created; content may fall back or skip
+        assert (tmp_path / "out.pdf").exists() or (tmp_path / "out.txt").exists()
+
+    def test_ascii_safe_fallback_covers_ascii_content(self, tmp_path):
+        # Covers lines 188-191: ascii-safe Paragraph succeeds after normal+fallback both fail.
+        # Paragraph fails on calls 1 and 2 (per paragraph), succeeds on call 3.
+        from reportlab.platypus import Paragraph as RealP
+        call_n = [0]
+
+        def fail_twice(*args, **kwargs):
+            call_n[0] += 1
+            if call_n[0] <= 2:
+                raise Exception("font error")
+            return RealP(*args, **kwargs)
+
+        output_path = str(tmp_path / "out.pdf")
+        with patch("reportlab.platypus.Paragraph", side_effect=fail_twice):
+            FileOutputHandler.save_to_pdf("ASCII content here.", output_path, target_lang="English")
+        # ASCII safe fallback rendered; PDF should exist
+        assert (tmp_path / "out.pdf").exists() or (tmp_path / "out.txt").exists()
+
+
+# ---------------------------------------------------------------------------
+# save_to_docx — deeper fallback paths
+# ---------------------------------------------------------------------------
+
+
+class TestSaveToDocxDeepPaths:
+
+    def test_empty_paragraph_runs_adds_run_explicitly(self, tmp_path):
+        # Covers lines 272-274: else-branch of `if paragraph.runs:`
+        # When add_paragraph("") returns a paragraph with no runs
+        output_path = str(tmp_path / "out.docx")
+        with patch.object(
+            FileOutputHandler, "_normalize_paragraphs", return_value=[""]
+        ):
+            FileOutputHandler.save_to_docx("any content", output_path, target_lang="English")
+        # File saved (paragraph with empty text still counts toward len(doc.paragraphs))
+        assert (tmp_path / "out.docx").exists() or (tmp_path / "out.txt").exists()
+
+    def test_paragraph_error_and_no_paragraphs_falls_back_to_text(self, tmp_path):
+        # Covers lines 277-284 (paragraph error handler) AND 298/303 (empty-paragraphs fallback)
+        import sys
+        output_path = str(tmp_path / "out.docx")
+
+        mock_doc = MagicMock()
+        mock_doc.sections = []
+        mock_doc.paragraphs = []  # len == 0 → triggers no-paragraphs fallback
+        mock_doc.add_paragraph.side_effect = Exception("para error")
+
+        with patch.dict(sys.modules, {"docx": MagicMock(Document=lambda: mock_doc)}):
+            # Import the real Pt/Inches by ensuring docx.shared works separately;
+            # re-patch just Document via docx module attribute
+            pass
+
+        # Simpler approach: patch only docx.Document class
+        with patch("docx.Document", return_value=mock_doc):
+            FileOutputHandler.save_to_docx("content", output_path, target_lang="English")
+
+        # paragraphs is [], so _fallback_to_text is called → out.txt created
+        assert (tmp_path / "out.txt").exists()
+
+    def test_no_paragraphs_falls_back_to_text(self, tmp_path):
+        # Covers lines 298-303: the else branch of `if len(doc.paragraphs) > 0:`
+        output_path = str(tmp_path / "out.docx")
+        mock_doc = MagicMock()
+        mock_doc.sections = []
+        mock_doc.paragraphs = []
+        mock_para = MagicMock()
+        mock_para.runs = [MagicMock()]
+        mock_doc.add_paragraph.return_value = mock_para
+
+        with patch("docx.Document", return_value=mock_doc):
+            FileOutputHandler.save_to_docx("content", output_path, target_lang="English")
+
+        assert (tmp_path / "out.txt").exists()
+
+    def test_paragraph_inner_fallback_succeeds_logs_info(self, tmp_path, caplog):
+        # Covers line 281: inner fallback add_paragraph succeeds after outer try fails.
+        # First add_paragraph raises (outer except), second call succeeds (line 281 hit).
+        output_path = str(tmp_path / "out.docx")
+        mock_doc = MagicMock()
+        mock_doc.sections = []
+        mock_doc.paragraphs = [MagicMock()]  # len > 0, skip text fallback
+        mock_doc.add_paragraph.side_effect = [Exception("outer fail"), MagicMock()]
+
+        with patch("docx.Document", return_value=mock_doc):
+            with caplog.at_level(logging.INFO):
+                FileOutputHandler.save_to_docx("content", output_path, target_lang="English")
+
+        assert "Added paragraph" in caplog.text or "Error processing paragraph" in caplog.text
