@@ -21,6 +21,14 @@ def setup_logging() -> None:
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
+def _add_common_flags(parser: argparse.ArgumentParser) -> None:
+    """Add flags shared by translate, transcribe, and prompt subparsers."""
+    parser.add_argument('-m', '--model', dest='model', type=str, help='Model to use (e.g., gpt-4o, gpt-4o-mini)')
+    parser.add_argument('-t', '--temperature', dest='temperature', type=float, default=None, help='Sampling temperature override (0.0–2.0)')
+    parser.add_argument('-T', '--top-p', dest='top_p', type=float, default=None, help='Nucleus sampling top-p override (0.0–1.0)')
+    parser.add_argument('--dry-run', dest='dry_run', action='store_true', help='Print the prompt(s) that would be sent without making any API calls')
+
+
 def create_argument_parser() -> argparse.ArgumentParser:
     """Create and configure the command-line argument parser."""
     parser = argparse.ArgumentParser(
@@ -180,15 +188,7 @@ Custom prompt:
         help='Save each page immediately (text output only)',
     )
     translate_parser.add_argument('-f', '--font', dest='custom_font', type=str, help='Custom font name (must be in fonts/)')
-    translate_parser.add_argument('-m', '--model', dest='model', type=str, help='Model to use (e.g., gpt-4o, gpt-4o-mini)')
-    translate_parser.add_argument('-t', '--temperature', dest='temperature', type=float, default=None, help='Sampling temperature (0.0–2.0). Overrides service default.')
-    translate_parser.add_argument('--top-p', dest='top_p', type=float, default=None, help='Nucleus sampling top-p (0.0–1.0). Overrides service default.')
-    translate_parser.add_argument(
-        '--dry-run',
-        dest='dry_run',
-        action='store_true',
-        help='Print the prompt(s) that would be sent to the model without making any API calls',
-    )
+    _add_common_flags(translate_parser)
     translate_parser.add_argument(
         '-n', '--notes',
         dest='notes',
@@ -205,16 +205,8 @@ Custom prompt:
     )
     transcribe_parser.add_argument('-i', '--input', dest='input_file', type=str, required=False, help='Input image file path, or a folder of images to process in order')
     transcribe_parser.add_argument('-o', '--output', dest='output_file', type=str, help='Output file path')
-    transcribe_parser.add_argument('-m', '--model', dest='model', type=str, help='Model to use (e.g., gpt-4o, gpt-4o-mini)')
-    transcribe_parser.add_argument('-t', '--temperature', dest='temperature', type=float, default=None, help='Sampling temperature (0.0–2.0). Overrides OCR default of 0.0.')
-    transcribe_parser.add_argument('--top-p', dest='top_p', type=float, default=None, help='Nucleus sampling top-p (0.0–1.0). Overrides OCR default of 0.1.')
     transcribe_parser.add_argument('-v', '--vertical', dest='vertical', action='store_true', help='Text is predominantly vertical (top-to-bottom, right-to-left columns)')
-    transcribe_parser.add_argument(
-        '--dry-run',
-        dest='dry_run',
-        action='store_true',
-        help='Print the prompt(s) that would be sent to the model without making any API calls',
-    )
+    _add_common_flags(transcribe_parser)
     transcribe_parser.add_argument(
         '-n', '--notes',
         dest='notes',
@@ -231,15 +223,7 @@ Custom prompt:
         help='Prompt for a system (developer) prompt before the user prompt',
     )
     prompt_parser.add_argument('-o', '--output', dest='output_file', type=str, help='Save response to file')
-    prompt_parser.add_argument('-m', '--model', dest='model', type=str, help='Model to use (e.g., gpt-4o, gpt-4o-mini)')
-    prompt_parser.add_argument('-t', '--temperature', dest='temperature', type=float, default=None, help='Sampling temperature (0.0–2.0). Overrides service default of 0.7.')
-    prompt_parser.add_argument('--top-p', dest='top_p', type=float, default=None, help='Nucleus sampling top-p (0.0–1.0). Overrides service default of 1.0.')
-    prompt_parser.add_argument(
-        '--dry-run',
-        dest='dry_run',
-        action='store_true',
-        help='Print the prompt(s) that would be sent to the model without making any API calls',
-    )
+    _add_common_flags(prompt_parser)
 
     return parser
 
