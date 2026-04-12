@@ -274,8 +274,15 @@ class TestTranslationUserPromptTemplate:
         assert "--Current Page:" in result
 
     def test_mentions_numbering_preservation(self, translation_service):
-        result = translation_service._build_user_prompt_template("Japanese", "English")
+        # has_numbered=True → numbering sections are included
+        result = translation_service._build_user_prompt_template("Japanese", "English", has_numbered=True)
         assert "numbering" in result.lower() or "CRITICAL" in result
+
+    def test_no_numbering_instructions_when_not_detected(self, translation_service):
+        # has_numbered=False (default) → numbering sections are omitted
+        result = translation_service._build_user_prompt_template("Japanese", "English", has_numbered=False)
+        assert "CRITICAL" not in result
+        assert "NUMBERING CONTINUATION" not in result
 
 
 class TestCreateTranslationPrompt:
