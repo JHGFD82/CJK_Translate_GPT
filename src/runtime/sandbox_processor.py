@@ -317,11 +317,7 @@ class SandboxProcessor:
             print("======================\n")
 
             if output_file:
-                output_path = os.path.abspath(output_file)
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    f.write(extracted_text)
-                logger.info(f"Extracted text saved to: {output_path}")
-                print(f"Extracted text saved to: {output_path}")
+                self._save_text_file(extracted_text, output_file, "Extracted text")
 
             logger.info("OCR processing completed successfully")
         except Exception as e:
@@ -367,12 +363,7 @@ class SandboxProcessor:
             combined_parts.append(f"=== {filename} ===\n{extracted_text}")
 
         if output_file:
-            output_path = os.path.abspath(output_file)
-            combined_text = "\n\n".join(combined_parts)
-            with open(output_path, 'w', encoding='utf-8') as f:
-                f.write(combined_text)
-            logger.info(f"Combined OCR output saved to: {output_path}")
-            print(f"Combined output saved to: {output_path}")
+            self._save_text_file("\n\n".join(combined_parts), output_file, "Combined output")
 
     def process_image_translation(
         self,
@@ -434,15 +425,20 @@ class SandboxProcessor:
             response = self.prompt_service.send_prompt(user_prompt, system_prompt)
             print("\n" + response)
             if output_file:
-                output_path = os.path.abspath(output_file)
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    f.write(response)
-                logger.info(f"Response saved to: {output_path}")
-                print(f"\nResponse saved to: {output_path}")
+                self._save_text_file(response, output_file, "Response")
             logger.info("Custom prompt completed successfully")
         except Exception as e:
             logger.error(f"Error sending prompt: {e}", exc_info=True)
             raise CLIError(f"Error sending prompt: {e}") from e
+
+    @staticmethod
+    def _save_text_file(text: str, output_file: str, label: str = "Output") -> None:
+        """Write *text* to *output_file*, then log and print the saved path."""
+        output_path = os.path.abspath(output_file)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(text)
+        logger.info(f"{label} saved to: {output_path}")
+        print(f"{label} saved to: {output_path}")
 
     @staticmethod
     def _collect_multiline(label: str) -> str:
