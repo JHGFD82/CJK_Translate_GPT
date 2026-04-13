@@ -70,17 +70,15 @@ class SandboxProcessor:
             raise CLIError(f"Configuration error: {e}") from e
 
     def _detect_and_validate_file(self, file_path: str) -> str:
-        """Detect file type and validate the file."""
-        abs_path = os.path.abspath(file_path)
-
-        if not os.path.exists(abs_path):
+        """Detect file type and validate the file. Caller must pass an absolute path."""
+        if not os.path.exists(file_path):
             raise CLIError(f"File '{file_path}' not found.")
 
         logger.debug(f"Validating file: {file_path}")
-        lower_path = abs_path.lower()
+        lower_path = file_path.lower()
 
-        if self.image_processor.is_image_file(abs_path):
-            if not self.image_processor.validate_image_file(abs_path):
+        if self.image_processor.is_image_file(file_path):
+            if not self.image_processor.validate_image_file(file_path):
                 raise CLIError(f"Image file '{file_path}' is not valid.")
             logger.info(f"Detected image file: {file_path}")
             return 'image'
