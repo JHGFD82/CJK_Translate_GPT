@@ -125,7 +125,7 @@ class SandboxProcessor:
         opts: OutputOptions,
     ) -> List[str]:
         """Process text-based files (DOCX, TXT) with common logic."""
-        logger.info(f"Processing {file_type.upper()} file: {file_path}")
+        logger.info(f"Processing {file_type.upper()} file: {os.path.basename(file_path)}")
 
         if file_type == 'docx':
             with open(file_path, 'rb') as f:
@@ -283,7 +283,7 @@ class SandboxProcessor:
 
     def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, passes: int = 1) -> None:
         """Process an image file with OCR (transcribe command)."""
-        logger.info(f"Starting OCR processing: {file_path} → {target_language}")
+        logger.info(f"Starting OCR processing: {os.path.basename(file_path)} → {target_language}")
 
         try:
             extracted_text = self.image_processor_service.process_image_ocr(file_path, target_language, output_format="console", vertical=vertical, passes=passes)
@@ -314,7 +314,7 @@ class SandboxProcessor:
         if not image_files:
             raise CLIError(f"No image files found in folder '{folder_path}'.")
 
-        logger.info(f"Processing {len(image_files)} image(s) in folder: {folder_path}")
+        logger.info(f"Processing {len(image_files)} image(s) in folder: {os.path.basename(folder_path)}")
         print(f"Found {len(image_files)} image(s) to process.\n")
 
         combined_parts: List[str] = []
@@ -355,7 +355,7 @@ class SandboxProcessor:
         an output path is specified or auto_save is enabled.
         """
         logger.info(
-            f"Starting image translation: {file_path} "
+            f"Starting image translation: {os.path.basename(file_path)} "
             f"{source_language} → {target_language}"
         )
 
@@ -405,7 +405,7 @@ class SandboxProcessor:
         output_path = os.path.abspath(output_file)
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(text)
-        print(f"{label} saved to: {output_path}")
+        print(f"{label} saved to: {os.path.basename(output_path)}")
 
     @staticmethod
     def _collect_multiline(label: str) -> str:

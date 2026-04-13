@@ -83,7 +83,7 @@ class FileOutputHandler:
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(content)
             FileOutputHandler._emit_message(
-                f"Translation saved to: {output_path}",
+                f"Translation saved to: {Path(output_path).name}",
                 level=logging.INFO,
                 log_message=f'Translation saved to text file: {output_path}',
                 leading_newline=True,
@@ -101,7 +101,7 @@ class FileOutputHandler:
             with open(output_path, 'a', encoding='utf-8') as f:
                 f.write(content + '\n\n')
             FileOutputHandler._emit_message(
-                f"Page appended to: {output_path}",
+                f"Page appended to: {Path(output_path).name}",
                 level=logging.INFO,
                 log_message=f'Translation appended to text file: {output_path}',
             )
@@ -196,7 +196,7 @@ class FileOutputHandler:
             if story:
                 doc.build(story)
                 FileOutputHandler._emit_message(
-                    f"Translation saved to PDF: {output_path}",
+                    f"Translation saved to PDF: {Path(output_path).name}",
                     level=logging.INFO,
                     log_message=f'Translation saved to PDF file: {output_path}',
                     leading_newline=True,
@@ -287,7 +287,7 @@ class FileOutputHandler:
             if len(doc.paragraphs) > 0:
                 doc.save(output_path)
                 FileOutputHandler._emit_message(
-                    f"Translation saved to Word document: {output_path}",
+                    f"Translation saved to Word document: {Path(output_path).name}",
                     level=logging.INFO,
                     log_message=f'Translation saved to Word document: {output_path}',
                     leading_newline=True,

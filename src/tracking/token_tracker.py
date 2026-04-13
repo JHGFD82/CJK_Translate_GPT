@@ -140,11 +140,11 @@ class TokenTracker:
         """Write *data* to the archive file for *month*, skipping if already archived."""
         archive_path = get_archive_path(self.professor, month)
         if archive_path.exists():
-            logging.info(f"Archive already exists for {month}, skipping: {archive_path}")
+            logging.info(f"Archive already exists for {month}, skipping: {archive_path.name}")
             return
         with open(archive_path, "w") as f:
             json.dump(data, f, indent=2)
-        logging.info(f"Archived {self.professor} month {month} → {archive_path}")
+        logging.info(f"Archived {self.professor} month {month} → {archive_path.name}")
 
     def _load_usage_data(self) -> Dict[str, Any]:
         """Load usage data, handling month rollover."""
@@ -283,7 +283,7 @@ class TokenTracker:
                     arc = json.load(f)
                 combined.merge_dict(arc.get("total_usage", {}))
             except (json.JSONDecodeError, KeyError) as e:
-                logging.warning(f"Could not read archive {archive_file}: {e}")
+                logging.warning(f"Could not read archive {archive_file.name}: {e}")
 
         return combined.to_dict()
 
