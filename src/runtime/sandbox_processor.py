@@ -8,6 +8,7 @@ from typing import Optional, List, Tuple, TypedDict, cast
 
 from ..config import get_api_key
 from ..errors import CLIError
+from ..models import OutputOptions
 from ..output.file_output import FileOutputHandler
 from ..processors.docx_processor import DocxProcessor
 from ..processors.image_processor import ImageProcessor
@@ -121,9 +122,7 @@ class SandboxProcessor:
         abstract_text: Optional[str],
         source_language: str,
         target_language: str,
-        output_file: Optional[str],
-        auto_save: bool,
-        progressive_save: bool,
+        opts: OutputOptions,
     ) -> List[str]:
         """Process text-based files (DOCX, TXT) with common logic."""
         logger.info(f"Processing {file_type.upper()} file: {file_path}")
@@ -145,9 +144,7 @@ class SandboxProcessor:
             abstract_text,
             source_language,
             target_language,
-            output_file,
-            auto_save,
-            progressive_save,
+            opts,
             file_path,
         )
 
@@ -158,10 +155,7 @@ class SandboxProcessor:
         target_language: str,
         page_nums: Optional[str] = None,
         abstract: bool = False,
-        output_file: Optional[str] = None,
-        auto_save: bool = False,
-        progressive_save: bool = False,
-        custom_font: Optional[str] = None,
+        opts: OutputOptions = OutputOptions(),
     ) -> None:
         """Translate a document file (PDF, Word document, or text file)."""
         file_path = os.path.abspath(file_path)
@@ -177,9 +171,7 @@ class SandboxProcessor:
                     file_path,
                     source_language,
                     target_language,
-                    output_file,
-                    auto_save,
-                    custom_font,
+                    opts,
                 )
             except Exception as e:
                 logger.error(f"Error processing image: {e}", exc_info=True)
@@ -204,9 +196,7 @@ class SandboxProcessor:
                         end_page,
                         source_language,
                         target_language,
-                        output_file,
-                        auto_save,
-                        progressive_save,
+                        opts,
                         file_path,
                     )
             elif file_type in ('docx', 'txt'):
@@ -217,9 +207,7 @@ class SandboxProcessor:
                     abstract_text,
                     source_language,
                     target_language,
-                    output_file,
-                    auto_save,
-                    progressive_save,
+                    opts,
                 )
             else:
                 raise CLIError(f"Cannot translate file type '{file_type}'.")
@@ -227,16 +215,16 @@ class SandboxProcessor:
             full_translation = "".join(document_text)
             print(full_translation)
 
-            if not progressive_save and (output_file or auto_save):
+            if not opts.progressive_save and (opts.output_file or opts.auto_save):
                 logger.info("Saving translation output")
                 self.file_output.save_translation_output(
                     full_translation,
                     file_path,
-                    output_file,
-                    auto_save,
+                    opts.output_file,
+                    opts.auto_save,
                     source_language,
                     target_language,
-                    custom_font,
+                    opts.custom_font,
                 )
 
             logger.info("Translation completed successfully")
@@ -258,9 +246,7 @@ class SandboxProcessor:
         source_language: str,
         target_language: str,
         abstract: bool = False,
-        output_file: Optional[str] = None,
-        auto_save: bool = False,
-        custom_font: Optional[str] = None,
+        opts: OutputOptions = OutputOptions(),
     ) -> None:
         """Translate custom text input by the user."""
         abstract_text: Optional[str] = self._collect_multiline("Abstract text") or None if abstract else None
@@ -282,17 +268,17 @@ class SandboxProcessor:
             else:
                 translated_text = self.translation_service.translate_text(custom_text, source_language, target_language)
 
-            if output_file or auto_save:
+            if opts.output_file or opts.auto_save:
                 input_filename = f"custom_text_{source_language}to{target_language}.txt"
                 logger.info("Saving custom text translation")
                 self.file_output.save_translation_output(
                     translated_text,
                     input_filename,
-                    output_file,
-                    auto_save,
+                    opts.output_file,
+                    opts.auto_save,
                     source_language,
                     target_language,
-                    custom_font,
+                    opts.custom_font,
                 )
 
             logger.info("Custom text translation completed successfully")
@@ -368,9 +354,7 @@ class SandboxProcessor:
         file_path: str,
         source_language: str,
         target_language: str,
-        output_file: Optional[str] = None,
-        auto_save: bool = False,
-        custom_font: Optional[str] = None,
+        opts: OutputOptions = OutputOptions(),
     ) -> None:
         """Transcribe and translate an image in a single API call (translate command).
 
@@ -397,16 +381,16 @@ class SandboxProcessor:
         print(translation)
         print("===================\n")
 
-        if output_file or auto_save:
+        if opts.output_file or opts.auto_save:
             logger.info("Saving image translation output")
             self.file_output.save_translation_output(
                 translation,
                 file_path,
-                output_file,
-                auto_save,
+                opts.output_file,
+                opts.auto_save,
                 source_language,
                 target_language,
-                custom_font,
+                opts.custom_font,
             )
 
         logger.info("Image translation completed successfully")
@@ -568,28 +552,27 @@ class SandboxProcessor:
             self._dry_run_display(model_dr, sys_p, usr_p)
             return
 
+        opts = OutputOptions(
+            output_file=self._resolve_output_path(args),
+            auto_save=getattr(args, 'auto_save', False),
+            progressive_save=getattr(args, 'progressive_save', False),
+            custom_font=getattr(args, 'custom_font', None),
+        )
         if args.custom_text:
-            output_file = self._resolve_output_path(args)
             self.translate_custom_text(
                 source_language,
                 target_language,
                 getattr(args, 'abstract', False),
-                output_file,
-                args.auto_save,
-                getattr(args, 'custom_font', None),
+                opts,
             )
         elif args.input_file:
-            output_file = self._resolve_output_path(args)
             self.translate_document(
                 args.input_file,
                 source_language,
                 target_language,
                 getattr(args, 'page_nums', None),
                 getattr(args, 'abstract', False),
-                output_file,
-                getattr(args, 'auto_save', False),
-                getattr(args, 'progressive_save', False),
-                getattr(args, 'custom_font', None),
+                opts,
             )
         else:
             raise CLIError("No input specified. Use -i for file input or -c for custom text.")

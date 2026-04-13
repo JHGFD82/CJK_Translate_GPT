@@ -24,6 +24,7 @@ from .catalog import (
     remove_model_from_catalog,
     save_model_catalog,
 )
+from .output_options import OutputOptions
 from .pricing import (
     PORTKEY_PRICING_API_BASE,
     add_model_to_catalog,
@@ -58,4 +59,6 @@ __all__ = [
     "maybe_sync_model_pricing",
     # resolver
     "resolve_model",
+    # output options
+    "OutputOptions",
 ]
