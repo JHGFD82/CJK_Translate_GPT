@@ -105,6 +105,7 @@ class SandboxProcessor:
             return pages
 
         start_page, end_page = _parse_page_nums(page_nums)
+        assert end_page is not None  # page_nums is non-empty here, so _parse_page_nums always returns an int
 
         if start_page >= len(pages):
             raise CLIError(f"Page {start_page + 1} does not exist. Document has {len(pages)} logical pages.")
