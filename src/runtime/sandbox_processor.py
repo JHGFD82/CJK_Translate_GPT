@@ -4,7 +4,7 @@ import argparse
 import logging
 import os
 import sys
-from typing import Optional, List, Tuple, cast
+from typing import Optional, List, Tuple, TypedDict, cast
 
 from ..config import get_api_key
 from ..errors import CLIError
@@ -20,6 +20,14 @@ from ..services.translation_service import TranslationService
 from ..tracking.token_tracker import TokenTracker
 
 logger = logging.getLogger(__name__)
+
+
+class _SvcKwargs(TypedDict, total=False):
+    """Shared keyword arguments passed to every BaseService subclass."""
+    token_tracker: TokenTracker
+    model: Optional[str]
+    temperature: Optional[float]
+    top_p: Optional[float]
 
 
 def _parse_page_nums(page_nums_str: Optional[str]) -> Tuple[int, Optional[int]]:
@@ -48,22 +56,11 @@ class SandboxProcessor:
             logger.info(f"Initializing processor for professor: {self.professor_display_name}")
 
             self.token_tracker = TokenTracker(professor=professor_name)
-            self.translation_service = TranslationService(
-                api_key, professor_name, token_tracker=self.token_tracker, model=model,
-                temperature=temperature, top_p=top_p,
-            )
-            self.image_processor_service = ImageProcessorService(
-                api_key, professor_name, token_tracker=self.token_tracker, model=model,
-                temperature=temperature, top_p=top_p,
-            )
-            self.image_translation_service = ImageTranslationService(
-                api_key, professor_name, token_tracker=self.token_tracker, model=model,
-                temperature=temperature, top_p=top_p,
-            )
-            self.prompt_service = PromptService(
-                api_key, professor_name, token_tracker=self.token_tracker, model=model,
-                temperature=temperature, top_p=top_p,
-            )
+            _svc_kwargs: _SvcKwargs = {"token_tracker": self.token_tracker, "model": model, "temperature": temperature, "top_p": top_p}
+            self.translation_service = TranslationService(api_key, professor_name, **_svc_kwargs)
+            self.image_processor_service = ImageProcessorService(api_key, professor_name, **_svc_kwargs)
+            self.image_translation_service = ImageTranslationService(api_key, professor_name, **_svc_kwargs)
+            self.prompt_service = PromptService(api_key, professor_name, **_svc_kwargs)
 
             self.image_processor = ImageProcessor()
             self.pdf_processor = PDFProcessor()
