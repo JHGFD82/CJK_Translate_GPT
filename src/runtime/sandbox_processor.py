@@ -503,162 +503,164 @@ class SandboxProcessor:
 
         return None
 
+    def _run_translate(self, args: argparse.Namespace) -> None:
+        """Handle the 'translate' command."""
+        language_code = args.language_code
+
+        if not isinstance(language_code, tuple):
+            raise CLIError("Translation requires a 2-character language code (e.g., CE, JE, KE)")
+
+        lang_tuple = cast(Tuple[str, str], language_code)
+        if len(lang_tuple) != 2:
+            raise CLIError("Translation requires a 2-character language code (e.g., CE, JE, KE)")
+
+        source_language: str = lang_tuple[0]
+        target_language: str = lang_tuple[1]
+
+        if getattr(args, 'notes', False):
+            sys_note, usr_note = self._collect_notes()
+            self.translation_service.system_note = sys_note
+            self.translation_service.user_note = usr_note
+            self.image_translation_service.system_note = sys_note
+            self.image_translation_service.user_note = usr_note
+
+        if getattr(args, 'dry_run', False):
+            model_dr = self.translation_service._get_model()
+            abstract_text_dr: Optional[str] = None
+            if getattr(args, 'abstract', False):
+                abstract_text_dr = self._collect_multiline("Abstract text") or None
+
+            if args.input_file:
+                file_path_dr = os.path.abspath(args.input_file)
+                file_type_dr = self._detect_and_validate_file(file_path_dr)
+                if file_type_dr == 'image':
+                    sys_p, usr_p = self.image_translation_service.build_prompts(source_language, target_language)
+                    self._dry_run_display(
+                        self.image_translation_service._get_model(), sys_p, usr_p,
+                        note="Image content would be base64-encoded and attached to the user message",
+                    )
+                    return
+                elif file_type_dr == 'pdf':
+                    with open(file_path_dr, 'rb') as f:
+                        first_page = next(iter(self.pdf_processor.process_pdf(f)), None)
+                        page_text_dr = self.pdf_processor.process_page(first_page) if first_page else "[no text found in PDF]"
+                elif file_type_dr == 'docx':
+                    with open(file_path_dr, 'rb') as f:
+                        pages_dr = DocxProcessor.process_docx_with_pages(f, target_page_size=2000)
+                        page_text_dr = pages_dr[0] if pages_dr else "[no text found in document]"
+                elif file_type_dr == 'txt':
+                    with open(file_path_dr, 'r', encoding='utf-8') as f:
+                        pages_dr = TxtProcessor.process_txt_with_pages(f, target_page_size=2000)
+                        page_text_dr = pages_dr[0] if pages_dr else "[no text found in file]"
+                else:
+                    page_text_dr = f"[{source_language} text to translate]"
+            elif args.custom_text:
+                page_text_dr = self._collect_multiline(
+                    f"Enter the {source_language} text you want to translate to {target_language}"
+                )
+                if not page_text_dr.strip():
+                    page_text_dr = f"[{source_language} text to translate]"
+            else:
+                page_text_dr = f"[{source_language} text to translate]"
+
+            combined = generate_process_text(abstract_text_dr or "", page_text_dr, "")
+            sys_p, usr_p = self.translation_service.build_prompts(combined, source_language, target_language)
+            self._dry_run_display(model_dr, sys_p, usr_p)
+            return
+
+        if args.custom_text:
+            output_file = self._resolve_output_path(args)
+            self.translate_custom_text(
+                source_language,
+                target_language,
+                getattr(args, 'abstract', False),
+                output_file,
+                args.auto_save,
+                getattr(args, 'custom_font', None),
+            )
+        elif args.input_file:
+            output_file = self._resolve_output_path(args)
+            self.translate_document(
+                args.input_file,
+                source_language,
+                target_language,
+                getattr(args, 'page_nums', None),
+                getattr(args, 'abstract', False),
+                output_file,
+                getattr(args, 'auto_save', False),
+                getattr(args, 'progressive_save', False),
+                getattr(args, 'custom_font', None),
+            )
+        else:
+            raise CLIError("No input specified. Use -i for file input or -c for custom text.")
+
+    def _run_transcribe(self, args: argparse.Namespace) -> None:
+        """Handle the 'transcribe' command."""
+        # language_code is already resolved to a full name by parse_single_language_code
+        target_language: str = args.language_code
+
+        if getattr(args, 'notes', False):
+            sys_note, usr_note = self._collect_notes()
+            self.image_processor_service.system_note = sys_note
+            self.image_processor_service.user_note = usr_note
+
+        if getattr(args, 'dry_run', False):
+            vertical_dr = getattr(args, 'vertical', False)
+            model_dr = self.image_processor_service._get_model()
+            sys_p, usr_p = self.image_processor_service.build_prompts(target_language, vertical=vertical_dr)
+            self._dry_run_display(model_dr, sys_p, usr_p,
+                                  note="Image content would be base64-encoded and attached to the user message")
+            return
+
+        if not args.input_file:
+            raise CLIError("Input file is required for transcribe command. Use -i option.")
+
+        input_path = os.path.abspath(args.input_file)
+        output_file = getattr(args, 'output_file', None)
+        vertical = getattr(args, 'vertical', False)
+
+        if os.path.isdir(input_path):
+            self.process_image_folder(input_path, target_language, output_file, vertical=vertical)
+        else:
+            file_type = self._detect_and_validate_file(input_path)
+            if file_type != 'image':
+                raise CLIError(f"Transcribe command requires an image file or folder, but got {file_type}.")
+            self.process_image(input_path, target_language, output_file, vertical=vertical)
+
+    def _run_prompt(self, args: argparse.Namespace) -> None:
+        """Handle the 'prompt' command."""
+        system_prompt_text: Optional[str] = None
+        if getattr(args, 'include_system_prompt', False):
+            system_prompt_text = self._collect_multiline("System prompt") or None
+
+        if getattr(args, 'dry_run', False):
+            model_dr = self.prompt_service._get_model()
+            sys_p, usr_p = self.prompt_service.build_prompts(
+                "[Interactive prompt — text would be entered at runtime]",
+                system_prompt_text,
+            )
+            self._dry_run_display(model_dr, sys_p, usr_p)
+            return
+
+        user_prompt_text = self._collect_multiline("User prompt")
+        if not user_prompt_text.strip():
+            raise CLIError("No prompt text provided.")
+
+        output_file_p = getattr(args, 'output_file', None)
+        self.process_prompt(user_prompt_text, system_prompt_text, output_file_p)
+
     def run(self, args: argparse.Namespace) -> None:
         """Run the translation application with the given arguments."""
+        _dispatch = {
+            'translate': self._run_translate,
+            'transcribe': self._run_transcribe,
+            'prompt': self._run_prompt,
+        }
         try:
-            command = args.command
-
-            if command == 'translate':
-                # Handle translation command
-                language_code = args.language_code
-                
-                # Validate language_code is a tuple with 2 elements
-                if not isinstance(language_code, tuple):
-                    raise CLIError("Translation requires a 2-character language code (e.g., CE, JE, KE)")
-                    
-                # Cast to the expected type after validation
-                lang_tuple = cast(Tuple[str, str], language_code)
-                if len(lang_tuple) != 2:
-                    raise CLIError("Translation requires a 2-character language code (e.g., CE, JE, KE)")
-
-                source_language: str = lang_tuple[0]
-                target_language: str = lang_tuple[1]
-
-                if getattr(args, 'notes', False):
-                    sys_note, usr_note = self._collect_notes()
-                    self.translation_service.system_note = sys_note
-                    self.translation_service.user_note = usr_note
-                    self.image_translation_service.system_note = sys_note
-                    self.image_translation_service.user_note = usr_note
-
-                if getattr(args, 'dry_run', False):
-                    model_dr = self.translation_service._get_model()
-                    abstract_text_dr: Optional[str] = None
-                    if getattr(args, 'abstract', False):
-                        abstract_text_dr = self._collect_multiline("Abstract text") or None
-
-                    if args.input_file:
-                        file_path_dr = os.path.abspath(args.input_file)
-                        file_type_dr = self._detect_and_validate_file(file_path_dr)
-                        if file_type_dr == 'image':
-                            sys_p, usr_p = self.image_translation_service.build_prompts(source_language, target_language)
-                            self._dry_run_display(
-                                self.image_translation_service._get_model(), sys_p, usr_p,
-                                note="Image content would be base64-encoded and attached to the user message",
-                            )
-                            return
-                        elif file_type_dr == 'pdf':
-                            with open(file_path_dr, 'rb') as f:
-                                first_page = next(iter(self.pdf_processor.process_pdf(f)), None)
-                                page_text_dr = self.pdf_processor.process_page(first_page) if first_page else "[no text found in PDF]"
-                        elif file_type_dr == 'docx':
-                            with open(file_path_dr, 'rb') as f:
-                                pages_dr = DocxProcessor.process_docx_with_pages(f, target_page_size=2000)
-                                page_text_dr = pages_dr[0] if pages_dr else "[no text found in document]"
-                        elif file_type_dr == 'txt':
-                            with open(file_path_dr, 'r', encoding='utf-8') as f:
-                                pages_dr = TxtProcessor.process_txt_with_pages(f, target_page_size=2000)
-                                page_text_dr = pages_dr[0] if pages_dr else "[no text found in file]"
-                        else:
-                            page_text_dr = f"[{source_language} text to translate]"
-                    elif args.custom_text:
-                        page_text_dr = self._collect_multiline(
-                            f"Enter the {source_language} text you want to translate to {target_language}"
-                        )
-                        if not page_text_dr.strip():
-                            page_text_dr = f"[{source_language} text to translate]"
-                    else:
-                        page_text_dr = f"[{source_language} text to translate]"
-
-                    combined = generate_process_text(abstract_text_dr or "", page_text_dr, "")
-                    sys_p, usr_p = self.translation_service.build_prompts(combined, source_language, target_language)
-                    self._dry_run_display(model_dr, sys_p, usr_p)
-                    return
-
-                if args.custom_text:
-                    output_file = self._resolve_output_path(args)
-                    self.translate_custom_text(
-                        source_language,
-                        target_language,
-                        getattr(args, 'abstract', False),
-                        output_file,
-                        args.auto_save,
-                        getattr(args, 'custom_font', None),
-                    )
-                elif args.input_file:
-                    output_file = self._resolve_output_path(args)
-                    self.translate_document(
-                        args.input_file,
-                        source_language,
-                        target_language,
-                        getattr(args, 'page_nums', None),
-                        getattr(args, 'abstract', False),
-                        output_file,
-                        getattr(args, 'auto_save', False),
-                        getattr(args, 'progressive_save', False),
-                        getattr(args, 'custom_font', None),
-                    )
-                else:
-                    raise CLIError("No input specified. Use -i for file input or -c for custom text.")
-
-            elif command == 'transcribe':
-                # Handle transcribe (OCR) command
-                # language_code is already resolved to a full name by parse_single_language_code
-                target_language = args.language_code
-
-                if getattr(args, 'notes', False):
-                    sys_note, usr_note = self._collect_notes()
-                    self.image_processor_service.system_note = sys_note
-                    self.image_processor_service.user_note = usr_note
-
-                if getattr(args, 'dry_run', False):
-                    vertical_dr = getattr(args, 'vertical', False)
-                    model_dr = self.image_processor_service._get_model()
-                    sys_p, usr_p = self.image_processor_service.build_prompts(target_language, vertical=vertical_dr)
-                    self._dry_run_display(model_dr, sys_p, usr_p,
-                                          note="Image content would be base64-encoded and attached to the user message")
-                    return
-
-                if not args.input_file:
-                    raise CLIError("Input file is required for transcribe command. Use -i option.")
-
-                input_path = os.path.abspath(args.input_file)
-                output_file = getattr(args, 'output_file', None)
-                vertical = getattr(args, 'vertical', False)
-
-                if os.path.isdir(input_path):
-                    self.process_image_folder(input_path, target_language, output_file, vertical=vertical)
-                else:
-                    # Validate it's an image file
-                    file_type = self._detect_and_validate_file(input_path)
-                    if file_type != 'image':
-                        raise CLIError(f"Transcribe command requires an image file or folder, but got {file_type}.")
-                    self.process_image(input_path, target_language, output_file, vertical=vertical)
-
-            elif command == 'prompt':
-                system_prompt_text: Optional[str] = None
-                if getattr(args, 'include_system_prompt', False):
-                    system_prompt_text = self._collect_multiline("System prompt") or None
-
-                if getattr(args, 'dry_run', False):
-                    model_dr = self.prompt_service._get_model()
-                    sys_p, usr_p = self.prompt_service.build_prompts(
-                        "[Interactive prompt — text would be entered at runtime]",
-                        system_prompt_text,
-                    )
-                    self._dry_run_display(model_dr, sys_p, usr_p)
-                    return
-
-                user_prompt_text = self._collect_multiline("User prompt")
-                if not user_prompt_text.strip():
-                    raise CLIError("No prompt text provided.")
-
-                output_file_p = getattr(args, 'output_file', None)
-                self.process_prompt(user_prompt_text, system_prompt_text, output_file_p)
-
-            else:
-                raise CLIError(f"Unknown command: {command}")
-
+            handler = _dispatch.get(args.command)
+            if handler is None:
+                raise CLIError(f"Unknown command: {args.command}")
+            handler(args)
         except CLIError as e:
             logger.error(f"Error: {e}")
             print(f"Error: {e}", file=sys.stderr)
