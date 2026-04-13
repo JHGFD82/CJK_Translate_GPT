@@ -54,7 +54,7 @@ class SandboxProcessor:
             api_key, self.professor_display_name = get_api_key(professor_name)
             self.professor_name = professor_name
 
-            logger.info(f"Initializing processor for professor: {self.professor_display_name}")
+            logger.debug(f"Initializing processor for professor: {self.professor_display_name}")
 
             self.token_tracker = TokenTracker(professor=professor_name)
             _svc_kwargs: _SvcKwargs = {"token_tracker": self.token_tracker, "model": model, "temperature": temperature, "top_p": top_p}
@@ -81,16 +81,16 @@ class SandboxProcessor:
         if self.image_processor.is_image_file(file_path):
             if not self.image_processor.validate_image_file(file_path):
                 raise CLIError(f"Image file '{file_path}' is not valid.")
-            logger.info(f"Detected image file: {file_path}")
+            logger.debug(f"Detected image file: {file_path}")
             return 'image'
         if lower_path.endswith('.pdf'):
-            logger.info(f"Detected PDF file: {file_path}")
+            logger.debug(f"Detected PDF file: {file_path}")
             return 'pdf'
         if lower_path.endswith('.docx'):
-            logger.info(f"Detected Word document: {file_path}")
+            logger.debug(f"Detected Word document: {file_path}")
             return 'docx'
         if lower_path.endswith('.txt'):
-            logger.info(f"Detected text file: {file_path}")
+            logger.debug(f"Detected text file: {file_path}")
             return 'txt'
 
         raise CLIError("Unsupported file format. Supported formats: PDF, DOCX, TXT, or image files (JPG, PNG, etc.)")
@@ -184,10 +184,8 @@ class SandboxProcessor:
 
         try:
             if file_type == 'pdf':
-                logger.info(f"Processing PDF file: {file_path}")
                 with open(file_path, 'rb') as f:
                     pages = self.pdf_processor.process_pdf(f)
-                    logger.info("Translating PDF pages")
                     start_page, end_page = _parse_page_nums(page_nums)
                     document_text = self.translation_service.translate_document(
                         pages,
@@ -213,7 +211,7 @@ class SandboxProcessor:
                 raise CLIError(f"Cannot translate file type '{file_type}'.")
 
             full_translation = "".join(document_text)
-            print(full_translation)
+
 
             if not opts.progressive_save and (opts.output_file or opts.auto_save):
                 logger.info("Saving translation output")
@@ -227,15 +225,11 @@ class SandboxProcessor:
                     opts.custom_font,
                 )
 
-            logger.info("Translation completed successfully")
-
         except ImportError as e:
             if "python-docx" in str(e):
-                logger.error("python-docx library not found")
                 raise CLIError(
                     "python-docx is required to process Word documents. Install it with: pip install python-docx"
                 ) from e
-            logger.error(f"Import error: {e}")
             raise CLIError(f"Import error: {e}") from e
         except Exception as e:
             logger.error(f"Error processing document: {e}", exc_info=True)
@@ -259,7 +253,7 @@ class SandboxProcessor:
                 print("No text provided.")
                 return
 
-            logger.info(f"Starting custom text translation: {source_language} -> {target_language}")
+            logger.debug(f"Starting custom text translation: {source_language} -> {target_language}")
             print("\nTranslating...")
             if abstract_text:
                 translated_text = self.translation_service.translate_page_text(
@@ -270,7 +264,6 @@ class SandboxProcessor:
 
             if opts.output_file or opts.auto_save:
                 input_filename = f"custom_text_{source_language}to{target_language}.txt"
-                logger.info("Saving custom text translation")
                 self.file_output.save_translation_output(
                     translated_text,
                     input_filename,
@@ -281,7 +274,6 @@ class SandboxProcessor:
                     opts.custom_font,
                 )
 
-            logger.info("Custom text translation completed successfully")
         except KeyboardInterrupt:
             logger.info("Translation cancelled by user")
             print("\nTranslation cancelled.")
@@ -303,7 +295,6 @@ class SandboxProcessor:
             if output_file:
                 self._save_text_file(extracted_text, output_file, "Extracted text")
 
-            logger.info("OCR processing completed successfully")
         except Exception as e:
             logger.error(f"Error processing image: {e}", exc_info=True)
             raise CLIError(f"Error processing image: {e}") from e
@@ -382,7 +373,6 @@ class SandboxProcessor:
         print("===================\n")
 
         if opts.output_file or opts.auto_save:
-            logger.info("Saving image translation output")
             self.file_output.save_translation_output(
                 translation,
                 file_path,
@@ -393,8 +383,6 @@ class SandboxProcessor:
                 opts.custom_font,
             )
 
-        logger.info("Image translation completed successfully")
-
     def process_prompt(
         self,
         user_prompt: str,
@@ -402,24 +390,21 @@ class SandboxProcessor:
         output_file: Optional[str] = None,
     ) -> None:
         """Send a custom prompt and print (and optionally save) the response."""
-        logger.info("Sending custom prompt")
         try:
             response = self.prompt_service.send_prompt(user_prompt, system_prompt)
             print("\n" + response)
             if output_file:
                 self._save_text_file(response, output_file, "Response")
-            logger.info("Custom prompt completed successfully")
         except Exception as e:
             logger.error(f"Error sending prompt: {e}", exc_info=True)
             raise CLIError(f"Error sending prompt: {e}") from e
 
     @staticmethod
     def _save_text_file(text: str, output_file: str, label: str = "Output") -> None:
-        """Write *text* to *output_file*, then log and print the saved path."""
+        """Write *text* to *output_file*, then print the saved path."""
         output_path = os.path.abspath(output_file)
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(text)
-        logger.info(f"{label} saved to: {output_path}")
         print(f"{label} saved to: {output_path}")
 
     @staticmethod
@@ -648,15 +633,12 @@ class SandboxProcessor:
                 raise CLIError(f"Unknown command: {args.command}")
             handler(args)
         except CLIError as e:
-            logger.error(f"Error: {e}")
             print(f"Error: {e}", file=sys.stderr)
             sys.exit(1)
         except KeyboardInterrupt:
-            logger.info("Operation cancelled by user")
             print("\nOperation cancelled.", file=sys.stderr)
             sys.exit(130)
         except Exception as e:
             logger.error(f"Unexpected error: {e}", exc_info=True)
-            print(f"Unexpected error: {e}", file=sys.stderr)
             sys.exit(1)
 

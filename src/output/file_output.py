@@ -136,10 +136,10 @@ class FileOutputHandler:
             # Configure font - use Times-Roman for English unless custom font specified
             if not custom_font and target_lang == 'English':
                 font_name = 'Times-Roman'
-                logging.info(f"Using Times-Roman for English translation (target_lang={target_lang})")
+                logging.debug(f"Using Times-Roman for English translation (target_lang={target_lang})")
             else:
                 font_name = get_pdf_font(custom_font)
-                logging.info(f"Using CJK font: {font_name} (custom_font={custom_font}, target_lang={target_lang})")
+                logging.debug(f"Using CJK font: {font_name} (custom_font={custom_font}, target_lang={target_lang})")
             
             # Create paragraph style with proper font
             try:
@@ -152,7 +152,7 @@ class FileOutputHandler:
                     spaceAfter=12,
                     encoding='utf-8'
                 )
-                logging.info(f"Created paragraph style with font: {font_name}")
+                logging.debug(f"Created paragraph style with font: {font_name}")
             except (TypeError, ValueError, KeyError) as e:
                 logging.warning(f"Failed to create custom style with font {font_name}: {e}")
                 normal_style = styles['Normal']
@@ -180,7 +180,7 @@ class FileOutputHandler:
                         paragraph = Paragraph(clean_text, fallback_style)
                         story.append(paragraph)
                         story.append(Spacer(1, 12))
-                        logging.info(f"Used fallback font Times-Roman for paragraph {i}")
+                        logging.debug(f"Used fallback font Times-Roman for paragraph {i}")
                     except Exception as fallback_error:
                         logging.warning(f"Fallback font also failed for paragraph {i}: {fallback_error}")
                         ascii_safe_text = clean_text.encode('ascii', 'ignore').decode('ascii')
@@ -202,7 +202,7 @@ class FileOutputHandler:
                     leading_newline=True,
                 )
                 if font_name != 'Times-Roman':
-                    FileOutputHandler._emit_message(f"Used font: {font_name}", level=logging.INFO)
+                    FileOutputHandler._emit_message(f"Used font: {font_name}", level=logging.DEBUG)
             else:
                 FileOutputHandler._emit_message(
                     "Error: No content could be processed for PDF generation",
@@ -251,10 +251,10 @@ class FileOutputHandler:
             # Get font name for CJK support
             if not custom_font and target_lang == 'English':
                 font_name = 'Times New Roman'
-                logging.info(f"Using Times New Roman for English translation (target_lang={target_lang})")
+                logging.debug(f"Using Times New Roman for English translation (target_lang={target_lang})")
             else:
                 font_name = get_docx_font(custom_font)
-                logging.info(f"Using CJK font for Word: {font_name} (custom_font={custom_font}, target_lang={target_lang})")
+                logging.debug(f"Using CJK font for Word: {font_name} (custom_font={custom_font}, target_lang={target_lang})")
             
             # Split content into paragraphs and add to document
             for i, clean_text in enumerate(FileOutputHandler._normalize_paragraphs(content), start=1):
@@ -278,7 +278,7 @@ class FileOutputHandler:
                     logging.warning(f"Error processing paragraph {i} for Word document: {paragraph_error}")
                     try:
                         doc.add_paragraph(clean_text)
-                        logging.info(f"Added paragraph {i} with basic formatting")
+                        logging.debug(f"Added paragraph {i} with basic formatting")
                     except Exception as fallback_error:
                         logging.warning(f"Failed to add paragraph {i} to Word document: {fallback_error}")
                         continue
@@ -293,7 +293,7 @@ class FileOutputHandler:
                     leading_newline=True,
                 )
                 if font_name != 'Times New Roman':
-                    FileOutputHandler._emit_message(f"Used font: {font_name}", level=logging.INFO)
+                    FileOutputHandler._emit_message(f"Used font: {font_name}", level=logging.DEBUG)
             else:
                 FileOutputHandler._emit_message(
                     "Error: No content could be processed for Word document generation",
@@ -308,7 +308,7 @@ class FileOutputHandler:
                 level=logging.WARNING,
                 log_message='python-docx not installed. Falling back to text file.',
             )
-            FileOutputHandler._emit_message("pip install python-docx", level=logging.INFO)
+            print("pip install python-docx")
             FileOutputHandler._emit_message("Saving as text file instead.", level=logging.WARNING)
             FileOutputHandler._fallback_to_text(content, output_path)
         except Exception as e:

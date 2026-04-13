@@ -112,7 +112,7 @@ class TokenTracker:
 
         self.usage_data = self._load_usage_data()
 
-        logging.info(f"Token tracking initialized for Professor {professor.title()}: {self.data_file}")
+        logging.debug(f"Token tracking initialized for Professor {professor.title()}: {self.data_file}")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -242,7 +242,6 @@ class TokenTracker:
         self.usage_data["session_history"].append(asdict(usage))
         self._save_usage_data()
 
-        logging.info(f"Token usage recorded: {total_tokens} tokens (${total_cost:.4f}) for model {model}")
         return usage
 
     def get_daily_usage(self, date: Optional[str] = None) -> Dict[str, Any]:

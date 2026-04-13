@@ -112,9 +112,9 @@ class BaseService:
         assert not isinstance(response, ABCIterator), "Unexpected stream response received."
 
         if response.id:
-            logging.info(f"API call successful. Response ID: {response.id}")
+            logging.debug(f"API call successful. Response ID: {response.id}")
         if response.model:
-            logging.info(f"Model used: {response.model}")
+            logging.debug(f"Model used: {response.model}")
 
         if (
             response.usage

@@ -361,7 +361,7 @@ class TestSaveToPdf:
 
     def test_english_target_uses_times_roman(self, tmp_path, caplog):
         output_path = str(tmp_path / "out.pdf")
-        with caplog.at_level(logging.INFO):
+        with caplog.at_level(logging.DEBUG):
             FileOutputHandler.save_to_pdf("Content", output_path, target_lang="English")
         assert "Times-Roman" in caplog.text
 
@@ -406,7 +406,7 @@ class TestSaveToDocx:
 
     def test_english_target_uses_times_new_roman(self, tmp_path, caplog):
         output_path = str(tmp_path / "out.docx")
-        with caplog.at_level(logging.INFO):
+        with caplog.at_level(logging.DEBUG):
             FileOutputHandler.save_to_docx("Content.", output_path, target_lang="English")
         assert "Times New Roman" in caplog.text
 
@@ -569,7 +569,7 @@ class TestSaveToPdfDeepPaths:
         # Exercises the `else` branch (lines 141-142): get_pdf_font is invoked
         output_path = str(tmp_path / "out.pdf")
         with patch("src.output.file_output.get_pdf_font", return_value="Helvetica") as mock_gpf:
-            with caplog.at_level(logging.INFO):
+            with caplog.at_level(logging.DEBUG):
                 FileOutputHandler.save_to_pdf("Content.", output_path, target_lang="Japanese")
         mock_gpf.assert_called_once()
         assert "Helvetica" in caplog.text
@@ -578,7 +578,7 @@ class TestSaveToPdfDeepPaths:
         # Covers the `if font_name != 'Times-Roman':` True branch inside `if story:`
         output_path = str(tmp_path / "out.pdf")
         with patch("src.output.file_output.get_pdf_font", return_value="Helvetica"):
-            with caplog.at_level(logging.INFO):
+            with caplog.at_level(logging.DEBUG):
                 FileOutputHandler.save_to_pdf("Content here.", output_path, target_lang="Japanese")
         assert "Used font: Helvetica" in caplog.text
 
