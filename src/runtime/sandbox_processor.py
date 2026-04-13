@@ -289,12 +289,12 @@ class SandboxProcessor:
             logger.error(f"Error during translation: {e}", exc_info=True)
             raise CLIError(f"Error during translation: {e}") from e
 
-    def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False) -> None:
+    def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, passes: int = 1) -> None:
         """Process an image file with OCR (transcribe command)."""
         logger.info(f"Starting OCR processing: {file_path} → {target_language}")
 
         try:
-            extracted_text = self.image_processor_service.process_image_ocr(file_path, target_language, output_format="console", vertical=vertical)
+            extracted_text = self.image_processor_service.process_image_ocr(file_path, target_language, output_format="console", vertical=vertical, passes=passes)
 
             print("\n=== Extracted Text ===")
             print(extracted_text)
@@ -308,7 +308,7 @@ class SandboxProcessor:
             logger.error(f"Error processing image: {e}", exc_info=True)
             raise CLIError(f"Error processing image: {e}") from e
 
-    def process_image_folder(self, folder_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False) -> None:
+    def process_image_folder(self, folder_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, passes: int = 1) -> None:
         """Process all images in a folder with OCR, printing each result and optionally saving combined output."""
         from ..processors.constants import IMAGE_EXTENSIONS
 
@@ -333,7 +333,7 @@ class SandboxProcessor:
             print(f"[{idx}/{len(image_files)}] {filename}")
             try:
                 extracted_text = self.image_processor_service.process_image_ocr(
-                    img_path, target_language, output_format="console", vertical=vertical
+                    img_path, target_language, output_format="console", vertical=vertical, passes=passes
                 )
             except Exception as e:
                 logger.error(f"Error processing '{filename}': {e}", exc_info=True)
@@ -601,14 +601,17 @@ class SandboxProcessor:
         input_path = os.path.abspath(args.input_file)
         output_file = getattr(args, 'output_file', None)
         vertical = getattr(args, 'vertical', False)
+        passes = getattr(args, 'passes', 1)
+        if passes < 1:
+            raise CLIError("--passes must be at least 1.")
 
         if os.path.isdir(input_path):
-            self.process_image_folder(input_path, target_language, output_file, vertical=vertical)
+            self.process_image_folder(input_path, target_language, output_file, vertical=vertical, passes=passes)
         else:
             file_type = self._detect_and_validate_file(input_path)
             if file_type != 'image':
                 raise CLIError(f"Transcribe command requires an image file or folder, but got {file_type}.")
-            self.process_image(input_path, target_language, output_file, vertical=vertical)
+            self.process_image(input_path, target_language, output_file, vertical=vertical, passes=passes)
 
     def _run_prompt(self, args: argparse.Namespace) -> None:
         """Handle the 'prompt' command."""
