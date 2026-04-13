@@ -29,6 +29,7 @@ class _SvcKwargs(TypedDict, total=False):
     model: Optional[str]
     temperature: Optional[float]
     top_p: Optional[float]
+    max_tokens: Optional[int]
 
 
 def _parse_page_nums(page_nums_str: Optional[str]) -> Tuple[int, Optional[int]]:
@@ -48,7 +49,8 @@ class SandboxProcessor:
     """Main application class for processing inputs to the Princeton AI Sandbox."""
 
     def __init__(self, professor_name: str, model: Optional[str] = None,
-                 temperature: Optional[float] = None, top_p: Optional[float] = None):
+                 temperature: Optional[float] = None, top_p: Optional[float] = None,
+                 max_tokens: Optional[int] = None):
         """Initialize the processor for the specified professor."""
         try:
             api_key, self.professor_display_name = get_api_key(professor_name)
@@ -57,7 +59,7 @@ class SandboxProcessor:
             logger.debug(f"Initializing processor for professor: {self.professor_display_name}")
 
             self.token_tracker = TokenTracker(professor=professor_name)
-            _svc_kwargs: _SvcKwargs = {"token_tracker": self.token_tracker, "model": model, "temperature": temperature, "top_p": top_p}
+            _svc_kwargs: _SvcKwargs = {"token_tracker": self.token_tracker, "model": model, "temperature": temperature, "top_p": top_p, "max_tokens": max_tokens}
             self.translation_service = TranslationService(api_key, professor_name, **_svc_kwargs)
             self.image_processor_service = ImageProcessorService(api_key, professor_name, **_svc_kwargs)
             self.image_translation_service = ImageTranslationService(api_key, professor_name, **_svc_kwargs)

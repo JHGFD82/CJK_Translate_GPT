@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 from ..models import (
     resolve_model, get_model_system_role,
-    maybe_sync_model_pricing,
+    maybe_sync_model_pricing, get_model_max_completion_tokens,
 )
 from ..tracking.token_tracker import TokenTracker
 from .api_errors import handle_api_errors
@@ -31,8 +31,9 @@ class PromptService(BaseService):
         model: Optional[str] = None,
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
+        max_tokens: Optional[int] = None,
     ):
-        super().__init__(api_key, professor, token_tracker, None, model, temperature, top_p)
+        super().__init__(api_key, professor, token_tracker, None, model, temperature, top_p, max_tokens)
 
     def _get_model(self) -> str:
         """Resolve model, syncing pricing if needed."""
@@ -50,8 +51,9 @@ class PromptService(BaseService):
             {"role": system_role, "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
+        max_tokens = self.custom_max_tokens if self.custom_max_tokens is not None else get_model_max_completion_tokens(model, PROMPT_MAX_TOKENS)
         return self._create_completion(
-            model, messages, PROMPT_MAX_TOKENS,
+            model, messages, max_tokens,
             temperature=temperature, top_p=top_p,
         )
 
