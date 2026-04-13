@@ -433,15 +433,27 @@ class SandboxProcessor:
     @staticmethod
     def _collect_notes() -> Tuple[Optional[str], Optional[str]]:
         """Ask the user which prompt(s) to annotate, collect their note text, and return
-        (system_note, user_note).  Either value is None if not requested."""
+        (system_note, user_note).  Either value is None if not requested.
+
+        Options:
+          system   — one note appended to the system prompt only
+          user     — one note appended to the user prompt only
+          both     — the same note appended to both prompts
+          separate — different notes collected individually for system then user
+        """
         while True:
             try:
-                target = input("Add notes to (system / user / both): ").strip().lower()
+                target = input("Add notes to (system / user / both / separate): ").strip().lower()
             except EOFError:
                 return None, None
-            if target in ('system', 'user', 'both'):
+            if target in ('system', 'user', 'both', 'separate'):
                 break
-            print("Please enter 'system', 'user', or 'both'.")
+            print("Please enter 'system', 'user', 'both', or 'separate'.")
+
+        if target == 'separate':
+            system_note = SandboxProcessor._collect_multiline("System note") or None
+            user_note   = SandboxProcessor._collect_multiline("User note")   or None
+            return system_note, user_note
 
         note_text = SandboxProcessor._collect_multiline("Notes")
         if not note_text.strip():
