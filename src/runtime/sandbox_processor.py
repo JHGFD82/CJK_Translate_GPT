@@ -295,7 +295,10 @@ class SandboxProcessor:
             print("======================\n")
 
             if output_file:
-                self._save_text_file(extracted_text, output_file, "Extracted text")
+                self.file_output.save_translation_output(
+                    extracted_text, file_path, output_file, False,
+                    target_language, target_language,
+                )
 
         except Exception as e:
             logger.error(f"Error processing image: {e}", exc_info=True)
@@ -340,7 +343,10 @@ class SandboxProcessor:
             combined_parts.append(f"=== {filename} ===\n{extracted_text}")
 
         if output_file:
-            self._save_text_file("\n\n".join(combined_parts), output_file, "Combined output")
+            self.file_output.save_translation_output(
+                "\n\n".join(combined_parts), None, output_file, False,
+                target_language, target_language,
+            )
 
     def process_image_translation(
         self,
