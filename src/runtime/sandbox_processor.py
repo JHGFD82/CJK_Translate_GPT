@@ -431,9 +431,14 @@ class SandboxProcessor:
         return '\n'.join(lines)
 
     @staticmethod
-    def _collect_notes() -> Tuple[Optional[str], Optional[str]]:
-        """Ask the user which prompt(s) to annotate, collect their note text, and return
-        (system_note, user_note).  Either value is None if not requested.
+    def _collect_notes(
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None,
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """Optionally display the current prompts, then collect note text to append.
+
+        If *system_prompt* or *user_prompt* are provided they are shown before
+        the question so the user has context for what they are annotating.
 
         Options:
           system   — one note appended to the system prompt only
@@ -441,6 +446,19 @@ class SandboxProcessor:
           both     — the same note appended to both prompts
           separate — different notes collected individually for system then user
         """
+        if system_prompt is not None or user_prompt is not None:
+            sep = "-" * 70
+            print(f"\n{sep}")
+            print("  CURRENT PROMPTS  (your notes will be appended to these)")
+            print(sep)
+            if system_prompt is not None:
+                print("\n--- SYSTEM PROMPT ---")
+                print(system_prompt)
+            if user_prompt is not None:
+                print("\n--- USER PROMPT ---")
+                print(user_prompt)
+            print(f"\n{sep}\n")
+
         while True:
             try:
                 target = input("Add notes to (system / user / both / separate): ").strip().lower()
@@ -507,7 +525,28 @@ class SandboxProcessor:
         target_language: str = lang_tuple[1]
 
         if getattr(args, 'notes', False):
-            sys_note, usr_note = self._collect_notes()
+            # Build a prompt preview so the user can see what they are annotating.
+            # Use the image-translation prompts for image inputs, text-translation
+            # prompts (with a placeholder) for everything else.
+            _preview_sys: Optional[str] = None
+            _preview_usr: Optional[str] = None
+            if args.input_file:
+                _fp = os.path.abspath(args.input_file)
+                if os.path.exists(_fp) and self.image_processor.is_image_file(_fp):
+                    _preview_sys, _preview_usr = self.image_translation_service.build_prompts(
+                        source_language, target_language
+                    )
+                else:
+                    _placeholder = generate_process_text("", f"[{source_language} document text]", "")
+                    _preview_sys, _preview_usr = self.translation_service.build_prompts(
+                        _placeholder, source_language, target_language
+                    )
+            else:
+                _placeholder = generate_process_text("", f"[{source_language} custom text]", "")
+                _preview_sys, _preview_usr = self.translation_service.build_prompts(
+                    _placeholder, source_language, target_language
+                )
+            sys_note, usr_note = self._collect_notes(_preview_sys, _preview_usr)
             self.translation_service.system_note = sys_note
             self.translation_service.user_note = usr_note
             self.image_translation_service.system_note = sys_note
@@ -588,7 +627,11 @@ class SandboxProcessor:
         target_language: str = args.language_code
 
         if getattr(args, 'notes', False):
-            sys_note, usr_note = self._collect_notes()
+            _vertical_flag = getattr(args, 'vertical', False)
+            _preview_sys, _preview_usr = self.image_processor_service.build_prompts(
+                target_language, vertical=_vertical_flag
+            )
+            sys_note, usr_note = self._collect_notes(_preview_sys, _preview_usr)
             self.image_processor_service.system_note = sys_note
             self.image_processor_service.user_note = usr_note
 
