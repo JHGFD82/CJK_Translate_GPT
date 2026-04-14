@@ -552,6 +552,18 @@ class SandboxProcessor:
             self.image_translation_service.system_note = sys_note
             self.image_translation_service.user_note = usr_note
 
+        # Inline note flags (-ns / -nu / -nb) apply directly without interactive flow.
+        # -nb sets both; -ns/-nu set individually (and override -nb for their slot).
+        _inline_both = getattr(args, 'note_both', None)
+        _inline_sys  = getattr(args, 'note_system', None) or _inline_both
+        _inline_usr  = getattr(args, 'note_user', None)   or _inline_both
+        if _inline_sys is not None:
+            self.translation_service.system_note = _inline_sys
+            self.image_translation_service.system_note = _inline_sys
+        if _inline_usr is not None:
+            self.translation_service.user_note = _inline_usr
+            self.image_translation_service.user_note = _inline_usr
+
         if getattr(args, 'dry_run', False):
             model_dr = self.translation_service._get_model()
             abstract_text_dr: Optional[str] = None
@@ -634,6 +646,15 @@ class SandboxProcessor:
             sys_note, usr_note = self._collect_notes(_preview_sys, _preview_usr)
             self.image_processor_service.system_note = sys_note
             self.image_processor_service.user_note = usr_note
+
+        # Inline note flags (-ns / -nu / -nb) apply directly without interactive flow.
+        _inline_both = getattr(args, 'note_both', None)
+        _inline_sys  = getattr(args, 'note_system', None) or _inline_both
+        _inline_usr  = getattr(args, 'note_user', None)   or _inline_both
+        if _inline_sys is not None:
+            self.image_processor_service.system_note = _inline_sys
+        if _inline_usr is not None:
+            self.image_processor_service.user_note = _inline_usr
 
         if getattr(args, 'dry_run', False):
             vertical_dr = getattr(args, 'vertical', False)

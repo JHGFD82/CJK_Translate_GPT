@@ -31,6 +31,22 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--dry-run', dest='dry_run', action='store_true', help='Print the prompt(s) that would be sent without making any API calls')
 
 
+def _add_notes_flags(parser: argparse.ArgumentParser) -> None:
+    """Add the interactive and inline notes flags to a subparser."""
+    parser.add_argument(
+        '-n', '--notes',
+        dest='notes',
+        action='store_true',
+        help='Interactively append ad-hoc notes to the system prompt, user prompt, or both before sending',
+    )
+    parser.add_argument('-ns', '--note-system', dest='note_system', type=str, default=None, metavar='TEXT',
+                        help='Inline note appended to the system prompt')
+    parser.add_argument('-nu', '--note-user', dest='note_user', type=str, default=None, metavar='TEXT',
+                        help='Inline note appended to the user prompt')
+    parser.add_argument('-nb', '--note-both', dest='note_both', type=str, default=None, metavar='TEXT',
+                        help='Inline note appended to both the system and user prompts')
+
+
 def create_argument_parser() -> argparse.ArgumentParser:
     """Create and configure the command-line argument parser."""
     parser = argparse.ArgumentParser(
@@ -190,12 +206,7 @@ Custom prompt:
     )
     translate_parser.add_argument('-f', '--font', dest='custom_font', type=str, help='Custom font name (must be in fonts/)')
     _add_common_flags(translate_parser)
-    translate_parser.add_argument(
-        '-n', '--notes',
-        dest='notes',
-        action='store_true',
-        help='Interactively append ad-hoc notes to the system prompt, user prompt, or both before sending',
-    )
+    _add_notes_flags(translate_parser)
 
     # ===== TRANSCRIBE COMMAND =====
     transcribe_parser = subparsers.add_parser('transcribe', help='Transcribe images using OCR')
@@ -208,12 +219,7 @@ Custom prompt:
     transcribe_parser.add_argument('-v', '--vertical', dest='vertical', action='store_true', help='Text is predominantly vertical (top-to-bottom, right-to-left columns)')
     transcribe_parser.add_argument('-P', '--passes', dest='passes', type=int, default=1, metavar='N', help='Number of OCR passes (default: 1). Passes > 1 send the image and prior transcription back to the model for review and correction.')
     _add_common_flags(transcribe_parser)
-    transcribe_parser.add_argument(
-        '-n', '--notes',
-        dest='notes',
-        action='store_true',
-        help='Interactively append ad-hoc notes to the system prompt, user prompt, or both before sending',
-    )
+    _add_notes_flags(transcribe_parser)
 
     # ===== PROMPT COMMAND =====
     prompt_parser = subparsers.add_parser('prompt', help='Send a custom prompt to the AI model')
