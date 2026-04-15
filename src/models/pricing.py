@@ -8,6 +8,10 @@ from typing import Any, Dict, Tuple
 
 from . import catalog as _catalog
 
+# In-memory cache: model name → last-synced datetime.
+# Prevents repeated catalog disk reads when many workers share the same model.
+_sync_cache: Dict[str, datetime] = {}
+
 PORTKEY_PRICING_API_BASE = "https://api.portkey.ai/model-configs/pricing"
 
 
@@ -108,17 +112,24 @@ def maybe_sync_model_pricing(model: str) -> None:
     Only runs when the model has a 'portkey_id' field. Silently skips on any
     network or parse error so the caller is never blocked.
     """
+    # Fast in-memory check — avoids disk reads when workers share the same model
+    cached_at = _sync_cache.get(model)
+    if cached_at is not None and datetime.now() - cached_at < timedelta(hours=1):
+        return
+
     try:
         catalog = _catalog.load_model_catalog()
         model_entry = catalog["models"].get(model, {})
         portkey_id = model_entry.get("portkey_id")
         if not portkey_id:
+            _sync_cache[model] = datetime.now()  # no portkey_id — nothing to sync
             return
 
         last_sync_str = model_entry.get("last_sync", "")
         try:
             last_sync_dt = datetime.fromisoformat(last_sync_str)
             if datetime.now() - last_sync_dt < timedelta(hours=1):
+                _sync_cache[model] = last_sync_dt
                 return
         except (ValueError, TypeError):
             # Timestamp absent or in old monthly format — treat as stale and update
@@ -126,11 +137,13 @@ def maybe_sync_model_pricing(model: str) -> None:
 
         pricing_unit = catalog["config"]["pricing_unit"]
         fetched = _fetch_model_pricing(portkey_id, pricing_unit)
-        now_iso = datetime.now().isoformat(timespec="seconds")
+        now_dt = datetime.now()
+        now_iso = now_dt.isoformat(timespec="seconds")
         catalog["models"][model]["input"] = fetched["input"]
         catalog["models"][model]["output"] = fetched["output"]
         catalog["models"][model]["last_sync"] = now_iso
         _catalog.save_model_catalog(catalog)
+        _sync_cache[model] = now_dt
         logging.info(
             f"Synced pricing for {model}: "
             f"input=${catalog['models'][model]['input']}, "
