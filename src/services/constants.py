@@ -5,6 +5,9 @@ PAGE_DELAY_SECONDS: float = 3.0  # Delay between pages to prevent content filter
 MAX_RETRIES: int = 10            # Maximum retries for content filter / transient errors
 BASE_RETRY_DELAY: float = 3.0   # Base delay (seconds) for exponential backoff
 
+# Parallelism — easy-to-adjust default worker count for -w/--workers flag
+DEFAULT_PARALLEL_WORKERS: int = 1  # 1 = sequential (safe default); raise to fan out pages
+
 # Per-language script guidance for OCR prompts (transcribe command)
 OCR_SCRIPT_GUIDANCE: dict[str, str] = {
     'Chinese': (

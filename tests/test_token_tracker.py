@@ -1104,3 +1104,117 @@ class TestPrintUsageReportNoArchivedMonths:
 
         out = capsys.readouterr().out
         assert "No archived months yet" not in out
+
+
+# ---------------------------------------------------------------------------
+# Thread safety — concurrent record_usage calls must not drop token counts
+# ---------------------------------------------------------------------------
+
+class TestConcurrentRecordUsage:
+    """Verify that the threading.Lock in TokenTracker prevents token count loss
+    when multiple parallel translation workers call record_usage simultaneously.
+
+    Strategy: fire N threads, each calling record_usage once with a fixed token
+    count. After all threads complete the in-memory total_tokens must equal
+    N × per_call_tokens exactly.  Without the lock this test is highly likely
+    to fail due to read-modify-write races on the shared usage_data dict.
+    """
+
+    N_THREADS = 16
+    TOKENS_PER_CALL = 100
+
+    @pytest.fixture
+    def concurrent_tracker(self, tmp_path):
+        data_file = str(tmp_path / "concurrent.json")
+        return TokenTracker("concprof", data_file=data_file, monthly_limit=1000.0)
+
+    def _build_mock_usage(self):
+        """Return a mock API response object with fixed token counts."""
+        mock_usage = MagicMock()
+        mock_usage.prompt_tokens = self.TOKENS_PER_CALL
+        mock_usage.completion_tokens = 0
+        mock_usage.total_tokens = self.TOKENS_PER_CALL
+        return mock_usage
+
+    def test_no_tokens_dropped_under_concurrent_load(self, concurrent_tracker):
+        """All N concurrent calls must be reflected exactly in the final total."""
+        import threading
+
+        errors: list[Exception] = []
+
+        def worker():
+            try:
+                with patch("src.tracking.token_tracker.get_pricing_unit", return_value=1_000_000), \
+                     patch("src.tracking.token_tracker.get_model_pricing",
+                           return_value={"input": 0.0, "output": 0.0}):
+                    concurrent_tracker.record_usage(
+                        model="gpt-4o",
+                        prompt_tokens=self.TOKENS_PER_CALL,
+                        completion_tokens=0,
+                        total_tokens=self.TOKENS_PER_CALL,
+                    )
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker) for _ in range(self.N_THREADS)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == [], f"Worker threads raised exceptions: {errors}"
+
+        expected = self.N_THREADS * self.TOKENS_PER_CALL
+        actual = concurrent_tracker.usage_data["total_usage"]["total_tokens"]
+        assert actual == expected, (
+            f"Token count mismatch: expected {expected}, got {actual}. "
+            f"{expected - actual} token(s) were dropped (race condition)."
+        )
+
+    def test_call_count_matches_n_threads(self, concurrent_tracker):
+        """call_count in total_usage must equal the number of concurrent calls."""
+        import threading
+
+        def worker():
+            with patch("src.tracking.token_tracker.get_pricing_unit", return_value=1_000_000), \
+                 patch("src.tracking.token_tracker.get_model_pricing",
+                       return_value={"input": 0.0, "output": 0.0}):
+                concurrent_tracker.record_usage(
+                    model="gpt-4o",
+                    prompt_tokens=10,
+                    completion_tokens=5,
+                    total_tokens=15,
+                )
+
+        threads = [threading.Thread(target=worker) for _ in range(self.N_THREADS)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        expected = self.N_THREADS
+        actual = concurrent_tracker.usage_data["total_usage"].get("call_count", 0)
+        assert actual == expected
+
+    def test_session_history_length_matches_n_threads(self, concurrent_tracker):
+        """Every concurrent call must produce exactly one session_history entry."""
+        import threading
+
+        def worker():
+            with patch("src.tracking.token_tracker.get_pricing_unit", return_value=1_000_000), \
+                 patch("src.tracking.token_tracker.get_model_pricing",
+                       return_value={"input": 0.0, "output": 0.0}):
+                concurrent_tracker.record_usage(
+                    model="gpt-4o",
+                    prompt_tokens=10,
+                    completion_tokens=5,
+                    total_tokens=15,
+                )
+
+        threads = [threading.Thread(target=worker) for _ in range(self.N_THREADS)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(concurrent_tracker.usage_data["session_history"]) == self.N_THREADS

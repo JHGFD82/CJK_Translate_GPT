@@ -2,6 +2,7 @@
 
 import json
 import logging
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -110,6 +111,8 @@ class TokenTracker:
 
         self.monthly_limit = monthly_limit if monthly_limit is not None else get_monthly_limit()
 
+        self._lock = threading.Lock()
+
         self.usage_data = self._load_usage_data()
 
         logging.debug(f"Token tracking initialized for Professor {professor.title()}: {self.data_file}")
@@ -203,6 +206,10 @@ class TokenTracker:
                      total_tokens: int, requested_model: Optional[str] = None) -> TokenUsage:
         """Record token usage for a single API call.
 
+        Thread-safe: acquires the instance lock for the full read-modify-write
+        cycle so that concurrent page workers cannot interleave their updates
+        and silently drop token counts.
+
         Args:
             model:           Actual model name returned by the API (may carry a date suffix).
             prompt_tokens:   Input token count.
@@ -210,37 +217,38 @@ class TokenTracker:
             total_tokens:    Combined token count.
             requested_model: Model name used in the request (for pricing lookup when different).
         """
-        timestamp = datetime.now().isoformat()
-        pricing_model = requested_model if requested_model else model
-        if requested_model and requested_model != model:
-            logging.info(f"Using requested model '{requested_model}' for pricing instead of API model '{model}'")
+        with self._lock:
+            timestamp = datetime.now().isoformat()
+            pricing_model = requested_model if requested_model else model
+            if requested_model and requested_model != model:
+                logging.info(f"Using requested model '{requested_model}' for pricing instead of API model '{model}'")
 
-        input_cost, output_cost, total_cost = self._calculate_costs(pricing_model, prompt_tokens, completion_tokens)
+            input_cost, output_cost, total_cost = self._calculate_costs(pricing_model, prompt_tokens, completion_tokens)
 
-        usage = TokenUsage(
-            model=model,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=total_tokens,
-            timestamp=timestamp,
-            input_cost=input_cost,
-            output_cost=output_cost,
-            total_cost=total_cost,
-        )
+            usage = TokenUsage(
+                model=model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                timestamp=timestamp,
+                input_cost=input_cost,
+                output_cost=output_cost,
+                total_cost=total_cost,
+            )
 
-        self._update_stats(self.usage_data["total_usage"], prompt_tokens, completion_tokens, total_tokens, total_cost)
+            self._update_stats(self.usage_data["total_usage"], prompt_tokens, completion_tokens, total_tokens, total_cost)
 
-        if model not in self.usage_data["model_usage"]:
-            self.usage_data["model_usage"][model] = UsageStats().to_dict()
-        self._update_stats(self.usage_data["model_usage"][model], prompt_tokens, completion_tokens, total_tokens, total_cost)
+            if model not in self.usage_data["model_usage"]:
+                self.usage_data["model_usage"][model] = UsageStats().to_dict()
+            self._update_stats(self.usage_data["model_usage"][model], prompt_tokens, completion_tokens, total_tokens, total_cost)
 
-        date_str = self._get_current_date()
-        if date_str not in self.usage_data["daily_usage"]:
-            self.usage_data["daily_usage"][date_str] = UsageStats().to_dict()
-        self._update_stats(self.usage_data["daily_usage"][date_str], prompt_tokens, completion_tokens, total_tokens, total_cost)
+            date_str = self._get_current_date()
+            if date_str not in self.usage_data["daily_usage"]:
+                self.usage_data["daily_usage"][date_str] = UsageStats().to_dict()
+            self._update_stats(self.usage_data["daily_usage"][date_str], prompt_tokens, completion_tokens, total_tokens, total_cost)
 
-        self.usage_data["session_history"].append(asdict(usage))
-        self._save_usage_data()
+            self.usage_data["session_history"].append(asdict(usage))
+            self._save_usage_data()
 
         return usage
 

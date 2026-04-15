@@ -60,11 +60,13 @@ python main.py heller translate CE -i test.docx              # Word document
 python main.py heller translate CE -i test.txt               # Plain text file
 python main.py heller translate CE -i test.pdf -p 1-5        # Page range
 python main.py heller translate CE -i test.pdf -o out.docx   # Output as Word
+python main.py heller translate CE -i test.pdf -w 4          # 4 parallel workers
 
 # Transcription (OCR) — use single language char, not a pair
 python main.py heller transcribe E -i test.jpg               # OCR to console
 python main.py heller transcribe E -i test.jpg -o output.txt # OCR to file
 python main.py heller transcribe E -i test.jpg -m gpt-4o-mini # Specific model
+python main.py heller transcribe E -i ./scans/ -w 4          # Folder OCR, 4 parallel workers
 
 # Custom prompts (fully interactive — text entered at runtime, end with ---)
 python main.py heller prompt                                  # User prompt only
@@ -80,6 +82,21 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 - Validation ensures source ≠ target, valid language codes only
 
 ## Critical Implementation Details
+
+### Progressive Saving
+- **Text format only**: `--progressive-save` saves each page immediately as it finishes
+- **Incompatible with parallel mode**: `--progressive-save` is silently disabled (with a printed warning) when `workers > 1`
+
+### Parallel Processing
+- **Flag**: `-w N` / `--workers N` (default: `1` = sequential). The default is defined as `DEFAULT_PARALLEL_WORKERS` in `src/services/constants.py`.
+- **Translation (`-w N`)**: Each page is sent as an independent `ThreadPoolExecutor` worker. Previous-page context is the **untranslated source text** of the prior page (not the prior translation). `context_length_exceeded` recursive splitting still works within each worker.
+- **Transcription folder mode (`-w N`)**: Each image in a folder is dispatched to a separate worker. Multi-pass OCR (`-P N`) still runs sequentially within each worker. Workers have no effect for single-image input.
+- **Prompt command**: No `-w` flag — always a single call.
+- **Custom text (`-c`)**: `-w` is accepted but ignored (not paginated).
+- **Temp files**: Results are written to numbered temp files so RAM stays bounded for large documents; temp directory is deleted in a `finally` block.
+- **Rate limiting**: `PAGE_DELAY_SECONDS` between pages is removed in parallel mode; let the API handle rate limiting.
+- **Thread safety**: `TokenTracker.record_usage()` is protected by an internal `threading.Lock`, so concurrent workers cannot corrupt token counts.
+- **Worker capping**: If `workers > page_count`, the executor is silently capped to the number of pages (logged at INFO level).
 
 ### Error Handling Pattern
 - **API Failures**: Automatic retries with exponential backoff in `TranslationService`
@@ -164,6 +181,11 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 
 ## Testing Without API Keys
 Use `python main.py --show-config` to validate professor configuration without making API calls.
+
+## Test Coverage Notes
+- **Parallel translation**: `tests/test_parallel_translation.py` — order correctness, context passing, temp file cleanup, worker capping, progressive-save warning, context-length splitting inside workers
+- **Parallel OCR**: `tests/test_parallel_ocr.py` — folder mode order, worker exceptions, multi-pass forwarding, worker capping, empty folder error
+- **Thread safety**: `tests/test_token_tracker.py::TestConcurrentRecordUsage` — 16 concurrent `record_usage()` calls, exact token count, call count, session history length
 
 ## Git Commit Workflow
 - A `.gitmessage` template exists at the repo root — always follow its format when writing commits:

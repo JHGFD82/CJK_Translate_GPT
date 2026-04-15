@@ -6,6 +6,8 @@ import os
 import sys
 from typing import Optional, List, Tuple, TypedDict, cast
 
+from tqdm import tqdm
+
 from ..config import get_api_key
 from ..errors import CLIError
 from ..models import OutputOptions
@@ -125,6 +127,7 @@ class SandboxProcessor:
         source_language: str,
         target_language: str,
         opts: OutputOptions,
+        workers: int = 1,
     ) -> List[str]:
         """Process text-based files (DOCX, TXT) with common logic."""
         logger.info(f"Processing {file_type.upper()} file: {os.path.basename(file_path)}")
@@ -148,6 +151,7 @@ class SandboxProcessor:
             target_language,
             opts,
             file_path,
+            workers=workers,
         )
 
     def translate_document(
@@ -158,6 +162,7 @@ class SandboxProcessor:
         page_nums: Optional[str] = None,
         abstract: bool = False,
         opts: OutputOptions = OutputOptions(),
+        workers: int = 1,
     ) -> None:
         """Translate a document file (PDF, Word document, or text file)."""
         file_path = os.path.abspath(file_path)
@@ -198,6 +203,7 @@ class SandboxProcessor:
                         target_language,
                         opts,
                         file_path,
+                        workers=workers,
                     )
             elif file_type in ('docx', 'txt'):
                 document_text = self._process_text_based_file(
@@ -208,6 +214,7 @@ class SandboxProcessor:
                     source_language,
                     target_language,
                     opts,
+                    workers=workers,
                 )
             else:
                 raise CLIError(f"Cannot translate file type '{file_type}'.")
@@ -304,9 +311,15 @@ class SandboxProcessor:
             logger.error(f"Error processing image: {e}", exc_info=True)
             raise CLIError(f"Error processing image: {e}") from e
 
-    def process_image_folder(self, folder_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, passes: int = 1) -> None:
-        """Process all images in a folder with OCR, printing each result and optionally saving combined output."""
+    def process_image_folder(self, folder_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, passes: int = 1, workers: int = 1) -> None:
+        """Process all images in a folder with OCR, printing each result and optionally saving combined output.
+
+        When ``workers > 1`` images are dispatched in parallel via a ThreadPoolExecutor.
+        Multi-pass OCR within each image always runs sequentially inside the worker.
+        Results are printed and assembled in the original sorted-filename order.
+        """
         from ..processors.constants import IMAGE_EXTENSIONS
+        from concurrent.futures import ThreadPoolExecutor, as_completed as futures_as_completed
 
         folder_path = os.path.abspath(folder_path)
         all_entries = sorted(os.listdir(folder_path))
@@ -322,29 +335,76 @@ class SandboxProcessor:
         logger.info(f"Processing {len(image_files)} image(s) in folder: {os.path.basename(folder_path)}")
         print(f"Found {len(image_files)} image(s) to process.\n")
 
-        combined_parts: List[str] = []
+        # --- sequential path ---
+        if workers <= 1:
+            combined_parts: List[str] = []
+            for idx, img_path in enumerate(image_files, start=1):
+                filename = os.path.basename(img_path)
+                print(f"[{idx}/{len(image_files)}] {filename}")
+                try:
+                    extracted_text = self.image_processor_service.process_image_ocr(
+                        img_path, target_language, output_format="console", vertical=vertical, passes=passes
+                    )
+                except Exception as e:
+                    logger.error(f"Error processing '{filename}': {e}", exc_info=True)
+                    print(f"  ERROR: {e}")
+                    extracted_text = f"[Error processing {filename}: {e}]"
 
-        for idx, img_path in enumerate(image_files, start=1):
-            filename = os.path.basename(img_path)
-            print(f"[{idx}/{len(image_files)}] {filename}")
-            try:
-                extracted_text = self.image_processor_service.process_image_ocr(
-                    img_path, target_language, output_format="console", vertical=vertical, passes=passes
+                print("\n=== Extracted Text ===")
+                print(extracted_text)
+                print("======================\n")
+                combined_parts.append(f"=== {filename} ===\n{extracted_text}")
+
+            if output_file:
+                self.file_output.save_translation_output(
+                    "\n\n".join(combined_parts), None, output_file, False,
+                    target_language, target_language,
                 )
-            except Exception as e:
-                logger.error(f"Error processing '{filename}': {e}", exc_info=True)
-                print(f"  ERROR: {e}")
-                extracted_text = f"[Error processing {filename}: {e}]"
+            return
 
+        # --- parallel path ---
+        actual_workers = min(workers, len(image_files))
+        if actual_workers < workers:
+            logger.info(f"OCR workers capped at {actual_workers} (folder has {len(image_files)} image(s))")
+
+        results_map: dict[int, tuple[str, str]] = {}  # index → (filename, extracted_text)
+
+        def _ocr_one(idx: int, img_path: str) -> tuple[int, str, str]:
+            filename = os.path.basename(img_path)
+            extracted = self.image_processor_service.process_image_ocr(
+                img_path, target_language, output_format="console", vertical=vertical, passes=passes
+            )
+            return idx, filename, extracted
+
+        with ThreadPoolExecutor(max_workers=actual_workers) as executor:
+            future_map = {
+                executor.submit(_ocr_one, i, path): i
+                for i, path in enumerate(image_files)
+            }
+            desc = f"Transcribing ({actual_workers} workers)... "
+            for future in tqdm(futures_as_completed(future_map), total=len(image_files), desc=desc, ascii=True):
+                orig_idx = future_map[future]
+                try:
+                    idx, filename, extracted_text = future.result()
+                    results_map[idx] = (filename, extracted_text)
+                except Exception as e:
+                    filename = os.path.basename(image_files[orig_idx])
+                    logger.error(f"Error processing '{filename}': {e}", exc_info=True)
+                    results_map[orig_idx] = (filename, f"[Error processing {filename}: {e}]")
+
+        # Print and assemble in sorted-filename (original) order
+        combined_parts_p: List[str] = []
+        for idx in range(len(image_files)):
+            filename, extracted_text = results_map[idx]
+            print(f"[{idx + 1}/{len(image_files)}] {filename}")
             print("\n=== Extracted Text ===")
             print(extracted_text)
             print("======================\n")
-
-            combined_parts.append(f"=== {filename} ===\n{extracted_text}")
+            combined_parts_p.append(f"=== {filename} ===\n{extracted_text}")
 
         if output_file:
             self.file_output.save_translation_output(
-                "\n\n".join(combined_parts), None, output_file, False,
+                "\n\n".join(combined_parts_p), None, output_file, False,
                 target_language, target_language,
             )
 
@@ -614,6 +674,7 @@ class SandboxProcessor:
             progressive_save=getattr(args, 'progressive_save', False),
             custom_font=getattr(args, 'custom_font', None),
         )
+        workers = getattr(args, 'workers', 1)
         if args.custom_text:
             self.translate_custom_text(
                 source_language,
@@ -629,6 +690,7 @@ class SandboxProcessor:
                 getattr(args, 'page_nums', None),
                 getattr(args, 'abstract', False),
                 opts,
+                workers=workers,
             )
         else:
             raise CLIError("No input specified. Use -i for file input or -c for custom text.")
@@ -671,11 +733,12 @@ class SandboxProcessor:
         output_file = getattr(args, 'output_file', None)
         vertical = getattr(args, 'vertical', False)
         passes = getattr(args, 'passes', 1)
+        workers = getattr(args, 'workers', 1)
         if passes < 1:
             raise CLIError("--passes must be at least 1.")
 
         if os.path.isdir(input_path):
-            self.process_image_folder(input_path, target_language, output_file, vertical=vertical, passes=passes)
+            self.process_image_folder(input_path, target_language, output_file, vertical=vertical, passes=passes, workers=workers)
         else:
             file_type = self._detect_and_validate_file(input_path)
             if file_type != 'image':

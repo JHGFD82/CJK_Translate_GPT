@@ -198,6 +198,34 @@ python main.py smith translate JK -i document.txt --progressive-save --auto-save
 
 **Note:** When using `--progressive-save`, the translation is saved incrementally as each page is processed, which helps prevent data loss if the process is interrupted. Progressive saving only supports text file output (.txt) - PDF and Word document output are not compatible with progressive saving.
 
+**Incompatible with parallel mode:** `--progressive-save` is automatically disabled (with a printed warning) when `-w/--workers` is greater than 1, because pages complete in non-deterministic order.
+
+### Parallel Processing
+Speed up translation of long documents and OCR of image folders by dispatching multiple pages or images simultaneously:
+
+```bash
+# Translate a PDF with 4 parallel workers
+python main.py heller translate CE -i document.pdf -w 4
+
+# Transcribe a folder of images with 4 parallel workers
+python main.py heller transcribe E -i ./scans/ -w 4
+
+# Parallel workers + output file
+python main.py heller translate CE -i large.docx -w 8 -o output.txt
+```
+
+**How parallel translation context works:** In sequential mode the previous page's *translation* is used as context for the next page. In parallel mode (workers > 1), each page instead receives the *untranslated source text* of the prior page, because translations are not available in order. For most documents this produces equivalent quality; for highly sequential content (e.g. numbered lists spanning many pages) sequential mode may be preferable.
+
+**Key behaviour notes:**
+- `words=1` (the default) is identical to the previous sequential behaviour
+- Result order is preserved: pages/images are always assembled in their original order regardless of which worker finishes first
+- Results are written to temp files during processing (RAM stays bounded for large documents)
+- The per-page delay (`PAGE_DELAY_SECONDS`) is removed in parallel mode; the API handles rate limiting
+- `context_length_exceeded` recursive splitting still works inside each parallel worker
+- For transcription, `-w` only applies when processing a *folder* of images; it is ignored for single-image input
+- The `prompt` command has no `-w` flag (it is always a single API call)
+- The easy-to-adjust default worker count lives in `src/services/constants.py` as `DEFAULT_PARALLEL_WORKERS`
+
 ### Error Handling and Retries
 The system includes robust error handling for API failures:
 

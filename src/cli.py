@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from .config import parse_language_code, parse_single_language_code, validate_page_nums
 from .errors import CLIError
 from .runtime import SandboxProcessor, handle_info_commands
+from .services.constants import DEFAULT_PARALLEL_WORKERS
 
 # Load environment variables
 load_dotenv()
@@ -91,12 +92,17 @@ Translation:
   python main.py heller translate CE -i doc.pdf -m gpt-4o       Use a specific model
   python main.py heller translate CE -i doc.pdf --dry-run       Preview prompt without API call
   python main.py heller translate CE -i doc.pdf -n              Append ad-hoc notes to prompt
+  python main.py heller translate CE -i doc.pdf -w 4            Translate 4 pages in parallel
+    Note: -w > 1 passes untranslated source text as context (not prior translation) and
+    disables --progressive-save. Each page's context_length_exceeded splitting still works.
 
 Transcription (OCR):
   python main.py heller transcribe E -i image.jpg
   python main.py heller transcribe E -i image.jpg -o output.txt
   python main.py heller transcribe E -i ./scans/                Folder of images (sorted by name)
   python main.py heller transcribe E -i ./scans/ -o combined.txt  Combine all results into one file
+  python main.py heller transcribe E -i ./scans/ -w 4           Process 4 images in parallel
+    Note: -w only applies to folder mode; ignored for single-image input.
   python main.py heller transcribe S -i scan.png                Simplified Chinese
   python main.py heller transcribe T -i scan.png                Traditional Chinese
   python main.py heller transcribe J -i scan.png                Japanese (kanji + kana)
@@ -205,6 +211,18 @@ Custom prompt:
         help='Save each page immediately (text output only)',
     )
     translate_parser.add_argument('-f', '--font', dest='custom_font', type=str, help='Custom font name (must be in fonts/)')
+    translate_parser.add_argument(
+        '-w', '--workers',
+        dest='workers',
+        type=int,
+        default=DEFAULT_PARALLEL_WORKERS,
+        metavar='N',
+        help=(
+            'Number of parallel translation workers (default: %(default)s). '
+            'Each page is sent as an independent API call. '
+            'Workers > 1 uses untranslated source text as context and disables progressive save.'
+        ),
+    )
     _add_common_flags(translate_parser)
     _add_notes_flags(translate_parser)
 
@@ -218,6 +236,17 @@ Custom prompt:
     transcribe_parser.add_argument('-i', '--input', dest='input_file', type=str, required=False, help='Input image file path, or a folder of images to process in order')
     transcribe_parser.add_argument('-v', '--vertical', dest='vertical', action='store_true', help='Text is predominantly vertical (top-to-bottom, right-to-left columns)')
     transcribe_parser.add_argument('-P', '--passes', dest='passes', type=int, default=1, metavar='N', help='Number of OCR passes (default: 1). Passes > 1 send the image and prior transcription back to the model for review and correction.')
+    transcribe_parser.add_argument(
+        '-w', '--workers',
+        dest='workers',
+        type=int,
+        default=DEFAULT_PARALLEL_WORKERS,
+        metavar='N',
+        help=(
+            'Number of parallel OCR workers when processing a folder of images (default: %(default)s). '
+            'Ignored for single-image input. Multi-pass OCR within each image always runs sequentially.'
+        ),
+    )
     _add_common_flags(transcribe_parser)
     _add_notes_flags(transcribe_parser)
 
