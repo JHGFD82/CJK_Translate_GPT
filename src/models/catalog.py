@@ -2,6 +2,8 @@
 
 import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -59,11 +61,24 @@ def load_model_catalog() -> Dict[str, Any]:
 
 
 def save_model_catalog(config: Dict[str, Any]) -> None:
-    """Save model catalog to file."""
+    """Save model catalog to file atomically.
+
+    Writes to a temp file in the same directory, then replaces the target
+    with os.replace() so readers never see a partially written file.
+    """
     catalog_file = get_model_catalog_path()
     catalog_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(catalog_file, "w") as f:
-        json.dump(config, f, indent=2)
+    fd, tmp_path = tempfile.mkstemp(dir=catalog_file.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(config, f, indent=2)
+        os.replace(tmp_path, catalog_file)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def get_available_models() -> List[str]:
