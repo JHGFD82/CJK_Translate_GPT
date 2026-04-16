@@ -369,8 +369,10 @@ class SandboxProcessor:
 
         results_map: dict[int, tuple[str, str]] = {}  # index → (filename, extracted_text)
 
-        # Warm the pricing cache on the main thread so workers share the fast path
+        # Warm the pricing cache on the main thread so workers share the fast path.
+        # Also suppress per-image/per-pass prints that would interleave with tqdm.
         self.image_processor_service._get_model()
+        self.image_processor_service._suppress_inline_print = True
 
         def _ocr_one(idx: int, img_path: str) -> tuple[int, str, str]:
             filename = os.path.basename(img_path)
