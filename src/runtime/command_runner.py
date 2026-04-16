@@ -18,6 +18,7 @@ from ..models import OutputOptions
 from ..processors.docx_processor import DocxProcessor
 from ..processors.pdf_processor import generate_process_text
 from ..processors.txt_processor import TxtProcessor
+from ..settings import DEFAULT_PAGE_SIZE
 
 if TYPE_CHECKING:
     from ..processors.image_processor import ImageProcessor
@@ -225,11 +226,11 @@ class _CommandMixin:
                         page_text_dr = self.pdf_processor.process_page(first_page) if first_page else "[no text found in PDF]"
                 elif file_type_dr == 'docx':
                     with open(file_path_dr, 'rb') as f:
-                        pages_dr = DocxProcessor.process_docx_with_pages(f, target_page_size=2000)
+                        pages_dr = DocxProcessor.process_docx_with_pages(f, target_page_size=DEFAULT_PAGE_SIZE)
                         page_text_dr = pages_dr[0] if pages_dr else "[no text found in document]"
                 elif file_type_dr == 'txt':
                     with open(file_path_dr, 'r', encoding='utf-8') as f:
-                        pages_dr = TxtProcessor.process_txt_with_pages(f, target_page_size=2000)
+                        pages_dr = TxtProcessor.process_txt_with_pages(f, target_page_size=DEFAULT_PAGE_SIZE)
                         page_text_dr = pages_dr[0] if pages_dr else "[no text found in file]"
                 else:
                     page_text_dr = f"[{source_language} text to translate]"

@@ -1,0 +1,39 @@
+# settings.toml — User-customizable runtime settings for PU AI Sandbox
+# Edit this file to change default behavior. Changes take effect on the next run.
+# Default models are in src/model_catalog.json under [config.defaults].
+
+[translation]
+temperature = 0.5          # 0.0 = fully deterministic, 2.0 = maximum creativity
+top_p = 0.5                # Nucleus sampling threshold (lower = more focused output)
+max_tokens = 4000          # Maximum response tokens (increase for very long pages)
+context_percentage = 0.65  # Fraction of the previous page passed as context (0.0–1.0)
+
+[ocr]
+temperature = 0.0          # Fully deterministic — reduces hallucination in transcription
+top_p = 0.1                # Very low to prevent the model from inventing characters
+max_tokens = 4000
+frequency_penalty = 0.5    # Penalizes repeating the same tokens
+presence_penalty = 0.3     # Encourages output diversity
+
+[image_translation]
+temperature = 0.3          # Slightly creative to handle ambiguous characters via context
+max_tokens = 8000          # Higher budget: output includes both transcript and translation
+
+[prompt]
+temperature = 0.7          # More creative than translation — suitable for open-ended prompts
+top_p = 1.0                # Full nucleus sampling
+max_tokens = 4000
+default_system_prompt = "You are a helpful assistant."
+
+[retry]
+page_delay_seconds = 3.0   # Seconds to pause between pages in sequential mode
+max_retries = 10           # Maximum retry attempts on transient errors or content filter
+base_retry_delay = 3.0     # Base seconds for exponential backoff (delay = base * 2^attempt)
+
+[processing]
+default_parallel_workers = 1  # Default -w/--workers value; 1 = sequential (safe default)
+default_ocr_passes = 1        # Default -P/--passes value; >1 enables multi-pass OCR refinement
+default_page_size = 2000      # Target characters per logical page when splitting DOCX/TXT files
+
+[budget]
+warning_threshold_pct = 80    # Warn when monthly spend exceeds this percentage of the limit

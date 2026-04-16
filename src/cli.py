@@ -10,6 +10,7 @@ from .config import parse_language_code, parse_single_language_code, validate_pa
 from .errors import CLIError
 from .runtime import SandboxProcessor, handle_info_commands
 from .services.constants import DEFAULT_PARALLEL_WORKERS
+from .settings import DEFAULT_OCR_PASSES
 
 # Load environment variables
 load_dotenv()
@@ -235,7 +236,7 @@ Custom prompt:
     )
     transcribe_parser.add_argument('-i', '--input', dest='input_file', type=str, required=False, help='Input image file path, or a folder of images to process in order')
     transcribe_parser.add_argument('-v', '--vertical', dest='vertical', action='store_true', help='Text is predominantly vertical (top-to-bottom, right-to-left columns)')
-    transcribe_parser.add_argument('-P', '--passes', dest='passes', type=int, default=1, metavar='N', help='Number of OCR passes (default: 1). Passes > 1 send the image and prior transcription back to the model for review and correction.')
+    transcribe_parser.add_argument('-P', '--passes', dest='passes', type=int, default=DEFAULT_OCR_PASSES, metavar='N', help='Number of OCR passes (default: 1). Passes > 1 send the image and prior transcription back to the model for review and correction.')
     transcribe_parser.add_argument(
         '-w', '--workers',
         dest='workers',

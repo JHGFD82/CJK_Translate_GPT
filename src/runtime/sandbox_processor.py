@@ -16,6 +16,7 @@ from ..processors.docx_processor import DocxProcessor
 from ..processors.image_processor import ImageProcessor
 from ..processors.pdf_processor import PDFProcessor
 from ..processors.txt_processor import TxtProcessor
+from ..settings import DEFAULT_PAGE_SIZE
 from ..services.image_processor_service import ImageProcessorService
 from ..services.image_translation_service import ImageTranslationService
 from ..services.parallel_utils import tqdm_logging, update_pbar_postfix
@@ -147,11 +148,11 @@ class SandboxProcessor(_CommandMixin):
 
         if file_type == 'docx':
             with open(file_path, 'rb') as f:
-                pages = DocxProcessor.process_docx_with_pages(f, target_page_size=2000)
+                pages = DocxProcessor.process_docx_with_pages(f, target_page_size=DEFAULT_PAGE_SIZE)
                 pages = self._handle_page_range(pages, page_nums, "Word document")
         elif file_type == 'txt':
             with open(file_path, 'r', encoding='utf-8') as f:
-                pages = TxtProcessor.process_txt_with_pages(f, target_page_size=2000)
+                pages = TxtProcessor.process_txt_with_pages(f, target_page_size=DEFAULT_PAGE_SIZE)
                 pages = self._handle_page_range(pages, page_nums, "text file")
         else:
             raise ValueError(f"Unsupported text file type: {file_type}")

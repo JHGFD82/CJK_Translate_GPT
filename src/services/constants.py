@@ -1,12 +1,13 @@
 """Shared constants for all service modules (rate limiting, retry behaviour, script guidance)."""
 
-# Rate limiting and retry configuration
-PAGE_DELAY_SECONDS: float = 3.0  # Delay between pages to prevent content filter triggers
-MAX_RETRIES: int = 10            # Maximum retries for content filter / transient errors
-BASE_RETRY_DELAY: float = 3.0   # Base delay (seconds) for exponential backoff
+from ..settings import (
+    PAGE_DELAY_SECONDS,
+    MAX_RETRIES,
+    BASE_RETRY_DELAY,
+    DEFAULT_PARALLEL_WORKERS,
+)
 
-# Parallelism — easy-to-adjust default worker count for -w/--workers flag
-DEFAULT_PARALLEL_WORKERS: int = 1  # 1 = sequential (safe default); raise to fan out pages
+__all__ = ["PAGE_DELAY_SECONDS", "MAX_RETRIES", "BASE_RETRY_DELAY", "DEFAULT_PARALLEL_WORKERS"]
 
 # Per-language script guidance for OCR prompts (transcribe command)
 OCR_SCRIPT_GUIDANCE: dict[str, str] = {

@@ -13,6 +13,7 @@ from ..models.catalog import (
     get_monthly_limit, save_model_catalog,
 )
 from ..console import print_banner, print_subsection
+from ..settings import BUDGET_WARNING_THRESHOLD
 
 
 # Constants
@@ -311,7 +312,7 @@ class TokenTracker:
             "usage_percentage": usage_pct,
             "remaining_budget": remaining,
             "is_exceeded": monthly_usage["total_cost"] >= self.monthly_limit,
-            "approaching_limit": usage_pct > 80,
+            "approaching_limit": usage_pct > BUDGET_WARNING_THRESHOLD,
         }
 
     def print_usage_report(self, month: Optional[str] = None, include_all_time: bool = False):

@@ -12,12 +12,12 @@ from .api_errors import handle_api_errors
 from .base_service import BaseService
 
 
-DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
-
-# API parameters for general-purpose prompts
-PROMPT_MAX_TOKENS: int = 4000
-PROMPT_TEMPERATURE: float = 0.7
-PROMPT_TOP_P: float = 1.0
+from ..settings import (
+    DEFAULT_SYSTEM_PROMPT,
+    PROMPT_MAX_TOKENS,
+    PROMPT_TEMPERATURE,
+    PROMPT_TOP_P,
+)
 
 
 class PromptService(BaseService):
