@@ -41,6 +41,17 @@ class PromptService(BaseService):
         maybe_sync_model_pricing(model)
         return model
 
+    def build_prompts(
+        self,
+        user_prompt: str,
+        system_prompt: Optional[str] = None,
+    ) -> tuple[str, str]:
+        """Return (system_prompt, user_prompt) without calling the API.
+
+        Used by --dry-run mode to preview what would be sent to the model.
+        """
+        return system_prompt or DEFAULT_SYSTEM_PROMPT, user_prompt
+
     def _call_api(self, model: str, system_role: str, system_prompt: str, user_prompt: str) -> Any:
         """Call the API with parameters appropriate for the given model."""
         temperature = self.custom_temperature if self.custom_temperature is not None else PROMPT_TEMPERATURE
@@ -56,17 +67,6 @@ class PromptService(BaseService):
             model, messages, max_tokens,
             temperature=temperature, top_p=top_p,
         )
-
-    def build_prompts(
-        self,
-        user_prompt: str,
-        system_prompt: Optional[str] = None,
-    ) -> tuple[str, str]:
-        """Return (system_prompt, user_prompt) without calling the API.
-
-        Used by --dry-run mode to preview what would be sent to the model.
-        """
-        return system_prompt or DEFAULT_SYSTEM_PROMPT, user_prompt
 
     def send_prompt(
         self,
