@@ -2,6 +2,7 @@
 
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed as futures_as_completed
 from typing import Optional, List, Tuple, TypedDict
 
 from tqdm import tqdm
@@ -10,19 +11,30 @@ from ..config import get_api_key
 from ..errors import CLIError
 from ..models import OutputOptions
 from ..output.file_output import FileOutputHandler
+from ..processors.constants import IMAGE_EXTENSIONS
 from ..processors.docx_processor import DocxProcessor
 from ..processors.image_processor import ImageProcessor
 from ..processors.pdf_processor import PDFProcessor
 from ..processors.txt_processor import TxtProcessor
 from ..services.image_processor_service import ImageProcessorService
 from ..services.image_translation_service import ImageTranslationService
-from ..services.parallel_utils import tqdm_logging
+from ..services.parallel_utils import tqdm_logging, update_pbar_postfix
 from ..services.prompt_service import PromptService
 from ..services.translation_service import TranslationService
 from ..tracking.token_tracker import TokenTracker
 from .command_runner import _CommandMixin
 
 logger = logging.getLogger(__name__)
+
+
+def _collect_image_files(folder_path: str) -> List[str]:
+    """Return sorted absolute paths of image files in *folder_path*."""
+    return [
+        os.path.join(folder_path, name)
+        for name in sorted(os.listdir(folder_path))
+        if name.lower().endswith(IMAGE_EXTENSIONS)
+        and os.path.isfile(os.path.join(folder_path, name))
+    ]
 
 
 class _SvcKwargs(TypedDict, total=False):
@@ -318,16 +330,8 @@ class SandboxProcessor(_CommandMixin):
         Multi-pass OCR within each image always runs sequentially inside the worker.
         Results are printed and assembled in the original sorted-filename order.
         """
-        from ..processors.constants import IMAGE_EXTENSIONS
-        from concurrent.futures import ThreadPoolExecutor, as_completed as futures_as_completed
-
         folder_path = os.path.abspath(folder_path)
-        all_entries = sorted(os.listdir(folder_path))
-        image_files = [
-            os.path.join(folder_path, name)
-            for name in all_entries
-            if name.lower().endswith(IMAGE_EXTENSIONS) and os.path.isfile(os.path.join(folder_path, name))
-        ]
+        image_files = _collect_image_files(folder_path)
 
         if not image_files:
             raise CLIError(f"No image files found in folder '{folder_path}'.")
@@ -401,12 +405,7 @@ class SandboxProcessor(_CommandMixin):
                             filename = os.path.basename(image_files[orig_idx])
                             logger.error(f"Error processing '{filename}': {e}", exc_info=True)
                             results_map[orig_idx] = (filename, f"[Error processing {filename}: {e}]")
-                        try:
-                            run_tokens = int(self.token_tracker.usage_data["total_usage"].get("total_tokens", 0)) - int(baseline_tokens)
-                            run_cost = float(self.token_tracker.usage_data["total_usage"].get("total_cost", 0.0)) - float(baseline_cost)
-                            pbar.set_postfix(tokens=f"{run_tokens:,}", cost=f"${run_cost:.4f}")
-                        except (TypeError, ValueError):
-                            pass
+                        update_pbar_postfix(pbar, self.token_tracker.usage_data, baseline_tokens, baseline_cost)
                         pbar.update(1)
 
         # Print and assemble in sorted-filename (original) order
@@ -481,16 +480,8 @@ class SandboxProcessor(_CommandMixin):
         When ``workers > 1`` images are dispatched in parallel via a ThreadPoolExecutor.
         Results are printed and assembled in sorted-filename order after all workers finish.
         """
-        from ..processors.constants import IMAGE_EXTENSIONS
-        from concurrent.futures import ThreadPoolExecutor, as_completed as futures_as_completed
-
         folder_path = os.path.abspath(folder_path)
-        all_entries = sorted(os.listdir(folder_path))
-        image_files = [
-            os.path.join(folder_path, name)
-            for name in all_entries
-            if name.lower().endswith(IMAGE_EXTENSIONS) and os.path.isfile(os.path.join(folder_path, name))
-        ]
+        image_files = _collect_image_files(folder_path)
 
         if not image_files:
             raise CLIError(f"No image files found in folder '{folder_path}'.")
@@ -565,12 +556,7 @@ class SandboxProcessor(_CommandMixin):
                             filename = os.path.basename(image_files[orig_idx])
                             logger.error(f"Error processing '{filename}': {e}", exc_info=True)
                             results_map[orig_idx] = (filename, "", f"[Error processing {filename}: {e}]")
-                        try:
-                            run_tokens = int(self.token_tracker.usage_data["total_usage"].get("total_tokens", 0)) - int(baseline_tokens)
-                            run_cost = float(self.token_tracker.usage_data["total_usage"].get("total_cost", 0.0)) - float(baseline_cost)
-                            pbar.set_postfix(tokens=f"{run_tokens:,}", cost=f"${run_cost:.4f}")
-                        except (TypeError, ValueError):
-                            pass
+                        update_pbar_postfix(pbar, self.token_tracker.usage_data, baseline_tokens, baseline_cost)
                         pbar.update(1)
 
         # Print and assemble in sorted-filename (original) order

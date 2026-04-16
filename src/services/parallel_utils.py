@@ -2,7 +2,7 @@
 
 import logging
 from contextlib import contextmanager
-from typing import Generator
+from typing import Any, Dict, Generator
 
 from tqdm import tqdm
 
@@ -43,3 +43,22 @@ def tqdm_logging() -> Generator[None, None, None]:
         root_logger.removeHandler(handler)
         for h in existing_handlers:
             root_logger.addHandler(h)
+
+
+def update_pbar_postfix(
+    pbar: tqdm,
+    usage_data: Dict[str, Any],
+    baseline_tokens: Any,
+    baseline_cost: Any,
+) -> None:
+    """Update a tqdm progress bar postfix with run-so-far token/cost counts.
+
+    Silently does nothing if the values cannot be converted (e.g. None on
+    first call before any usage has been recorded).
+    """
+    try:
+        run_tokens = int(usage_data["total_usage"].get("total_tokens", 0)) - int(baseline_tokens)
+        run_cost = float(usage_data["total_usage"].get("total_cost", 0.0)) - float(baseline_cost)
+        pbar.set_postfix(tokens=f"{run_tokens:,}", cost=f"${run_cost:.4f}")
+    except (TypeError, ValueError):
+        pass
