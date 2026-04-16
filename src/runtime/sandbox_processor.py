@@ -492,6 +492,155 @@ class SandboxProcessor:
                 opts.custom_font,
             )
 
+    def process_image_translation_folder(
+        self,
+        folder_path: str,
+        source_language: str,
+        target_language: str,
+        opts: OutputOptions = OutputOptions(),
+        workers: int = 1,
+    ) -> None:
+        """Translate all images in a folder using the combined OCR+translation service.
+
+        When ``workers > 1`` images are dispatched in parallel via a ThreadPoolExecutor.
+        Results are printed and assembled in sorted-filename order after all workers finish.
+        """
+        from ..processors.constants import IMAGE_EXTENSIONS
+        from concurrent.futures import ThreadPoolExecutor, as_completed as futures_as_completed
+
+        folder_path = os.path.abspath(folder_path)
+        all_entries = sorted(os.listdir(folder_path))
+        image_files = [
+            os.path.join(folder_path, name)
+            for name in all_entries
+            if name.lower().endswith(IMAGE_EXTENSIONS) and os.path.isfile(os.path.join(folder_path, name))
+        ]
+
+        if not image_files:
+            raise CLIError(f"No image files found in folder '{folder_path}'.")
+
+        logger.info(f"Processing {len(image_files)} image(s) in folder: {os.path.basename(folder_path)}")
+        print(f"Found {len(image_files)} image(s) to translate.\n")
+
+        # --- sequential path ---
+        if workers <= 1:
+            combined_parts: List[str] = []
+            for idx, img_path in enumerate(image_files, start=1):
+                filename = os.path.basename(img_path)
+                print(f"[{idx}/{len(image_files)}] {filename}")
+                try:
+                    transcript, translation = self.image_translation_service.process_image_translation(
+                        img_path, source_language, target_language
+                    )
+                except Exception as e:
+                    logger.error(f"Error processing '{filename}': {e}", exc_info=True)
+                    print(f"  ERROR: {e}")
+                    transcript, translation = "", f"[Error processing {filename}: {e}]"
+                if transcript:
+                    print("\n=== Transcript ===")
+                    print(transcript)
+                    print("==================\n")
+                print("\n=== Translation ===")
+                print(translation)
+                print("===================\n")
+                combined_parts.append(f"=== {filename} ===\n{translation}")
+            if opts.output_file or opts.auto_save:
+                self.file_output.save_translation_output(
+                    "\n\n".join(combined_parts), None, opts.output_file, opts.auto_save,
+                    source_language, target_language, opts.custom_font,
+                )
+            return
+
+        # --- parallel path ---
+        actual_workers = min(workers, len(image_files))
+        if actual_workers < workers:
+            logger.info(f"Image translation workers capped at {actual_workers} (folder has {len(image_files)} image(s))")
+
+        results_map: dict[int, tuple[str, str, str]] = {}  # index → (filename, transcript, translation)
+
+        # Warm pricing cache and suppress per-image prints before dispatching workers
+        self.image_translation_service._get_model()
+        self.image_translation_service._suppress_inline_print = True
+
+        def _translate_one(idx: int, img_path: str) -> tuple[int, str, str, str]:
+            filename = os.path.basename(img_path)
+            transcript, translation = self.image_translation_service.process_image_translation(
+                img_path, source_language, target_language
+            )
+            return idx, filename, transcript, translation
+
+        import logging as _logging
+
+        class _TqdmLoggingHandler(_logging.Handler):
+            def emit(self, record: _logging.LogRecord) -> None:
+                try:
+                    tqdm.write(self.format(record))
+                except Exception:
+                    self.handleError(record)
+
+        root_logger = _logging.getLogger()
+        tqdm_handler = _TqdmLoggingHandler()
+        tqdm_handler.setFormatter(_logging.Formatter(
+            fmt="%(asctime)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S,%f"[:-3],
+        ))
+        existing_handlers = root_logger.handlers[:]
+        for h in existing_handlers:
+            root_logger.removeHandler(h)
+        root_logger.addHandler(tqdm_handler)
+
+        baseline_tokens = self.token_tracker.usage_data["total_usage"].get("total_tokens", 0)
+        baseline_cost = self.token_tracker.usage_data["total_usage"].get("total_cost", 0.0)
+
+        try:
+            with ThreadPoolExecutor(max_workers=actual_workers) as executor:
+                future_map = {
+                    executor.submit(_translate_one, i, path): i
+                    for i, path in enumerate(image_files)
+                }
+                desc = f"Translating ({actual_workers} workers)... "
+                with tqdm(total=len(image_files), desc=desc, ascii=True) as pbar:
+                    for future in futures_as_completed(future_map):
+                        orig_idx = future_map[future]
+                        try:
+                            idx, filename, transcript, translation = future.result()
+                            results_map[idx] = (filename, transcript, translation)
+                        except Exception as e:
+                            filename = os.path.basename(image_files[orig_idx])
+                            logger.error(f"Error processing '{filename}': {e}", exc_info=True)
+                            results_map[orig_idx] = (filename, "", f"[Error processing {filename}: {e}]")
+                        try:
+                            run_tokens = int(self.token_tracker.usage_data["total_usage"].get("total_tokens", 0)) - int(baseline_tokens)
+                            run_cost = float(self.token_tracker.usage_data["total_usage"].get("total_cost", 0.0)) - float(baseline_cost)
+                            pbar.set_postfix(tokens=f"{run_tokens:,}", cost=f"${run_cost:.4f}")
+                        except (TypeError, ValueError):
+                            pass
+                        pbar.update(1)
+        finally:
+            root_logger.removeHandler(tqdm_handler)
+            for h in existing_handlers:
+                root_logger.addHandler(h)
+
+        # Print and assemble in sorted-filename (original) order
+        combined_parts_p: List[str] = []
+        for idx in range(len(image_files)):
+            filename, transcript, translation = results_map[idx]
+            print(f"[{idx + 1}/{len(image_files)}] {filename}")
+            if transcript:
+                print("\n=== Transcript ===")
+                print(transcript)
+                print("==================\n")
+            print("\n=== Translation ===")
+            print(translation)
+            print("===================\n")
+            combined_parts_p.append(f"=== {filename} ===\n{translation}")
+
+        if opts.output_file or opts.auto_save:
+            self.file_output.save_translation_output(
+                "\n\n".join(combined_parts_p), None, opts.output_file, opts.auto_save,
+                source_language, target_language, opts.custom_font,
+            )
+
     def process_prompt(
         self,
         user_prompt: str,
@@ -724,15 +873,25 @@ class SandboxProcessor:
                 opts,
             )
         elif args.input_file:
-            self.translate_document(
-                args.input_file,
-                source_language,
-                target_language,
-                getattr(args, 'page_nums', None),
-                getattr(args, 'abstract', False),
-                opts,
-                workers=workers,
-            )
+            input_path = os.path.abspath(args.input_file)
+            if os.path.isdir(input_path):
+                self.process_image_translation_folder(
+                    input_path,
+                    source_language,
+                    target_language,
+                    opts,
+                    workers=workers,
+                )
+            else:
+                self.translate_document(
+                    args.input_file,
+                    source_language,
+                    target_language,
+                    getattr(args, 'page_nums', None),
+                    getattr(args, 'abstract', False),
+                    opts,
+                    workers=workers,
+                )
         else:
             raise CLIError("No input specified. Use -i for file input or -c for custom text.")
 
