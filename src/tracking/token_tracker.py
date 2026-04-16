@@ -12,6 +12,7 @@ from ..models.catalog import (
     load_model_catalog, get_model_pricing, get_pricing_unit,
     get_monthly_limit, save_model_catalog,
 )
+from ..console import print_banner, print_subsection
 
 
 # Constants
@@ -337,27 +338,22 @@ class TokenTracker:
                 arc = json.load(f)
 
             total = arc["total_usage"]
-            print("\n" + "=" * 60)
-            print(f"TOKEN USAGE REPORT - PROFESSOR {self.professor.upper()}")
-            print("=" * 60)
-            print(f"\nArchived Month ({month}):")
-            print("-" * 40)
+            print_banner(f"TOKEN USAGE REPORT - PROFESSOR {self.professor.upper()}")
+            print_subsection(f"Archived Month ({month})")
             print(f"Total Tokens Used: {total['total_tokens']:,}")
             print(f"  • Input Tokens:  {total['total_input_tokens']:,}")
             print(f"  • Output Tokens: {total['total_output_tokens']:,}")
             print(f"Total Cost: ${total['total_cost']:.4f}")
             print(f"API Calls:  {total['call_count']}")
 
-            print("\nModel Breakdown:")
-            print("-" * 40)
+            print_subsection("Model Breakdown")
             for mdl, data in arc.get("model_usage", {}).items():
                 print(f"{mdl}:")
                 print(f"  • Calls:  {data['call_count']}")
                 print(f"  • Tokens: {data['total_tokens']:,}")
                 print(f"  • Cost:   ${data['total_cost']:.4f}")
 
-            print("\nDaily Breakdown:")
-            print("-" * 40)
+            print_subsection("Daily Breakdown")
             for day in sorted(arc.get("daily_usage", {}).keys()):
                 d = arc["daily_usage"][day]
                 calls = d.get("call_count", "?")
@@ -369,19 +365,14 @@ class TokenTracker:
         # ── Current month report ───────────────────────────────────
         monthly_total = self.usage_data["total_usage"]
 
-        print("\n" + "=" * 60)
-        print(f"TOKEN USAGE REPORT - PROFESSOR {self.professor.upper()}")
-        print("=" * 60)
-
-        print(f"\nCurrent Month ({current_month}):")
-        print("-" * 40)
+        print_banner(f"TOKEN USAGE REPORT - PROFESSOR {self.professor.upper()}")
+        print_subsection(f"Current Month ({current_month})")
         print(f"Total Tokens Used: {monthly_total['total_tokens']:,}")
         print(f"  • Input Tokens:  {monthly_total['total_input_tokens']:,}")
         print(f"  • Output Tokens: {monthly_total['total_output_tokens']:,}")
         print(f"Total Cost: ${monthly_total['total_cost']:.4f}")
 
-        print("\nModel Breakdown (this month):")
-        print("-" * 40)
+        print_subsection("Model Breakdown (this month)")
         for model, data in self.usage_data["model_usage"].items():
             print(f"{model}:")
             print(f"  • Calls:  {data['call_count']}")
@@ -391,15 +382,13 @@ class TokenTracker:
         # Today's usage
         today_usage = self.get_daily_usage()
         if today_usage["total_tokens"] > 0:
-            print(f"\nToday's Usage ({self._get_current_date()}):")
-            print("-" * 40)
+            print_subsection(f"Today's Usage ({self._get_current_date()})")
             print(f"Tokens: {today_usage['total_tokens']:,}")
             print(f"Cost:   ${today_usage['total_cost']:.4f}")
 
         # Monthly budget
         budget_status = self._get_monthly_budget_status()
-        print(f"\nMonthly Budget ({current_month}):")
-        print("-" * 40)
+        print_subsection(f"Monthly Budget ({current_month})")
         print(f"Monthly Limit: ${self.monthly_limit:.2f}")
         print(f"Used:          ${monthly_total['total_cost']:.4f} ({budget_status['usage_percentage']:.1f}%)")
         print(f"Remaining:     ${budget_status['remaining_budget']:.2f}")
@@ -414,8 +403,7 @@ class TokenTracker:
             archived = self.list_archived_months()
             if archived:
                 all_time = self.get_all_time_usage()
-                print(f"\nAll-Time Totals (across {len(archived)} archived month(s) + current):")
-                print("-" * 40)
+                print_subsection(f"All-Time Totals (across {len(archived)} archived month(s) + current)")
                 print(f"Total Tokens: {all_time['total_tokens']:,}")
                 print(f"  • Input:    {all_time['total_input_tokens']:,}")
                 print(f"  • Output:   {all_time['total_output_tokens']:,}")

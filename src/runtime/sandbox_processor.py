@@ -23,7 +23,7 @@ from ..services.prompt_service import PromptService
 from ..services.translation_service import TranslationService
 from ..tracking.token_tracker import TokenTracker
 from .command_runner import _CommandMixin
-from .console import print_section
+from ..console import print_section
 
 logger = logging.getLogger(__name__)
 
