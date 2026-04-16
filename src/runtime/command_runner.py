@@ -11,13 +11,21 @@ import argparse
 import logging
 import os
 import sys
-from typing import Optional, Tuple, cast
+from typing import TYPE_CHECKING, Optional, Tuple, cast
 
 from ..errors import CLIError
 from ..models import OutputOptions
 from ..processors.docx_processor import DocxProcessor
 from ..processors.pdf_processor import generate_process_text
 from ..processors.txt_processor import TxtProcessor
+
+if TYPE_CHECKING:
+    from ..processors.image_processor import ImageProcessor
+    from ..processors.pdf_processor import PDFProcessor
+    from ..services.image_processor_service import ImageProcessorService
+    from ..services.image_translation_service import ImageTranslationService
+    from ..services.prompt_service import PromptService
+    from ..services.translation_service import TranslationService
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +36,89 @@ class _CommandMixin:
     All instance-method references to ``self.*`` resolve on the concrete
     ``SandboxProcessor`` subclass via normal Python MRO.
     """
+
+    if TYPE_CHECKING:
+        # Attributes and processing methods provided by the SandboxProcessor subclass.
+        image_processor: "ImageProcessor"
+        image_translation_service: "ImageTranslationService"
+        translation_service: "TranslationService"
+        image_processor_service: "ImageProcessorService"
+        pdf_processor: "PDFProcessor"
+        prompt_service: "PromptService"
+
+        def _detect_and_validate_file(self, file_path: str) -> str: ...
+        def translate_custom_text(self, source_language: str, target_language: str, abstract: bool, opts: OutputOptions) -> None: ...
+        def process_image_translation_folder(self, folder_path: str, source_language: str, target_language: str, opts: OutputOptions, workers: int = ...) -> None: ...
+        def translate_document(self, file_path: str, source_language: str, target_language: str, page_nums: Optional[str], abstract: bool, opts: OutputOptions, workers: int = ...) -> None: ...
+        def process_image_folder(self, folder_path: str, target_language: str, output_file: Optional[str] = ..., vertical: bool = ..., passes: int = ..., workers: int = ...) -> None: ...
+        def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = ..., vertical: bool = ..., passes: int = ...) -> None: ...
+        def process_prompt(self, user_prompt: str, system_prompt: Optional[str] = ..., output_file: Optional[str] = ...) -> None: ...
+
+    @staticmethod
+    def _collect_multiline(label: str) -> str:
+        """Print a prompt label and collect lines until '---' or EOF."""
+        print(f"{label} (type --- on its own line when done):")
+        lines: list[str] = []
+        while True:
+            try:
+                line = input()
+                if line.strip() == '---':
+                    break
+                lines.append(line)
+            except EOFError:
+                break
+        return '\n'.join(lines)
+
+    @staticmethod
+    def _collect_notes(
+        system_prompt: Optional[str] = None,
+        user_prompt: Optional[str] = None,
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """Optionally display the current prompts, then collect note text to append.
+
+        If *system_prompt* or *user_prompt* are provided they are shown before
+        the question so the user has context for what they are annotating.
+
+        Options:
+          system   — one note appended to the system prompt only
+          user     — one note appended to the user prompt only
+          both     — the same note appended to both prompts
+          separate — different notes collected individually for system then user
+        """
+        if system_prompt is not None or user_prompt is not None:
+            sep = "-" * 70
+            print(f"\n{sep}")
+            print("  CURRENT PROMPTS  (your notes will be appended to these)")
+            print(sep)
+            if system_prompt is not None:
+                print("\n--- SYSTEM PROMPT ---")
+                print(system_prompt)
+            if user_prompt is not None:
+                print("\n--- USER PROMPT ---")
+                print(user_prompt)
+            print(f"\n{sep}\n")
+
+        while True:
+            try:
+                target = input("Add notes to (system / user / both / separate): ").strip().lower()
+            except EOFError:
+                return None, None
+            if target in ('system', 'user', 'both', 'separate'):
+                break
+            print("Please enter 'system', 'user', 'both', or 'separate'.")
+
+        if target == 'separate':
+            system_note = _CommandMixin._collect_multiline("System note") or None
+            user_note   = _CommandMixin._collect_multiline("User note")   or None
+            return system_note, user_note
+
+        note_text = _CommandMixin._collect_multiline("Notes")
+        if not note_text.strip():
+            return None, None
+
+        system_note = note_text if target in ('system', 'both') else None
+        user_note   = note_text if target in ('user',   'both') else None
+        return system_note, user_note
 
     @staticmethod
     def _dry_run_display(model: str, system_prompt: str, user_prompt: str, note: Optional[str] = None) -> None:
