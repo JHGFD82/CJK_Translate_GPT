@@ -64,7 +64,8 @@ def list_available_models() -> None:
     models = config["models"]
     pricing_unit = get_pricing_unit()
 
-    print("\n=== Available Models ===")
+    bar = "=== Available Models ==="
+    print(f"\n{bar}")
     print(f"Pricing is per {pricing_unit:,} tokens\n")
 
     for model_name, pricing in sorted(models.items()):
@@ -74,6 +75,7 @@ def list_available_models() -> None:
         print(f"  Input:  ${pricing['input']:.3f}")
         print(f"  Output: ${pricing['output']:.3f}")
         print()
+    print("=" * len(bar) + "\n")
 
 
 def _print_daily_usage(token_tracker: TokenTracker, professor_name: str, date: Optional[str] = None) -> None:

@@ -23,6 +23,7 @@ from ..services.prompt_service import PromptService
 from ..services.translation_service import TranslationService
 from ..tracking.token_tracker import TokenTracker
 from .command_runner import _CommandMixin
+from .console import print_section
 
 logger = logging.getLogger(__name__)
 
@@ -326,13 +327,9 @@ class SandboxProcessor(_CommandMixin):
         )
 
         if transcript:
-            print("\n=== Transcript ===")
-            print(transcript)
-            print("==================\n")
+            print_section("Transcript", transcript)
 
-        print("\n=== Translation ===")
-        print(translation)
-        print("===================\n")
+        print_section("Translation", translation)
 
         if opts.output_file or opts.auto_save:
             self.file_output.save_translation_output(
@@ -382,12 +379,8 @@ class SandboxProcessor(_CommandMixin):
                     print(f"  ERROR: {e}")
                     transcript, translation = "", f"[Error processing {filename}: {e}]"
                 if transcript:
-                    print("\n=== Transcript ===")
-                    print(transcript)
-                    print("==================\n")
-                print("\n=== Translation ===")
-                print(translation)
-                print("===================\n")
+                    print_section("Transcript", transcript)
+                print_section("Translation", translation)
                 combined_parts.append(f"=== {filename} ===\n{translation}")
             if opts.output_file or opts.auto_save:
                 self.file_output.save_translation_output(
@@ -443,12 +436,8 @@ class SandboxProcessor(_CommandMixin):
             filename, transcript, translation = results_map[idx]
             print(f"[{idx + 1}/{len(image_files)}] {filename}")
             if transcript:
-                print("\n=== Transcript ===")
-                print(transcript)
-                print("==================\n")
-            print("\n=== Translation ===")
-            print(translation)
-            print("===================\n")
+                print_section("Transcript", transcript)
+            print_section("Translation", translation)
             combined_parts_p.append(f"=== {filename} ===\n{translation}")
 
         if opts.output_file or opts.auto_save:
@@ -464,9 +453,7 @@ class SandboxProcessor(_CommandMixin):
         try:
             extracted_text = self.image_processor_service.process_image_ocr(file_path, target_language, output_format="console", vertical=vertical, passes=passes)
 
-            print("\n=== Extracted Text ===")
-            print(extracted_text)
-            print("======================\n")
+            print_section("Extracted Text", extracted_text)
 
             if output_file:
                 self.file_output.save_translation_output(
@@ -509,9 +496,7 @@ class SandboxProcessor(_CommandMixin):
                     print(f"  ERROR: {e}")
                     extracted_text = f"[Error processing {filename}: {e}]"
 
-                print("\n=== Extracted Text ===")
-                print(extracted_text)
-                print("======================\n")
+                print_section("Extracted Text", extracted_text)
                 combined_parts.append(f"=== {filename} ===\n{extracted_text}")
 
             if output_file:
@@ -568,9 +553,7 @@ class SandboxProcessor(_CommandMixin):
         for idx in range(len(image_files)):
             filename, extracted_text = results_map[idx]
             print(f"[{idx + 1}/{len(image_files)}] {filename}")
-            print("\n=== Extracted Text ===")
-            print(extracted_text)
-            print("======================\n")
+            print_section("Extracted Text", extracted_text)
             combined_parts_p.append(f"=== {filename} ===\n{extracted_text}")
 
         if output_file:
