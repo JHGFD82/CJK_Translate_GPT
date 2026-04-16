@@ -369,6 +369,9 @@ class SandboxProcessor:
 
         results_map: dict[int, tuple[str, str]] = {}  # index → (filename, extracted_text)
 
+        # Warm the pricing cache on the main thread so workers share the fast path
+        self.image_processor_service._get_model()
+
         def _ocr_one(idx: int, img_path: str) -> tuple[int, str, str]:
             filename = os.path.basename(img_path)
             extracted = self.image_processor_service.process_image_ocr(
@@ -376,21 +379,57 @@ class SandboxProcessor:
             )
             return idx, filename, extracted
 
-        with ThreadPoolExecutor(max_workers=actual_workers) as executor:
-            future_map = {
-                executor.submit(_ocr_one, i, path): i
-                for i, path in enumerate(image_files)
-            }
-            desc = f"Transcribing ({actual_workers} workers)... "
-            for future in tqdm(futures_as_completed(future_map), total=len(image_files), desc=desc, ascii=True):
-                orig_idx = future_map[future]
+        import logging as _logging
+
+        class _TqdmLoggingHandler(_logging.Handler):
+            def emit(self, record: _logging.LogRecord) -> None:
                 try:
-                    idx, filename, extracted_text = future.result()
-                    results_map[idx] = (filename, extracted_text)
-                except Exception as e:
-                    filename = os.path.basename(image_files[orig_idx])
-                    logger.error(f"Error processing '{filename}': {e}", exc_info=True)
-                    results_map[orig_idx] = (filename, f"[Error processing {filename}: {e}]")
+                    tqdm.write(self.format(record))
+                except Exception:
+                    self.handleError(record)
+
+        root_logger = _logging.getLogger()
+        tqdm_handler = _TqdmLoggingHandler()
+        tqdm_handler.setFormatter(_logging.Formatter(
+            fmt="%(asctime)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S,%f"[:-3],
+        ))
+        existing_handlers = root_logger.handlers[:]
+        for h in existing_handlers:
+            root_logger.removeHandler(h)
+        root_logger.addHandler(tqdm_handler)
+
+        baseline_tokens = self.token_tracker.usage_data["total_usage"].get("total_tokens", 0)
+        baseline_cost = self.token_tracker.usage_data["total_usage"].get("total_cost", 0.0)
+
+        try:
+            with ThreadPoolExecutor(max_workers=actual_workers) as executor:
+                future_map = {
+                    executor.submit(_ocr_one, i, path): i
+                    for i, path in enumerate(image_files)
+                }
+                desc = f"Transcribing ({actual_workers} workers)... "
+                with tqdm(total=len(image_files), desc=desc, ascii=True) as pbar:
+                    for future in futures_as_completed(future_map):
+                        orig_idx = future_map[future]
+                        try:
+                            idx, filename, extracted_text = future.result()
+                            results_map[idx] = (filename, extracted_text)
+                        except Exception as e:
+                            filename = os.path.basename(image_files[orig_idx])
+                            logger.error(f"Error processing '{filename}': {e}", exc_info=True)
+                            results_map[orig_idx] = (filename, f"[Error processing {filename}: {e}]")
+                        try:
+                            run_tokens = int(self.token_tracker.usage_data["total_usage"].get("total_tokens", 0)) - int(baseline_tokens)
+                            run_cost = float(self.token_tracker.usage_data["total_usage"].get("total_cost", 0.0)) - float(baseline_cost)
+                            pbar.set_postfix(tokens=f"{run_tokens:,}", cost=f"${run_cost:.4f}")
+                        except (TypeError, ValueError):
+                            pass
+                        pbar.update(1)
+        finally:
+            root_logger.removeHandler(tqdm_handler)
+            for h in existing_handlers:
+                root_logger.addHandler(h)
 
         # Print and assemble in sorted-filename (original) order
         combined_parts_p: List[str] = []
