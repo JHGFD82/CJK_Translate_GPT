@@ -236,9 +236,17 @@ class TestTranslationSystemPrompt:
         result = TranslationPromptSpec("Japanese", "English").system_prompt()
         assert "English" in result
 
+    def test_formatting_instruction_embedded(self):
+        result = TranslationPromptSpec("Japanese", "English").system_prompt()
+        assert "console" in result.lower() or "file output" in result
+
     def test_numbered_block_embedded_when_has_numbered(self):
         result = TranslationPromptSpec("Japanese", "English", has_numbered=True).system_prompt()
         assert "numbered lists" in result or "IMPORTANT" in result
+
+    def test_numbered_content_instruction_embedded(self):
+        result = TranslationPromptSpec("Japanese", "English", has_numbered=True).system_prompt()
+        assert "citations" in result and "footnotes" in result
 
     def test_numbered_block_absent_when_not_has_numbered(self):
         result = TranslationPromptSpec("Japanese", "English", has_numbered=False).system_prompt()
