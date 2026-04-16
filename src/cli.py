@@ -213,6 +213,12 @@ Custom prompt:
     )
     translate_parser.add_argument('-f', '--font', dest='custom_font', type=str, help='Custom font name (must be in fonts/)')
     translate_parser.add_argument(
+        '--kanbun',
+        dest='kanbun',
+        action='store_true',
+        help='Source text is kanbun (漢文): apply kundoku word-order reconstruction and Classical Chinese reading conventions',
+    )
+    translate_parser.add_argument(
         '-w', '--workers',
         dest='workers',
         type=int,

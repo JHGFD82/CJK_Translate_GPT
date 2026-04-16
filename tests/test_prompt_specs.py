@@ -130,6 +130,52 @@ class TestTranslationPromptSpecLanguagePairNotes:
         assert "합쇼체" in spec.system_prompt() or "해요체" in spec.system_prompt()
 
 
+class TestTranslationPromptSpecKanbun:
+    """--kanbun flag injects kundoku reading conventions."""
+
+    def test_kanbun_false_by_default(self):
+        spec = TranslationPromptSpec("Chinese", "English")
+        prompt = spec.system_prompt()
+        assert "kundoku" not in prompt.lower()
+
+    def test_kanbun_true_injects_note(self):
+        spec = TranslationPromptSpec("Chinese", "English", kanbun=True)
+        prompt = spec.system_prompt()
+        assert "kundoku" in prompt.lower() or "kanbun" in prompt.lower() or "漢文" in prompt
+
+    def test_kanbun_note_absent_when_false(self):
+        spec = TranslationPromptSpec("Chinese", "English", kanbun=False)
+        from src.services.prompts import fragments as F
+        assert F.KANBUN_NOTE not in spec.system_prompt()
+
+    def test_kanbun_true_injects_kanbun_note_constant(self):
+        spec = TranslationPromptSpec("Chinese", "English", kanbun=True)
+        from src.services.prompts import fragments as F
+        assert F.KANBUN_NOTE in spec.system_prompt()
+
+    def test_kanbun_note_appears_after_pair_note(self):
+        # JK pair note + kanbun — unusual but possible; kanbun note should follow pair note
+        spec = TranslationPromptSpec("Japanese", "Korean", kanbun=True)
+        prompt = spec.system_prompt()
+        pair_pos = prompt.lower().index("honorific")
+        kanbun_pos = prompt.index("漢文") if "漢文" in prompt else prompt.lower().index("kanbun")
+        assert kanbun_pos > pair_pos
+
+    def test_kanbun_and_system_note_both_present(self):
+        spec = TranslationPromptSpec("Chinese", "English", kanbun=True, system_note="MYSYSNOTE")
+        prompt = spec.system_prompt()
+        assert "MYSYSNOTE" in prompt
+        assert "漢文" in prompt or "kanbun" in prompt.lower() or "kundoku" in prompt.lower()
+
+    def test_kanbun_system_note_ordering(self):
+        spec = TranslationPromptSpec("Chinese", "English", kanbun=True, system_note="AFTERKANBUN")
+        prompt = spec.system_prompt()
+        from src.services.prompts import fragments as F
+        kanbun_pos = prompt.index(F.KANBUN_NOTE)
+        sysnote_pos = prompt.index("AFTERKANBUN")
+        assert sysnote_pos > kanbun_pos
+
+
 # ===========================================================================
 # OcrPromptSpec
 # ===========================================================================

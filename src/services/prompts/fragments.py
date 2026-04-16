@@ -234,6 +234,25 @@ IMAGE_TRANSLATION_VERTICAL_NOTE = (
 # Both directions of a pair should normally have entries.
 # ---------------------------------------------------------------------------
 
+# Source-style notes — injected automatically when a source-style flag is set.
+# Each entry is a complete block of instructions placed after the language-pair
+# note  (if any) and before the user's explicit system_note.
+
+KANBUN_NOTE = (
+    "The source text is kanbun (漢文) — Classical Chinese written for Japanese "
+    "kundoku (訓読) reading. Apply the following conventions:\n"
+    "- Reconstruct word order according to kundoku conventions: Japanese verb-final "
+    "syntax, not the Subject-Verb-Object order of Classical Chinese.\n"
+    "- Expand implicit grammatical elements (particles, verb endings, auxiliary "
+    "words) that are absent in the kanbun but required by kundoku reading.\n"
+    "- Preserve kanbun punctuation markers (返り点 kaeriten, 送り仮名 okurigana) "
+    "as context clues — do not reproduce them literally in the translation.\n"
+    "- Use the register appropriate to classical Japanese scholarly prose when "
+    "producing Japanese output, or fluent academic prose for English output.\n"
+    "- Proper nouns, reign names, and place names should follow established "
+    "Sinological or Japanese historical conventions (e.g. Heian, not 'Hei-an')."
+)
+
 LANGUAGE_PAIR_NOTES: dict[tuple[str, str], str] = {
     ("Japanese", "Korean"): (
         "Japanese and Korean both have elaborate honorific systems that do not map "

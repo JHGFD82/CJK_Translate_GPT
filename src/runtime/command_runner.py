@@ -204,6 +204,9 @@ class _CommandMixin:
             self.translation_service.user_note = _inline_usr
             self.image_translation_service.user_note = _inline_usr
 
+        if getattr(args, 'kanbun', False):
+            self.translation_service.kanbun = True
+
         if getattr(args, 'dry_run', False):
             model_dr = self.translation_service._get_model()
             abstract_text_dr: Optional[str] = None
