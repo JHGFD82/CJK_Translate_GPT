@@ -302,128 +302,6 @@ class SandboxProcessor(_CommandMixin):
             logger.error(f"Error during translation: {e}", exc_info=True)
             raise CLIError(f"Error during translation: {e}") from e
 
-    def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, passes: int = 1) -> None:
-        """Process an image file with OCR (transcribe command)."""
-        logger.info(f"Starting OCR processing: {os.path.basename(file_path)} → {target_language}")
-
-        try:
-            extracted_text = self.image_processor_service.process_image_ocr(file_path, target_language, output_format="console", vertical=vertical, passes=passes)
-
-            print("\n=== Extracted Text ===")
-            print(extracted_text)
-            print("======================\n")
-
-            if output_file:
-                self.file_output.save_translation_output(
-                    extracted_text, file_path, output_file, False,
-                    target_language, target_language,
-                )
-
-        except Exception as e:
-            logger.error(f"Error processing image: {e}", exc_info=True)
-            raise CLIError(f"Error processing image: {e}") from e
-
-    def process_image_folder(self, folder_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, passes: int = 1, workers: int = 1) -> None:
-        """Process all images in a folder with OCR, printing each result and optionally saving combined output.
-
-        When ``workers > 1`` images are dispatched in parallel via a ThreadPoolExecutor.
-        Multi-pass OCR within each image always runs sequentially inside the worker.
-        Results are printed and assembled in the original sorted-filename order.
-        """
-        folder_path = os.path.abspath(folder_path)
-        image_files = _collect_image_files(folder_path)
-
-        if not image_files:
-            raise CLIError(f"No image files found in folder '{folder_path}'.")
-
-        logger.info(f"Processing {len(image_files)} image(s) in folder: {os.path.basename(folder_path)}")
-        print(f"Found {len(image_files)} image(s) to process.\n")
-
-        # --- sequential path ---
-        if workers <= 1:
-            combined_parts: List[str] = []
-            for idx, img_path in enumerate(image_files, start=1):
-                filename = os.path.basename(img_path)
-                print(f"[{idx}/{len(image_files)}] {filename}")
-                try:
-                    extracted_text = self.image_processor_service.process_image_ocr(
-                        img_path, target_language, output_format="console", vertical=vertical, passes=passes
-                    )
-                except Exception as e:
-                    logger.error(f"Error processing '{filename}': {e}", exc_info=True)
-                    print(f"  ERROR: {e}")
-                    extracted_text = f"[Error processing {filename}: {e}]"
-
-                print("\n=== Extracted Text ===")
-                print(extracted_text)
-                print("======================\n")
-                combined_parts.append(f"=== {filename} ===\n{extracted_text}")
-
-            if output_file:
-                self.file_output.save_translation_output(
-                    "\n\n".join(combined_parts), None, output_file, False,
-                    target_language, target_language,
-                )
-            return
-
-        # --- parallel path ---
-        actual_workers = min(workers, len(image_files))
-        if actual_workers < workers:
-            logger.info(f"OCR workers capped at {actual_workers} (folder has {len(image_files)} image(s))")
-
-        results_map: dict[int, tuple[str, str]] = {}  # index → (filename, extracted_text)
-
-        # Warm the pricing cache on the main thread so workers share the fast path.
-        # Also suppress per-image/per-pass prints that would interleave with tqdm.
-        self.image_processor_service._get_model()
-        self.image_processor_service._suppress_inline_print = True
-
-        def _ocr_one(idx: int, img_path: str) -> tuple[int, str, str]:
-            filename = os.path.basename(img_path)
-            extracted = self.image_processor_service.process_image_ocr(
-                img_path, target_language, output_format="console", vertical=vertical, passes=passes
-            )
-            return idx, filename, extracted
-
-        baseline_tokens = self.token_tracker.usage_data["total_usage"].get("total_tokens", 0)
-        baseline_cost = self.token_tracker.usage_data["total_usage"].get("total_cost", 0.0)
-
-        with tqdm_logging():
-            with ThreadPoolExecutor(max_workers=actual_workers) as executor:
-                future_map = {
-                    executor.submit(_ocr_one, i, path): i
-                    for i, path in enumerate(image_files)
-                }
-                desc = f"Transcribing ({actual_workers} workers)... "
-                with tqdm(total=len(image_files), desc=desc, ascii=True) as pbar:
-                    for future in futures_as_completed(future_map):
-                        orig_idx = future_map[future]
-                        try:
-                            idx, filename, extracted_text = future.result()
-                            results_map[idx] = (filename, extracted_text)
-                        except Exception as e:
-                            filename = os.path.basename(image_files[orig_idx])
-                            logger.error(f"Error processing '{filename}': {e}", exc_info=True)
-                            results_map[orig_idx] = (filename, f"[Error processing {filename}: {e}]")
-                        update_pbar_postfix(pbar, self.token_tracker.usage_data, baseline_tokens, baseline_cost)
-                        pbar.update(1)
-
-        # Print and assemble in sorted-filename (original) order
-        combined_parts_p: List[str] = []
-        for idx in range(len(image_files)):
-            filename, extracted_text = results_map[idx]
-            print(f"[{idx + 1}/{len(image_files)}] {filename}")
-            print("\n=== Extracted Text ===")
-            print(extracted_text)
-            print("======================\n")
-            combined_parts_p.append(f"=== {filename} ===\n{extracted_text}")
-
-        if output_file:
-            self.file_output.save_translation_output(
-                "\n\n".join(combined_parts_p), None, output_file, False,
-                target_language, target_language,
-            )
-
     def process_image_translation(
         self,
         file_path: str,
@@ -577,6 +455,128 @@ class SandboxProcessor(_CommandMixin):
             self.file_output.save_translation_output(
                 "\n\n".join(combined_parts_p), None, opts.output_file, opts.auto_save,
                 source_language, target_language, opts.custom_font,
+            )
+
+    def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, passes: int = 1) -> None:
+        """Process an image file with OCR (transcribe command)."""
+        logger.info(f"Starting OCR processing: {os.path.basename(file_path)} → {target_language}")
+
+        try:
+            extracted_text = self.image_processor_service.process_image_ocr(file_path, target_language, output_format="console", vertical=vertical, passes=passes)
+
+            print("\n=== Extracted Text ===")
+            print(extracted_text)
+            print("======================\n")
+
+            if output_file:
+                self.file_output.save_translation_output(
+                    extracted_text, file_path, output_file, False,
+                    target_language, target_language,
+                )
+
+        except Exception as e:
+            logger.error(f"Error processing image: {e}", exc_info=True)
+            raise CLIError(f"Error processing image: {e}") from e
+
+    def process_image_folder(self, folder_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, passes: int = 1, workers: int = 1) -> None:
+        """Process all images in a folder with OCR, printing each result and optionally saving combined output.
+
+        When ``workers > 1`` images are dispatched in parallel via a ThreadPoolExecutor.
+        Multi-pass OCR within each image always runs sequentially inside the worker.
+        Results are printed and assembled in the original sorted-filename order.
+        """
+        folder_path = os.path.abspath(folder_path)
+        image_files = _collect_image_files(folder_path)
+
+        if not image_files:
+            raise CLIError(f"No image files found in folder '{folder_path}'.")
+
+        logger.info(f"Processing {len(image_files)} image(s) in folder: {os.path.basename(folder_path)}")
+        print(f"Found {len(image_files)} image(s) to process.\n")
+
+        # --- sequential path ---
+        if workers <= 1:
+            combined_parts: List[str] = []
+            for idx, img_path in enumerate(image_files, start=1):
+                filename = os.path.basename(img_path)
+                print(f"[{idx}/{len(image_files)}] {filename}")
+                try:
+                    extracted_text = self.image_processor_service.process_image_ocr(
+                        img_path, target_language, output_format="console", vertical=vertical, passes=passes
+                    )
+                except Exception as e:
+                    logger.error(f"Error processing '{filename}': {e}", exc_info=True)
+                    print(f"  ERROR: {e}")
+                    extracted_text = f"[Error processing {filename}: {e}]"
+
+                print("\n=== Extracted Text ===")
+                print(extracted_text)
+                print("======================\n")
+                combined_parts.append(f"=== {filename} ===\n{extracted_text}")
+
+            if output_file:
+                self.file_output.save_translation_output(
+                    "\n\n".join(combined_parts), None, output_file, False,
+                    target_language, target_language,
+                )
+            return
+
+        # --- parallel path ---
+        actual_workers = min(workers, len(image_files))
+        if actual_workers < workers:
+            logger.info(f"OCR workers capped at {actual_workers} (folder has {len(image_files)} image(s))")
+
+        results_map: dict[int, tuple[str, str]] = {}  # index → (filename, extracted_text)
+
+        # Warm the pricing cache on the main thread so workers share the fast path.
+        # Also suppress per-image/per-pass prints that would interleave with tqdm.
+        self.image_processor_service._get_model()
+        self.image_processor_service._suppress_inline_print = True
+
+        def _ocr_one(idx: int, img_path: str) -> tuple[int, str, str]:
+            filename = os.path.basename(img_path)
+            extracted = self.image_processor_service.process_image_ocr(
+                img_path, target_language, output_format="console", vertical=vertical, passes=passes
+            )
+            return idx, filename, extracted
+
+        baseline_tokens = self.token_tracker.usage_data["total_usage"].get("total_tokens", 0)
+        baseline_cost = self.token_tracker.usage_data["total_usage"].get("total_cost", 0.0)
+
+        with tqdm_logging():
+            with ThreadPoolExecutor(max_workers=actual_workers) as executor:
+                future_map = {
+                    executor.submit(_ocr_one, i, path): i
+                    for i, path in enumerate(image_files)
+                }
+                desc = f"Transcribing ({actual_workers} workers)... "
+                with tqdm(total=len(image_files), desc=desc, ascii=True) as pbar:
+                    for future in futures_as_completed(future_map):
+                        orig_idx = future_map[future]
+                        try:
+                            idx, filename, extracted_text = future.result()
+                            results_map[idx] = (filename, extracted_text)
+                        except Exception as e:
+                            filename = os.path.basename(image_files[orig_idx])
+                            logger.error(f"Error processing '{filename}': {e}", exc_info=True)
+                            results_map[orig_idx] = (filename, f"[Error processing {filename}: {e}]")
+                        update_pbar_postfix(pbar, self.token_tracker.usage_data, baseline_tokens, baseline_cost)
+                        pbar.update(1)
+
+        # Print and assemble in sorted-filename (original) order
+        combined_parts_p: List[str] = []
+        for idx in range(len(image_files)):
+            filename, extracted_text = results_map[idx]
+            print(f"[{idx + 1}/{len(image_files)}] {filename}")
+            print("\n=== Extracted Text ===")
+            print(extracted_text)
+            print("======================\n")
+            combined_parts_p.append(f"=== {filename} ===\n{extracted_text}")
+
+        if output_file:
+            self.file_output.save_translation_output(
+                "\n\n".join(combined_parts_p), None, output_file, False,
+                target_language, target_language,
             )
 
     def process_prompt(
