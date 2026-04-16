@@ -97,6 +97,39 @@ class TestTranslationPromptSpecNumbered:
         assert "NUMBERING CONTINUATION" not in spec.user_prompt()
 
 
+class TestTranslationPromptSpecLanguagePairNotes:
+    """Automatic honorific/formality notes for JK and KJ pairs."""
+
+    def test_jk_pair_injects_honorific_note(self):
+        spec = TranslationPromptSpec("Japanese", "Korean")
+        assert "honorific" in spec.system_prompt().lower()
+
+    def test_kj_pair_injects_honorific_note(self):
+        spec = TranslationPromptSpec("Korean", "Japanese")
+        assert "honorific" in spec.system_prompt().lower()
+
+    def test_pair_note_not_present_for_unrelated_pair(self):
+        spec = TranslationPromptSpec("Chinese", "English")
+        # No pair note — ADDITIONAL INSTRUCTIONS block should be absent
+        # (unless a system_note was explicitly passed)
+        assert "honorific" not in spec.system_prompt()
+
+    def test_explicit_system_note_appended_after_pair_note(self):
+        spec = TranslationPromptSpec("Japanese", "Korean", system_note="EXPLICIT")
+        prompt = spec.system_prompt()
+        honorific_pos = prompt.lower().index("honorific")
+        explicit_pos = prompt.index("EXPLICIT")
+        assert explicit_pos > honorific_pos  # pair note comes first
+
+    def test_kj_note_mentions_teineigo(self):
+        spec = TranslationPromptSpec("Korean", "Japanese")
+        assert "teineigo" in spec.system_prompt().lower() or "丁寧語" in spec.system_prompt()
+
+    def test_jk_note_mentions_korean_formal_register(self):
+        spec = TranslationPromptSpec("Japanese", "Korean")
+        assert "합쇼체" in spec.system_prompt() or "해요체" in spec.system_prompt()
+
+
 # ===========================================================================
 # OcrPromptSpec
 # ===========================================================================

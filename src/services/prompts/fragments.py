@@ -229,6 +229,38 @@ IMAGE_TRANSLATION_VERTICAL_NOTE = (
 )
 
 # ---------------------------------------------------------------------------
+# Language-pair-specific notes — injected automatically by TranslationPromptSpec
+# when the source/target combination matches.  Keyed by (source_language, target_language).
+# Both directions of a pair should normally have entries.
+# ---------------------------------------------------------------------------
+
+LANGUAGE_PAIR_NOTES: dict[tuple[str, str], str] = {
+    ("Japanese", "Korean"): (
+        "Japanese and Korean both have elaborate honorific systems that do not map "
+        "one-to-one. Apply the following conventions:\n"
+        "- Preserve the formality register of the source: formal/polite text should "
+        "become formal/polite in the target (e.g. 합쇼체 or 해요체 in Korean; "
+        "丁寧語 / teineigo in Japanese).\n"
+        "- Translate title suffixes appropriately: Japanese 様/さん/先生 → Korean "
+        "님/선생님, and vice versa.\n"
+        "- Do not flatten honorific speech to plain speech (반말 / タメ口) unless "
+        "the source explicitly uses an informal register."
+    ),
+    ("Korean", "Japanese"): (
+        "Korean and Japanese both have elaborate honorific systems that do not map "
+        "one-to-one. Apply the following conventions:\n"
+        "- Preserve the formality register of the source: formal/polite text should "
+        "become formal/polite in the target (丁寧語 / teineigo in Japanese; "
+        "합쇼체 or 해요체 in Korean).\n"
+        "- Translate title suffixes appropriately: Korean 님/선생님 → Japanese "
+        "様/さん/先生, and vice versa.\n"
+        "- Do not flatten honorific speech to plain speech (タメ口 / 반말) unless "
+        "the source explicitly uses an informal register."
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
 # Script guidance dictionaries
 # (moved from constants.py — text lives here, services import from here)
 # ---------------------------------------------------------------------------
