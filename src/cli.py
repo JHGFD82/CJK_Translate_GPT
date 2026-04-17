@@ -109,6 +109,7 @@ Transcription (OCR):
   python main.py heller transcribe J -i scan.png                Japanese (kanji + kana)
   python main.py heller transcribe C -i scan.png -m gpt-4o-mini Use a specific model
   python main.py heller transcribe J -i scan.png -v             Vertical text layout
+  python main.py heller transcribe J -i scan.png --kanbun        Kanbun (漢文) with 返り点/送り仮名 annotations
   python main.py heller transcribe E -i image.jpg --dry-run     Preview prompt without API call
   python main.py heller transcribe E -i image.jpg -n            Append ad-hoc notes to prompt
 
@@ -242,6 +243,12 @@ Custom prompt:
     )
     transcribe_parser.add_argument('-i', '--input', dest='input_file', type=str, required=False, help='Input image file path, or a folder of images to process in order')
     transcribe_parser.add_argument('-v', '--vertical', dest='vertical', action='store_true', help='Text is predominantly vertical (top-to-bottom, right-to-left columns)')
+    transcribe_parser.add_argument(
+        '--kanbun',
+        dest='kanbun',
+        action='store_true',
+        help='Image contains kanbun (漢文): preserve 返り点, 送り仮名, and other kundoku annotations exactly as written',
+    )
     transcribe_parser.add_argument('-P', '--passes', dest='passes', type=int, default=DEFAULT_OCR_PASSES, metavar='N', help='Number of OCR passes (default: 1). Passes > 1 send the image and prior transcription back to the model for review and correction.')
     transcribe_parser.add_argument(
         '-w', '--workers',

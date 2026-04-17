@@ -253,6 +253,19 @@ KANBUN_NOTE = (
     "Sinological or Japanese historical conventions (e.g. Heian, not 'Hei-an')."
 )
 
+KANBUN_OCR_NOTE = (
+    "The image contains kanbun (漢文) — Classical Chinese text annotated for "
+    "Japanese kundoku (訓読) reading. Transcribe the image faithfully, preserving "
+    "all annotations exactly as they appear:\n"
+    "- Transcribe all 返り点 (kaeriten: レ点, 一二三点, 上中下点, etc.) as they appear "
+    "beside or below the main characters.\n"
+    "- Transcribe all 送り仮名 (okurigana) — small kana written beside the main "
+    "characters — exactly as they appear.\n"
+    "- Preserve 句読点 (punctuation marks) and any 訓点 (kunten) annotations.\n"
+    "- Do NOT reorder characters, expand grammar, or interpret kundoku conventions; "
+    "transcribe the text exactly as written on the page."
+)
+
 LANGUAGE_PAIR_NOTES: dict[tuple[str, str], str] = {
     ("Japanese", "Korean"): (
         "Japanese and Korean both have elaborate honorific systems that do not map "

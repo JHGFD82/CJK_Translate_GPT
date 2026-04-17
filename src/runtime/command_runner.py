@@ -311,6 +311,9 @@ class _CommandMixin:
         if _inline_usr is not None:
             self.image_processor_service.user_note = _inline_usr
 
+        if getattr(args, 'kanbun', False):
+            self.image_processor_service.kanbun = True
+
         if getattr(args, 'dry_run', False):
             vertical_dr = getattr(args, 'vertical', False)
             model_dr = self.image_processor_service._get_model()
