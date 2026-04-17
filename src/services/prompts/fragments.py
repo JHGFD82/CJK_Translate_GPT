@@ -27,12 +27,27 @@ TRANSLATION_ROLE = (
 )
 
 # Placeholders: {target}
-TRANSLATION_CONTEXT_SPEC = (
-    'The input is structured with labeled sections. "--Current Page: " contains the text to translate. '
-    '"--Context: " (when present) contains either the document abstract or text from the previous page '
-    "— use it to inform the translation but do not translate or reproduce it. "
+# Three variants — selected by TranslationPromptSpec based on context_type.
+TRANSLATION_CONTEXT_SPEC_NONE = (
+    'The input is labeled "--Current Page: ". '
+    "Output only the {target} translation of that text. "
+    'Do not reproduce the "--Current Page: " label in your output.'
+)
+
+TRANSLATION_CONTEXT_SPEC_ABSTRACT = (
+    'The input has two labeled sections. '
+    '"--Context: " contains the document abstract — use it to inform the translation but do not translate or reproduce it. '
+    '"--Current Page: " is the text to translate. '
     "Output only the {target} translation of \"--Current Page: \". "
-    'Do not reproduce the "--Context: " or "--Current Page: " labels in your output.'
+    'Do not reproduce either label in your output.'
+)
+
+TRANSLATION_CONTEXT_SPEC_PREVIOUS = (
+    'The input has two labeled sections. '
+    '"--Context: " contains the end of the previous page — use it to maintain continuity but do not translate or reproduce it. '
+    '"--Current Page: " is the text to translate. '
+    "Output only the {target} translation of \"--Current Page: \". "
+    'Do not reproduce either label in your output.'
 )
 
 # Output-format variants — keyed by canonical format group
@@ -78,8 +93,13 @@ TRANSLATION_NUMBERED_SYSTEM = (
 
 # Placeholders: {source}, {target}
 TRANSLATION_USER_BASE = (
-    'Translate only the {source} text of the "--Current Page: " to {target}, without outputting any other\n'
-    'content, and without outputting anything related to "--Context: ", if provided.'
+    'Translate only the {source} text under "--Current Page: " to {target}, outputting only the translation with no other content.'
+)
+
+TRANSLATION_USER_BASE_WITH_CONTEXT = (
+    'Translate only the {source} text under "--Current Page: " to {target}. '
+    'Do not translate or reproduce the "--Context: " section. '
+    'Output only the translation with no other content.'
 )
 
 # Included in the user prompt only when numbered content is detected
