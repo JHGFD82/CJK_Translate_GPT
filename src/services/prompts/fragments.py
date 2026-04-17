@@ -28,11 +28,11 @@ TRANSLATION_ROLE = (
 
 # Placeholders: {target}
 TRANSLATION_CONTEXT_SPEC = (
-    'You may be provided with "--Context: " which includes either the document\'s abstract or '
-    "text from the previous page for context. You will also be provided with \"--Current Page: \" "
-    "which includes the text of the current page. Only output the {target} translation of "
-    'the "--Current Page: ". Do not output the context, nor the "--Context: " and "--Current Page: " '
-    "labels."
+    'The input is structured with labeled sections. "--Current Page: " contains the text to translate. '
+    '"--Context: " (when present) contains either the document abstract or text from the previous page '
+    "— use it to inform the translation but do not translate or reproduce it. "
+    "Output only the {target} translation of \"--Current Page: \". "
+    'Do not reproduce the "--Context: " or "--Current Page: " labels in your output.'
 )
 
 # Output-format variants — keyed by canonical format group
