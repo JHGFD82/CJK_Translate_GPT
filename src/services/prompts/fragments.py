@@ -253,6 +253,14 @@ KANBUN_NOTE = (
     "Sinological or Japanese historical conventions (e.g. Heian, not 'Hei-an')."
 )
 
+KANBUN_SCRIPT_NOTE = (
+    "The text is kanbun (漢文) — Classical Chinese written in kanji only. "
+    "Hiragana and katakana appear only as annotations (送り仮名 okurigana, "
+    "振り仮名 furigana) beside the main characters, not as independent text. "
+    "Transcribe all kanji and all kana annotations exactly as they appear — "
+    "do NOT omit small or lightly printed kana, as they are critical annotations."
+)
+
 KANBUN_OCR_NOTE = (
     "The image contains kanbun (漢文) — Classical Chinese text annotated for "
     "Japanese kundoku (訓読) reading. Transcribe the image faithfully, preserving "
