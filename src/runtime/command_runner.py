@@ -247,7 +247,8 @@ class _CommandMixin:
                 page_text_dr = f"[{source_language} text to translate]"
 
             combined = generate_process_text(abstract_text_dr or "", page_text_dr, "")
-            sys_p, usr_p = self.translation_service.build_prompts(combined, source_language, target_language)
+            context_type_dr = "abstract" if abstract_text_dr else "none"
+            sys_p, usr_p = self.translation_service.build_prompts(combined, source_language, target_language, context_type=context_type_dr)
             self._dry_run_display(model_dr, sys_p, usr_p)
             return
 
