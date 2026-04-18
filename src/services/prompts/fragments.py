@@ -135,9 +135,9 @@ TRANSLATION_NO_META_COMMENTARY = (
 # OCR — system prompt sections
 # ---------------------------------------------------------------------------
 
+# Placeholders: {target}
 OCR_SYSTEM_BASE = (
-    "You are an expert OCR assistant specializing in text extraction from images containing "
-    "Chinese, Japanese, Korean, and English.\n"
+    "You are an expert OCR assistant specializing in {target} text extraction from images.\n"
     "\n"
     "Your task is to transcribe all legibly visible text from the image exactly as it appears, "
     "preserving layout, orientation (horizontal or vertical), and structure as closely as possible."
