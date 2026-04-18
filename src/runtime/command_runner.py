@@ -122,12 +122,20 @@ class _CommandMixin:
         return system_note, user_note
 
     @staticmethod
-    def _dry_run_display(model: str, system_prompt: str, user_prompt: str, note: Optional[str] = None) -> None:
+    def _dry_run_display(model: str, system_prompt: str, user_prompt: str, note: Optional[str] = None,
+                         temperature: Optional[float] = None, top_p: Optional[float] = None,
+                         max_tokens: Optional[int] = None) -> None:
         """Print prompts in a structured format without making any API calls."""
         sep = "=" * 70
         print(f"\n{sep}")
         print("  DRY RUN — No API call will be made")
         print(f"  Model: {model}")
+        if temperature is not None:
+            print(f"  Temperature: {temperature}")
+        if top_p is not None:
+            print(f"  Top-p: {top_p}")
+        if max_tokens is not None:
+            print(f"  Max tokens: {max_tokens}")
         if note:
             print(f"  Note:  {note}")
         print(sep)
@@ -221,6 +229,9 @@ class _CommandMixin:
                     self._dry_run_display(
                         self.image_translation_service._get_model(), sys_p, usr_p,
                         note="Image content would be base64-encoded and attached to the user message",
+                        temperature=getattr(args, 'temperature', None),
+                        top_p=getattr(args, 'top_p', None),
+                        max_tokens=getattr(args, 'max_tokens', None),
                     )
                     return
                 elif file_type_dr == 'pdf':
@@ -248,8 +259,20 @@ class _CommandMixin:
 
             combined = generate_process_text(abstract_text_dr or "", page_text_dr, "")
             context_type_dr = "abstract" if abstract_text_dr else "none"
-            sys_p, usr_p = self.translation_service.build_prompts(combined, source_language, target_language, context_type=context_type_dr)
-            self._dry_run_display(model_dr, sys_p, usr_p)
+            output_file_dr = getattr(args, 'output_file', None)
+            auto_save_dr = getattr(args, 'auto_save', False)
+            if output_file_dr:
+                ext = output_file_dr.lower().rsplit('.', 1)[-1] if '.' in output_file_dr else ''
+                output_format_dr = {'pdf': 'pdf', 'docx': 'docx', 'txt': 'txt'}.get(ext, 'file')
+            elif auto_save_dr:
+                output_format_dr = 'txt'
+            else:
+                output_format_dr = 'console'
+            sys_p, usr_p = self.translation_service.build_prompts(combined, source_language, target_language, output_format=output_format_dr, context_type=context_type_dr)
+            self._dry_run_display(model_dr, sys_p, usr_p,
+                                  temperature=getattr(args, 'temperature', None),
+                                  top_p=getattr(args, 'top_p', None),
+                                  max_tokens=getattr(args, 'max_tokens', None))
             return
 
         opts = OutputOptions(
@@ -317,10 +340,16 @@ class _CommandMixin:
 
         if getattr(args, 'dry_run', False):
             vertical_dr = getattr(args, 'vertical', False)
+            passes_dr = getattr(args, 'passes', 1)
             model_dr = self.image_processor_service._get_model()
             sys_p, usr_p = self.image_processor_service.build_prompts(target_language, vertical=vertical_dr)
-            self._dry_run_display(model_dr, sys_p, usr_p,
-                                  note="Image content would be base64-encoded and attached to the user message")
+            note = "Image content would be base64-encoded and attached to the user message"
+            if passes_dr > 1:
+                note += f"; {passes_dr} OCR passes would run sequentially"
+            self._dry_run_display(model_dr, sys_p, usr_p, note=note,
+                                  temperature=getattr(args, 'temperature', None),
+                                  top_p=getattr(args, 'top_p', None),
+                                  max_tokens=getattr(args, 'max_tokens', None))
             return
 
         if not args.input_file:
