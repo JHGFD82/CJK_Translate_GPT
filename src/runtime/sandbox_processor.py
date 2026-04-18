@@ -29,6 +29,14 @@ from ..console import print_section
 logger = logging.getLogger(__name__)
 
 
+# Maps file extension → (file_type token, human-readable label) for _detect_and_validate_file.
+_EXT_TYPES: dict[str, tuple[str, str]] = {
+    '.pdf':  ('pdf',  'PDF file'),
+    '.docx': ('docx', 'Word document'),
+    '.txt':  ('txt',  'text file'),
+}
+
+
 def _collect_image_files(folder_path: str) -> List[str]:
     """Return sorted absolute paths of image files in *folder_path*."""
     return [
@@ -101,15 +109,12 @@ class SandboxProcessor(_CommandMixin):
                 raise CLIError(f"Image file '{file_path}' is not valid.")
             logger.debug(f"Detected image file: {file_path}")
             return 'image'
-        if lower_path.endswith('.pdf'):
-            logger.debug(f"Detected PDF file: {file_path}")
-            return 'pdf'
-        if lower_path.endswith('.docx'):
-            logger.debug(f"Detected Word document: {file_path}")
-            return 'docx'
-        if lower_path.endswith('.txt'):
-            logger.debug(f"Detected text file: {file_path}")
-            return 'txt'
+
+        _, ext = os.path.splitext(lower_path)
+        if ext in _EXT_TYPES:
+            file_type, label = _EXT_TYPES[ext]
+            logger.debug(f"Detected {label}: {file_path}")
+            return file_type
 
         raise CLIError("Unsupported file format. Supported formats: PDF, DOCX, TXT, or image files (JPG, PNG, etc.)")
 
