@@ -159,6 +159,11 @@ OCR_USER_BASE = (
     "Transcribe all legibly visible text from this image exactly as it appears in {target}."
 )
 
+OCR_USER_BASE_KANBUN = (
+    "Transcribe all legibly visible text from this image exactly as it appears,"
+    " preserving the kanbun (漢文) characters and all kundoku annotations."
+)
+
 OCR_USER_RULES = (
     "CRITICAL RULES FOR THIS IMAGE:\n"
     "- Output ONLY text that is genuinely visible \u2014 do NOT invent, fill in, or hallucinate any characters or words\n"
