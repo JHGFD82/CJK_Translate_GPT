@@ -184,13 +184,18 @@ class TestValidatePageNums:
     def test_first_page(self):
         assert validate_page_nums("1") == "1"
 
+    def test_comma_separated_pages_valid(self):
+        assert validate_page_nums("1,2") == "1,2"
+
+    def test_multi_range_valid(self):
+        assert validate_page_nums("4,15-17,20,30-55") == "4,15-17,20,30-55"
+
+    def test_multi_range_with_spaces_valid(self):
+        assert validate_page_nums("4, 15-17, 20") == "4, 15-17, 20"
+
     def test_letters_rejected(self):
         with pytest.raises(argparse.ArgumentTypeError):
             validate_page_nums("abc")
-
-    def test_comma_separated_rejected(self):
-        with pytest.raises(argparse.ArgumentTypeError):
-            validate_page_nums("1,2")
 
     def test_double_range_rejected(self):
         with pytest.raises(argparse.ArgumentTypeError):
@@ -200,7 +205,7 @@ class TestValidatePageNums:
         with pytest.raises(argparse.ArgumentTypeError):
             validate_page_nums("")
 
-    def test_space_rejected(self):
+    def test_space_without_comma_rejected(self):
         with pytest.raises(argparse.ArgumentTypeError):
             validate_page_nums("1 2")
 

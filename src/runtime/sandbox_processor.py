@@ -56,17 +56,35 @@ class _SvcKwargs(TypedDict, total=False):
     max_tokens: Optional[int]
 
 
-def _parse_page_nums(page_nums_str: Optional[str]) -> Tuple[int, Optional[int]]:
-    """Parse a page selection string into zero-based (start, end) indices."""
+def _parse_page_ranges(page_nums_str: Optional[str]) -> List[Tuple[int, Optional[int]]]:
+    """Parse a page selection string into a list of zero-based (start, end) index pairs.
+
+    Returns [(0, None)] when no selection is specified (meaning all pages).
+    Each entry in the list is translated independently so context never bleeds
+    across range boundaries.
+
+    Examples::
+
+        "5"          -> [(4, 4)]
+        "1-10"       -> [(0, 9)]
+        "4,15-17,20" -> [(3, 3), (14, 16), (19, 19)]
+    """
     if page_nums_str is None:
-        return 0, None
-    if '-' in page_nums_str:
-        start, end = map(int, page_nums_str.split('-'))
-        return start - 1, end - 1
-    page = int(page_nums_str)
-    if page <= 0:
-        raise ValueError(f"{page_nums_str} is not a valid page number.")
-    return page - 1, page - 1
+        return [(0, None)]
+    ranges: List[Tuple[int, Optional[int]]] = []
+    for part in page_nums_str.split(','):
+        part = part.strip()
+        if '-' in part:
+            start, end = map(int, part.split('-'))
+            if start <= 0 or end <= 0 or start > end:
+                raise ValueError(f"Invalid page range '{part}'.")
+            ranges.append((start - 1, end - 1))
+        else:
+            page = int(part)
+            if page <= 0:
+                raise ValueError(f"'{part}' is not a valid page number.")
+            ranges.append((page - 1, page - 1))
+    return ranges
 
 
 class SandboxProcessor(_CommandMixin):
@@ -118,25 +136,6 @@ class SandboxProcessor(_CommandMixin):
 
         raise CLIError("Unsupported file format. Supported formats: PDF, DOCX, TXT, or image files (JPG, PNG, etc.)")
 
-    def _handle_page_range(self, pages: List[str], page_nums: Optional[str], file_type: str) -> List[str]:
-        """Handle page range selection for text-based documents."""
-        if not page_nums:
-            return pages
-
-        start_page, end_page = _parse_page_nums(page_nums)
-        assert end_page is not None  # page_nums is non-empty here, so _parse_page_nums always returns an int
-
-        if start_page >= len(pages):
-            raise CLIError(f"Page {start_page + 1} does not exist. Document has {len(pages)} logical pages.")
-
-        end_page = min(end_page, len(pages) - 1)
-        selected_pages = pages[start_page:end_page + 1]
-        logger.info(
-            f"Processing pages {start_page + 1}-{end_page + 1} of {file_type} "
-            f"(logical pages based on content length)"
-        )
-        return selected_pages
-
     def _process_text_based_file(
         self,
         file_path: str,
@@ -153,25 +152,31 @@ class SandboxProcessor(_CommandMixin):
 
         if file_type == 'docx':
             with open(file_path, 'rb') as f:
-                pages = DocxProcessor.process_docx_with_pages(f, target_page_size=DEFAULT_PAGE_SIZE)
-                pages = self._handle_page_range(pages, page_nums, "Word document")
+                all_pages = DocxProcessor.process_docx_with_pages(f, target_page_size=DEFAULT_PAGE_SIZE)
+            file_label = "Word document"
         elif file_type == 'txt':
             with open(file_path, 'r', encoding='utf-8') as f:
-                pages = TxtProcessor.process_txt_with_pages(f, target_page_size=DEFAULT_PAGE_SIZE)
-                pages = self._handle_page_range(pages, page_nums, "text file")
+                all_pages = TxtProcessor.process_txt_with_pages(f, target_page_size=DEFAULT_PAGE_SIZE)
+            file_label = "text file"
         else:
             raise ValueError(f"Unsupported text file type: {file_type}")
 
-        logger.info(f"Translating {len(pages)} page(s) from {source_language} to {target_language}")
-        return self.translation_service.translate_text_pages(
-            pages,
-            abstract_text,
-            source_language,
-            target_language,
-            opts,
-            file_path,
-            workers=workers,
-        )
+        results: List[str] = []
+        for start_page, end_page in _parse_page_ranges(page_nums):
+            if start_page >= len(all_pages):
+                raise CLIError(f"Page {start_page + 1} does not exist. Document has {len(all_pages)} logical pages.")
+            actual_end = min(end_page, len(all_pages) - 1) if end_page is not None else len(all_pages) - 1
+            segment = all_pages[start_page:actual_end + 1]
+            if page_nums:
+                logger.info(
+                    f"Processing pages {start_page + 1}-{actual_end + 1} of {file_label} "
+                    f"(logical pages based on content length)"
+                )
+            logger.info(f"Translating {len(segment)} page(s) from {source_language} to {target_language}")
+            results.extend(self.translation_service.translate_text_pages(
+                segment, abstract_text, source_language, target_language, opts, file_path, workers=workers,
+            ))
+        return results
 
     def translate_document(
         self,
@@ -209,12 +214,13 @@ class SandboxProcessor(_CommandMixin):
         logger.info(f"Starting translation: {source_language} → {target_language}")
 
         try:
+            document_text: List[str] = []
             if file_type == 'pdf':
                 with open(file_path, 'rb') as f:
-                    pages = self.pdf_processor.process_pdf(f)
-                    start_page, end_page = _parse_page_nums(page_nums)
-                    document_text = self.translation_service.translate_document(
-                        pages,
+                    all_pdf_pages = list(self.pdf_processor.process_pdf(f))
+                for start_page, end_page in _parse_page_ranges(page_nums):
+                    document_text.extend(self.translation_service.translate_document(
+                        iter(all_pdf_pages),
                         abstract_text,
                         start_page,
                         end_page,
@@ -223,7 +229,7 @@ class SandboxProcessor(_CommandMixin):
                         opts,
                         file_path,
                         workers=workers,
-                    )
+                    ))
             elif file_type in ('docx', 'txt'):
                 document_text = self._process_text_based_file(
                     file_path,
