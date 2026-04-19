@@ -35,5 +35,10 @@ default_parallel_workers = 1  # Default -w/--workers value; 1 = sequential (safe
 default_ocr_passes = 1        # Default -P/--passes value; >1 enables multi-pass OCR refinement
 default_page_size = 2000      # Target characters per logical page when splitting DOCX/TXT files
 
+[transcription_review]
+temperature = 0.1          # Low temperature for precise, analytical error detection
+top_p = 0.5                # Focused nucleus sampling
+max_tokens = 4000          # JSON output; increase for very long transcriptions
+
 [budget]
 warning_threshold_pct = 80    # Warn when monthly spend exceeds this percentage of the limit

@@ -53,5 +53,10 @@ DEFAULT_PARALLEL_WORKERS: int = _s["processing"]["default_parallel_workers"]
 DEFAULT_OCR_PASSES: int = _s["processing"]["default_ocr_passes"]
 DEFAULT_PAGE_SIZE: int = _s["processing"]["default_page_size"]
 
+# ── Transcription review ───────────────────────────────────────────────────────
+TRANSCRIPTION_REVIEW_TEMPERATURE: float = _s["transcription_review"]["temperature"]
+TRANSCRIPTION_REVIEW_TOP_P: float = _s["transcription_review"]["top_p"]
+TRANSCRIPTION_REVIEW_MAX_TOKENS: int = _s["transcription_review"]["max_tokens"]
+
 # ── Budget ─────────────────────────────────────────────────────────────────────
 BUDGET_WARNING_THRESHOLD: int = _s["budget"]["warning_threshold_pct"]

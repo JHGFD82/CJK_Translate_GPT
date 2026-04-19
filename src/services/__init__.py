@@ -6,6 +6,7 @@ from .translation_service import TranslationService
 from .image_processor_service import ImageProcessorService
 from .image_translation_service import ImageTranslationService
 from .prompt_service import PromptService
+from .transcription_review_service import TranscriptionReviewService
 
 __all__ = [
     "APISignal",
@@ -14,4 +15,5 @@ __all__ = [
     "ImageProcessorService",
     "ImageTranslationService",
     "PromptService",
+    "TranscriptionReviewService",
 ]

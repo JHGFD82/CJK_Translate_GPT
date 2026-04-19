@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from ..services.image_processor_service import ImageProcessorService
     from ..services.image_translation_service import ImageTranslationService
     from ..services.prompt_service import PromptService
+    from ..services.transcription_review_service import TranscriptionReviewService
     from ..services.translation_service import TranslationService
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ class _CommandMixin:
         image_processor_service: "ImageProcessorService"
         pdf_processor: "PDFProcessor"
         prompt_service: "PromptService"
+        transcription_review_service: "TranscriptionReviewService"
 
         def _detect_and_validate_file(self, file_path: str) -> str: ...
         def translate_custom_text(self, source_language: str, target_language: str, abstract: bool, opts: OutputOptions) -> None: ...
@@ -54,6 +56,7 @@ class _CommandMixin:
         def process_image_folder(self, folder_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, passes: int = 1, workers: int = 1) -> None: ...
         def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, passes: int = 1) -> None: ...
         def process_prompt(self, user_prompt: str, system_prompt: Optional[str] = None, output_file: Optional[str] = None) -> None: ...
+        def process_transcription_review(self, text: str, language: str, kanbun: bool = False, output_file: Optional[str] = None) -> None: ...
 
     @staticmethod
     def _collect_multiline(label: str) -> str:
@@ -372,7 +375,6 @@ class _CommandMixin:
             self.process_image(input_path, target_language, output_file, vertical=vertical, passes=passes)
 
     def _run_prompt(self, args: argparse.Namespace) -> None:
-        """Handle the 'prompt' command."""
         system_prompt_text: Optional[str] = None
         if getattr(args, 'include_system_prompt', False):
             system_prompt_text = self._collect_multiline("System prompt") or None
@@ -393,12 +395,68 @@ class _CommandMixin:
         output_file_p = getattr(args, 'output_file', None)
         self.process_prompt(user_prompt_text, system_prompt_text, output_file_p)
 
+    def _run_transcription_review(self, args: argparse.Namespace) -> None:
+        """Handle the 'transcription_review' command."""
+        language: str = args.language_code  # already resolved by parse_single_language_code
+        kanbun = getattr(args, 'kanbun', False)
+
+        if getattr(args, 'notes', False):
+            _preview_sys, _preview_usr = self.transcription_review_service.build_prompts(language, kanbun=kanbun)
+            sys_note, usr_note = self._collect_notes(_preview_sys, _preview_usr)
+            self.transcription_review_service.system_note = sys_note
+            self.transcription_review_service.user_note = usr_note
+
+        _inline_both = getattr(args, 'note_both', None)
+        _inline_sys  = getattr(args, 'note_system', None) or _inline_both
+        _inline_usr  = getattr(args, 'note_user', None)   or _inline_both
+        if _inline_sys is not None:
+            self.transcription_review_service.system_note = _inline_sys
+        if _inline_usr is not None:
+            self.transcription_review_service.user_note = _inline_usr
+
+        if getattr(args, 'dry_run', False):
+            model_dr = self.transcription_review_service._get_model()
+            sys_p, usr_p = self.transcription_review_service.build_prompts(language, kanbun=kanbun)
+            self._dry_run_display(
+                model_dr, sys_p, usr_p,
+                note="Transcription text would be appended to the user prompt at runtime",
+                temperature=getattr(args, 'temperature', None),
+                top_p=getattr(args, 'top_p', None),
+                max_tokens=getattr(args, 'max_tokens', None),
+            )
+            return
+
+        if args.input_file:
+            input_path = os.path.abspath(args.input_file)
+            if not os.path.exists(input_path):
+                raise CLIError(f"Input file '{input_path}' not found.")
+            with open(input_path, 'r', encoding='utf-8') as f:
+                text = f.read()
+            if not text.strip():
+                raise CLIError(f"Input file '{input_path}' is empty.")
+        elif args.custom_text:
+            text = self._collect_multiline("Paste the transcription result to review")
+            if not text.strip():
+                raise CLIError("No transcription text provided.")
+        else:
+            raise CLIError(
+                "No input supplied.\n"
+                "  transcription_review expects the text output of a prior transcription, "
+                "not the original document or image.\n"
+                "  Use -i <file.txt> to supply a saved transcription file, "
+                "or -c to paste the text interactively."
+            )
+
+        output_file_r = getattr(args, 'output_file', None)
+        self.process_transcription_review(text, language, kanbun=kanbun, output_file=output_file_r)
+
     def run(self, args: argparse.Namespace) -> None:
         """Run the translation application with the given arguments."""
         _dispatch = {
             'translate': self._run_translate,
             'transcribe': self._run_transcribe,
             'prompt': self._run_prompt,
+            'transcription_review': self._run_transcription_review,
         }
         try:
             handler = _dispatch.get(args.command)

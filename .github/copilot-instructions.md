@@ -59,6 +59,7 @@ python main.py heller translate CE -i test.pdf               # PDF translation
 python main.py heller translate CE -i test.docx              # Word document
 python main.py heller translate CE -i test.txt               # Plain text file
 python main.py heller translate CE -i test.pdf -p 1-5        # Page range
+python main.py heller translate CE -i test.pdf -p "4,15-17,20,30-55"  # Multi-range
 python main.py heller translate CE -i test.pdf -o out.docx   # Output as Word
 python main.py heller translate CE -i test.pdf -w 4          # 4 parallel workers
 
@@ -67,6 +68,13 @@ python main.py heller transcribe E -i test.jpg               # OCR to console
 python main.py heller transcribe E -i test.jpg -o output.txt # OCR to file
 python main.py heller transcribe E -i test.jpg -m gpt-4o-mini # Specific model
 python main.py heller transcribe E -i ./scans/ -w 4          # Folder OCR, 4 parallel workers
+
+# Transcription review (OCR error detection) — use single language char
+python main.py heller transcription_review J -i transcription.txt   # Review a saved Japanese transcription
+python main.py heller transcription_review J -c                      # Paste transcription text interactively
+python main.py heller transcription_review J -i trans.txt -o report.json  # Save JSON report to file
+python main.py heller transcription_review J --kanbun -i kanbun.txt  # Text contains kanbun annotations
+python main.py heller transcription_review J -i trans.txt --dry-run  # Preview prompt without API call
 
 # Custom prompts (fully interactive — text entered at runtime, end with ---)
 python main.py heller prompt                                  # User prompt only
@@ -113,7 +121,7 @@ Two-character codes: `CE` (Chinese→English), `JK` (Japanese→Korean), etc.
 ### PDF Processing Specifics
 - **CJK Optimization**: Custom `LAParams` in `PDFProcessor` for better CJK text extraction
 - **Context Preservation**: Previous page context (65% of content) passed to translation
-- **Page Range Support**: 1-based user input converted to 0-based internally
+- **Page Range Support**: 1-based user input converted to 0-based internally; supports multi-range syntax `"4,15-17,20,30-55"` via `_parse_page_ranges()` (replaces `_parse_page_nums`)
 
 ### Output Format Support
 - **Text Files (.txt)**: Direct UTF-8 output, supports progressive saving

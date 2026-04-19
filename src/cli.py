@@ -119,6 +119,13 @@ Custom prompt:
   python main.py heller prompt -o response.txt   Save response to file
   python main.py heller prompt -m gpt-4o-mini    Use a specific model
   python main.py heller prompt --dry-run         Preview prompt without API call
+
+Transcription review (OCR error detection):
+  python main.py heller transcription_review J -i transcription.txt   Review a saved Japanese transcription
+  python main.py heller transcription_review J -c                      Paste transcription text interactively
+  python main.py heller transcription_review J -i trans.txt -o report.json  Save JSON report to file
+  python main.py heller transcription_review J --kanbun -i kanbun.txt  Text contains kanbun annotations
+  python main.py heller transcription_review J -i trans.txt --dry-run  Preview prompt without API call
         """,
     )
 
@@ -274,6 +281,38 @@ Custom prompt:
     )
     _add_common_flags(prompt_parser)
 
+    # ===== TRANSCRIPTION REVIEW COMMAND =====
+    review_parser = subparsers.add_parser(
+        'transcription_review',
+        help='Review AI transcription output for OCR errors (returns JSON report)',
+    )
+    review_parser.add_argument(
+        'language_code',
+        type=parse_single_language_code,
+        help='Language of the transcription: E (English), C (Chinese), S (Simplified Chinese), T (Traditional Chinese), J (Japanese), K (Korean)',
+    )
+    review_input_group = review_parser.add_mutually_exclusive_group(required=False)
+    review_input_group.add_argument(
+        '-i', '--input',
+        dest='input_file',
+        type=str,
+        help='Path to a text file containing the transcription result to review',
+    )
+    review_input_group.add_argument(
+        '-c', '--custom',
+        dest='custom_text',
+        action='store_true',
+        help='Paste the transcription text interactively (end with --- on its own line)',
+    )
+    review_parser.add_argument(
+        '--kanbun',
+        dest='kanbun',
+        action='store_true',
+        help='Text contains kanbun (\u6f22\u6587) with kundoku annotations (\u8fd4\u308a\u70b9, \u9001\u308a\u4eee\u540d)',
+    )
+    _add_common_flags(review_parser)
+    _add_notes_flags(review_parser)
+
     return parser
 
 
@@ -301,6 +340,7 @@ def main() -> None:
                 "  usage daily [YYYY-MM-DD]             Daily usage\n"
                 "  translate <code> -i <file>           Translate a document\n"
                 "  transcribe <lang> -i <image>         OCR an image\n"
+                "  transcription_review <lang> -i <file>  Review a transcription for OCR errors\n"
                 "\nOr for global commands: python main.py --show-config | --list-models"
             )
 
@@ -314,6 +354,7 @@ def main() -> None:
                 "  usage daily [YYYY-MM-DD]             Daily usage\n"
                 "  translate <code> -i <file>           Translate a document\n"
                 "  transcribe <lang> -i <image>         OCR an image\n"
+                "  transcription_review <lang> -i <file>  Review a transcription for OCR errors\n"
                 "\nRun 'python main.py --help' for full usage information."
             )
 
@@ -321,7 +362,7 @@ def main() -> None:
         if args.command == 'usage':
             if handle_info_commands(args):
                 return
-        elif args.command in ('translate', 'transcribe', 'prompt'):
+        elif args.command in ('translate', 'transcribe', 'prompt', 'transcription_review'):
             model = getattr(args, 'model', None)
             temperature = getattr(args, 'temperature', None)
             top_p = getattr(args, 'top_p', None)

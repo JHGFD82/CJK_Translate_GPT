@@ -392,3 +392,79 @@ IMAGE_TRANSLATION_SCRIPT_GUIDANCE: dict[str, str] = {
     ),
     "English": "The source text uses the Latin alphabet.",
 }
+
+
+# ---------------------------------------------------------------------------
+# Transcription review — system prompt sections
+# ---------------------------------------------------------------------------
+
+# Placeholders: {language}
+TRANSCRIPTION_REVIEW_ROLE = (
+    "You are an expert proofreader and language scholar specialising in {language} texts. "
+    "You will be given text that was produced by an AI transcription (OCR) system from a "
+    "historical or archival document. Your task is to review it for OCR errors, identify "
+    "the probable source, and report each error with one or more corrected candidates."
+)
+
+TRANSCRIPTION_REVIEW_KANBUN_NOTE = (
+    "The text contains kanbun (\u6f22\u6587) with kundoku annotations (\u8fd4\u308a\u70b9, \u9001\u308a\u4eee\u540d). "
+    "Evaluate annotations as part of the transcription — they are intentional and should "
+    "not be flagged as errors unless clearly wrong."
+)
+
+TRANSCRIPTION_REVIEW_APPROACH = (
+    "REVIEW APPROACH:\n"
+    "1. Assess whether the text makes sense as a whole.\n"
+    "2. Identify the source type (genre, period, register) to establish interpretive context.\n"
+    "3. Use that context to spot characters or words that are likely OCR misreadings.\n"
+    "4. For each error, record the most probable correction(s) in descending confidence order."
+)
+
+TRANSCRIPTION_REVIEW_SCHEMA = (
+    'OUTPUT FORMAT:\n'
+    'Respond with ONLY a valid JSON object — no markdown, no code fences, no prose outside the JSON.\n'
+    '\n'
+    '{\n'
+    '  "meta": {\n'
+    '    "language": "<language of the text>",\n'
+    '    "identified_source": "<source type / genre / period, or \\"unknown\\">",\n'
+    '    "source_confidence": "<high | medium | low | unknown>",\n'
+    '    "overall_quality": "<good | fair | poor>",\n'
+    '    "assessment": "<1\u20133 sentences on transcription quality and any systematic error patterns>",\n'
+    '    "error_count": <integer>\n'
+    '  },\n'
+    '  "corrections": [\n'
+    '    {\n'
+    '      "page": <integer | null>,\n'
+    '      "line": <integer>,\n'
+    '      "position": <integer, 1-based character index within the line>,\n'
+    '      "context": "<\u223c20 characters surrounding the error>",\n'
+    '      "original": "<erroneous character(s) as transcribed>",\n'
+    '      "candidates": [\n'
+    '        {"char": "<most likely>", "confidence": "high"},\n'
+    '        {"char": "<alternative>", "confidence": "low"}\n'
+    '      ],\n'
+    '      "error_type": "<substitution | insertion | deletion>"\n'
+    '    }\n'
+    '  ]\n'
+    '}'
+)
+
+TRANSCRIPTION_REVIEW_RULES = (
+    "RULES:\n"
+    '- Set "page" only when the text contains clear page-break markers; otherwise use null.\n'
+    "- List candidates in descending confidence order; one entry is sufficient when certain.\n"
+    '- "position" is the 1-based index of the first erroneous character within the line.\n'
+    '- "context" should show approximately 10 characters before and after the error.\n'
+    "- If no errors are found, return an empty corrections array.\n"
+    "- Do not flag punctuation normalization or stylistic preferences \u2014 only genuine OCR errors."
+)
+
+# Placeholders: {language}
+TRANSCRIPTION_REVIEW_USER_BASE = (
+    "Review the following {language} transcription for OCR errors. "
+    "Output only the JSON review object, with no additional text."
+)
+
+# Placeholders: {text}
+TRANSCRIPTION_REVIEW_TEXT_BLOCK = "\n\nTRANSCRIPTION:\n{text}"

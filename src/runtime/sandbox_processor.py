@@ -21,6 +21,7 @@ from ..services.image_processor_service import ImageProcessorService
 from ..services.image_translation_service import ImageTranslationService
 from ..services.parallel_utils import tqdm_logging, update_pbar_postfix
 from ..services.prompt_service import PromptService
+from ..services.transcription_review_service import TranscriptionReviewService
 from ..services.translation_service import TranslationService
 from ..tracking.token_tracker import TokenTracker
 from .command_runner import _CommandMixin
@@ -106,6 +107,7 @@ class SandboxProcessor(_CommandMixin):
             self.image_processor_service = ImageProcessorService(api_key, professor_name, **_svc_kwargs)
             self.image_translation_service = ImageTranslationService(api_key, professor_name, **_svc_kwargs)
             self.prompt_service = PromptService(api_key, professor_name, **_svc_kwargs)
+            self.transcription_review_service = TranscriptionReviewService(api_key, professor_name, **_svc_kwargs)
 
             self.image_processor = ImageProcessor()
             self.pdf_processor = PDFProcessor()
@@ -589,6 +591,25 @@ class SandboxProcessor(_CommandMixin):
         except Exception as e:
             logger.error(f"Error sending prompt: {e}", exc_info=True)
             raise CLIError(f"Error sending prompt: {e}") from e
+
+    def process_transcription_review(
+        self,
+        text: str,
+        language: str,
+        kanbun: bool = False,
+        output_file: Optional[str] = None,
+    ) -> None:
+        """Review a transcription for OCR errors and print (and optionally save) the JSON report."""
+        try:
+            result_json = self.transcription_review_service.review_transcription(
+                text, language, kanbun=kanbun
+            )
+            print("\n" + result_json)
+            if output_file:
+                self._save_text_file(result_json, output_file, "Review")
+        except Exception as e:
+            logger.error(f"Error during transcription review: {e}", exc_info=True)
+            raise CLIError(f"Error during transcription review: {e}") from e
 
     @staticmethod
     def _save_text_file(text: str, output_file: str, label: str = "Output") -> None:

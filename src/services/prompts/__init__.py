@@ -8,9 +8,11 @@ create a spec, then call its methods to obtain (system_prompt, user_prompt).
 from .translation import TranslationPromptSpec
 from .ocr import OcrPromptSpec
 from .image_translation import ImageTranslationPromptSpec
+from .transcription_review import TranscriptionReviewPromptSpec
 
 __all__ = [
     "TranslationPromptSpec",
     "OcrPromptSpec",
     "ImageTranslationPromptSpec",
+    "TranscriptionReviewPromptSpec",
 ]
