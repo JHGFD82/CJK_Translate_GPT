@@ -431,8 +431,16 @@ TRANSCRIPTION_REVIEW_SCHEMA = (
     '    "source_confidence": "<high | medium | low | unknown>",\n'
     '    "overall_quality": "<good | fair | poor>",\n'
     '    "assessment": "<1\u20133 sentences on transcription quality and any systematic error patterns>",\n'
-    '    "error_count": <integer>\n'
+    '    "error_count": <integer, count of entries in \'corrections\' only>\n'
     '  },\n'
+    '  "global_replacements": [\n'
+    '    {\n'
+    '      "from": "<character(s) as mistakenly transcribed>",\n'
+    '      "to": "<correct character(s)>",\n'
+    '      "confidence": "<high | medium | low>",\n'
+    '      "note": "<optional: brief explanation, e.g. visually similar in low-resolution scans>"\n'
+    '    }\n'
+    '  ],\n'
     '  "corrections": [\n'
     '    {\n'
     '      "page": <integer | null>,\n'
@@ -457,7 +465,16 @@ TRANSCRIPTION_REVIEW_RULES = (
     '- "position" is the 1-based index of the first erroneous character within the line.\n'
     '- "context" should show approximately 10 characters before and after the error.\n'
     "- If no errors are found, return an empty corrections array.\n"
-    "- Do not flag punctuation normalization or stylistic preferences \u2014 only genuine OCR errors."
+    "- Do not flag punctuation normalization or stylistic preferences \u2014 only genuine OCR errors.\n"
+    "- GLOBAL REPLACEMENTS vs CORRECTIONS: If the same character substitution error (one specific\n"
+    "  character or sequence mistakenly rendered as another) occurs in three or more places,\n"
+    "  record it ONCE in 'global_replacements' as a find-and-replace rule rather than listing\n"
+    "  every occurrence in 'corrections'. A global replacement means: every instance of 'from'\n"
+    "  in the transcription should be replaced with 'to'. Do NOT also add those instances to\n"
+    "  'corrections' — they are covered by the global rule. Use 'corrections' only for errors\n"
+    "  that are unique to a specific context or whose correction depends on surrounding text.\n"
+    '- "error_count" reflects the number of entries in "corrections" only; global replacements\n'
+    "  are not counted individually."
 )
 
 # Placeholders: {language}
