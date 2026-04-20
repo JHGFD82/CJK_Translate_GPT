@@ -300,6 +300,11 @@ KANBUN_MAIN_OCR_NOTE = (
     "- 振り仮名 / ルビ (furigana/ruby) — small kana giving readings above or beside characters\n"
     "- 返り点 (kaeriten: レ点, 一二三点, 上中下点, etc.) — reordering marks beside characters\n"
     "- Any other small subscript or superscript annotation\n"
+    "- Handwritten characters, stamps, seals, or ink marks of any kind\n"
+    "- Any text written in the margins, between columns, or outside the main text block\n"
+    "EXCEPTIONS — include these even if they appear outside the main body columns:\n"
+    "- Chapter titles, section headings, and fascicle labels\n"
+    "- Printed page numbers\n"
     "Repetition marks that occupy a main-character position (々, 〻, 〱, 〲, etc.) ARE "
     "main-line characters and must be transcribed.\n"
     "Do NOT reorder characters or apply kundoku reading order; transcribe the main characters "
@@ -308,7 +313,9 @@ KANBUN_MAIN_OCR_NOTE = (
 
 OCR_USER_BASE_KANBUN_MAIN = (
     "Transcribe ONLY the large main-line kanji from this kanbun (漢文) image. "
-    "Do not include okurigana, furigana, kaeriten, or any other small annotation characters."
+    "Do not include okurigana, furigana, kaeriten, any other small annotation characters, "
+    "handwritten marks, or text in the margins. "
+    "Chapter titles and printed page numbers may be included."
 )
 
 KANBUN_OCR_NOTE = (
@@ -459,11 +466,13 @@ TRANSCRIPTION_REVIEW_KANBUN_NOTE = (
 
 TRANSCRIPTION_REVIEW_KANBUN_MAIN_NOTE = (
     "This transcription was produced in main-character-only mode from a kanbun (漢文) image: "
-    "okurigana (送り仮名), furigana (振り仮名/ルビ), kaeriten (返り点), and all other small "
-    "kundoku annotations were intentionally omitted during OCR. Do NOT flag the absence of "
-    "these annotation characters as errors — they were never part of the transcription.\n"
+    "okurigana (送り仮名), furigana (振り仮名/ルビ), kaeriten (返り点), all other small "
+    "kundoku annotations, handwritten marks, and any text in the margins were intentionally "
+    "omitted during OCR. Do NOT flag the absence of any of these as errors — they were never "
+    "part of the transcription.\n"
     "Focus your review solely on the accuracy of the main-line kanji characters that are "
-    "present. Repetition marks that occupy a main-character position (々, 〻, 〱, 〲, etc.) "
+    "present. Chapter titles and printed page numbers may appear and are legitimate. "
+    "Repetition marks that occupy a main-character position (々, 〻, 〱, 〲, etc.) "
     "are valid and should not be flagged unless clearly wrong for their context."
 )
 
