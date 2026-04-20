@@ -415,9 +415,21 @@ TRANSCRIPTION_REVIEW_ROLE = (
 )
 
 TRANSCRIPTION_REVIEW_KANBUN_NOTE = (
-    "The text contains kanbun (\u6f22\u6587) with kundoku annotations (\u8fd4\u308a\u70b9, \u9001\u308a\u4eee\u540d). "
+    "The text contains kanbun (漢文) with kundoku annotations (返り点, 送り仮名). "
     "Evaluate annotations as part of the transcription — they are intentional and should "
-    "not be flagged as errors unless clearly wrong."
+    "not be flagged as errors unless clearly wrong.\n"
+    "Repetition marks are valid transcription characters and must NOT be flagged as errors "
+    "simply because they differ from the character they represent. The following are all "
+    "legitimate, distinct Unicode characters — treat each one as correct if it plausibly "
+    "matches what would appear in a historical kanbun manuscript:\n"
+    "  々  (noma, kanji repetition mark)\n"
+    "  〻  (variant noma, resembles ノ＋一)\n"
+    "  〱 〲 (ku-no-ji-ten, angled z-shape)\n"
+    "  〳 〴 〵 (vertical ku-no-ji-ten variants)\n"
+    "  ゝ ゞ (hiragana iteration marks)\n"
+    "Only flag a repetition mark as an error if it is clearly the wrong mark for its "
+    "position (e.g. a kanji repetition mark where a kana iteration mark is expected), "
+    "or if it has been substituted for a regular character that cannot be a repetition."
 )
 
 TRANSCRIPTION_REVIEW_APPROACH = (
