@@ -250,11 +250,18 @@ Transcription review (OCR error detection):
     )
     transcribe_parser.add_argument('-i', '--input', dest='input_file', type=str, required=False, help='Input image file path, or a folder of images to process in order')
     transcribe_parser.add_argument('-v', '--vertical', dest='vertical', action='store_true', help='Text is predominantly vertical (top-to-bottom, right-to-left columns)')
-    transcribe_parser.add_argument(
+    kanbun_group = transcribe_parser.add_mutually_exclusive_group()
+    kanbun_group.add_argument(
         '--kanbun',
         dest='kanbun',
         action='store_true',
         help='Image contains kanbun (漢文): preserve 返り点, 送り仮名, and other kundoku annotations exactly as written',
+    )
+    kanbun_group.add_argument(
+        '--kanbun-main',
+        dest='kanbun_main',
+        action='store_true',
+        help='Image contains kanbun (漢文): transcribe ONLY the large main-line kanji; omit okurigana, furigana, kaeriten, and other small annotations',
     )
     transcribe_parser.add_argument('-P', '--passes', dest='passes', type=int, default=DEFAULT_OCR_PASSES, metavar='N', help='Number of OCR passes (default: 1). Passes > 1 send the image and prior transcription back to the model for review and correction.')
     transcribe_parser.add_argument(

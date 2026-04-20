@@ -341,6 +341,9 @@ class _CommandMixin:
         if getattr(args, 'kanbun', False):
             self.image_processor_service.kanbun = True
 
+        if getattr(args, 'kanbun_main', False):
+            self.image_processor_service.kanbun_main = True
+
         if getattr(args, 'dry_run', False):
             vertical_dr = getattr(args, 'vertical', False)
             passes_dr = getattr(args, 'passes', 1)

@@ -286,6 +286,31 @@ KANBUN_SCRIPT_NOTE = (
     "do NOT omit small or lightly printed kana, as they are critical annotations."
 )
 
+KANBUN_MAIN_SCRIPT_NOTE = (
+    "The text is kanbun (漢文) — Classical Chinese written primarily in kanji. "
+    "Small kana characters beside the main characters are kundoku annotations "
+    "(送り仮名 okurigana, 振り仮名 furigana). Transcribe ONLY the main-line kanji; "
+    "do NOT transcribe any small annotation kana."
+)
+
+KANBUN_MAIN_OCR_NOTE = (
+    "The image contains kanbun (漢文) — Classical Chinese text with kundoku annotations. "
+    "Transcribe ONLY the large main-line kanji characters. Omit all of the following:\n"
+    "- 送り仮名 (okurigana) — small kana written beside the main characters\n"
+    "- 振り仮名 / ルビ (furigana/ruby) — small kana giving readings above or beside characters\n"
+    "- 返り点 (kaeriten: レ点, 一二三点, 上中下点, etc.) — reordering marks beside characters\n"
+    "- Any other small subscript or superscript annotation\n"
+    "Repetition marks that occupy a main-character position (々, 〻, 〱, 〲, etc.) ARE "
+    "main-line characters and must be transcribed.\n"
+    "Do NOT reorder characters or apply kundoku reading order; transcribe the main characters "
+    "in the visual order as they appear on the page (top-to-bottom, right-to-left columns)."
+)
+
+OCR_USER_BASE_KANBUN_MAIN = (
+    "Transcribe ONLY the large main-line kanji from this kanbun (漢文) image. "
+    "Do not include okurigana, furigana, kaeriten, or any other small annotation characters."
+)
+
 KANBUN_OCR_NOTE = (
     "The image contains kanbun (漢文) — Classical Chinese text annotated for "
     "Japanese kundoku (訓読) reading. Transcribe the image faithfully, preserving "
