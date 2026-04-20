@@ -402,9 +402,10 @@ class _CommandMixin:
         """Handle the 'transcription_review' command."""
         language: str = args.language_code  # already resolved by parse_single_language_code
         kanbun = getattr(args, 'kanbun', False)
+        kanbun_main = getattr(args, 'kanbun_main', False)
 
         if getattr(args, 'notes', False):
-            _preview_sys, _preview_usr = self.transcription_review_service.build_prompts(language, kanbun=kanbun)
+            _preview_sys, _preview_usr = self.transcription_review_service.build_prompts(language, kanbun=kanbun, kanbun_main=kanbun_main)
             sys_note, usr_note = self._collect_notes(_preview_sys, _preview_usr)
             self.transcription_review_service.system_note = sys_note
             self.transcription_review_service.user_note = usr_note
@@ -419,7 +420,7 @@ class _CommandMixin:
 
         if getattr(args, 'dry_run', False):
             model_dr = self.transcription_review_service._get_model()
-            sys_p, usr_p = self.transcription_review_service.build_prompts(language, kanbun=kanbun)
+            sys_p, usr_p = self.transcription_review_service.build_prompts(language, kanbun=kanbun, kanbun_main=kanbun_main)
             self._dry_run_display(
                 model_dr, sys_p, usr_p,
                 note="Transcription text would be appended to the user prompt at runtime",
@@ -451,7 +452,7 @@ class _CommandMixin:
             )
 
         output_file_r = getattr(args, 'output_file', None)
-        self.process_transcription_review(text, language, kanbun=kanbun, output_file=output_file_r)
+        self.process_transcription_review(text, language, kanbun=kanbun, kanbun_main=kanbun_main, output_file=output_file_r)
 
     def run(self, args: argparse.Namespace) -> None:
         """Run the translation application with the given arguments."""

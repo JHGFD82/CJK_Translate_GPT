@@ -311,11 +311,18 @@ Transcription review (OCR error detection):
         action='store_true',
         help='Paste the transcription text interactively (end with --- on its own line)',
     )
-    review_parser.add_argument(
+    review_kanbun_group = review_parser.add_mutually_exclusive_group()
+    review_kanbun_group.add_argument(
         '--kanbun',
         dest='kanbun',
         action='store_true',
-        help='Text contains kanbun (\u6f22\u6587) with kundoku annotations (\u8fd4\u308a\u70b9, \u9001\u308a\u4eee\u540d)',
+        help='Text contains kanbun (漢文) with kundoku annotations (返り点, 送り仮名)',
+    )
+    review_kanbun_group.add_argument(
+        '--kanbun-main',
+        dest='kanbun_main',
+        action='store_true',
+        help='Transcription was produced in main-character-only mode (okurigana, furigana, kaeriten were omitted intentionally — do not flag their absence as errors)',
     )
     _add_common_flags(review_parser)
     _add_notes_flags(review_parser)

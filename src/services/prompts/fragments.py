@@ -457,6 +457,16 @@ TRANSCRIPTION_REVIEW_KANBUN_NOTE = (
     "or if it has been substituted for a regular character that cannot be a repetition."
 )
 
+TRANSCRIPTION_REVIEW_KANBUN_MAIN_NOTE = (
+    "This transcription was produced in main-character-only mode from a kanbun (漢文) image: "
+    "okurigana (送り仮名), furigana (振り仮名/ルビ), kaeriten (返り点), and all other small "
+    "kundoku annotations were intentionally omitted during OCR. Do NOT flag the absence of "
+    "these annotation characters as errors — they were never part of the transcription.\n"
+    "Focus your review solely on the accuracy of the main-line kanji characters that are "
+    "present. Repetition marks that occupy a main-character position (々, 〻, 〱, 〲, etc.) "
+    "are valid and should not be flagged unless clearly wrong for their context."
+)
+
 TRANSCRIPTION_REVIEW_APPROACH = (
     "REVIEW APPROACH:\n"
     "1. Assess whether the text makes sense as a whole.\n"

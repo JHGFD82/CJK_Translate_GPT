@@ -596,12 +596,13 @@ class SandboxProcessor(_CommandMixin):
         text: str,
         language: str,
         kanbun: bool = False,
+        kanbun_main: bool = False,
         output_file: Optional[str] = None,
     ) -> None:
         """Review a transcription for OCR errors and print (and optionally save) the JSON report."""
         try:
             result_json = self.transcription_review_service.review_transcription(
-                text, language, kanbun=kanbun
+                text, language, kanbun=kanbun, kanbun_main=kanbun_main
             )
             print("\n" + result_json)
             if output_file:
