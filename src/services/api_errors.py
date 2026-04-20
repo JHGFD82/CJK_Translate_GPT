@@ -18,6 +18,26 @@ def is_content_filter_error(error: Exception) -> bool:
     return "content_filter" in msg or "jailbreak" in msg
 
 
+def is_transient_error(error: Exception) -> bool:
+    """Return True if the error is a transient server-side failure worth retrying.
+
+    Covers 503 Service Unavailable, gateway timeouts, and provider-side
+    deadline / overload responses (e.g. Google 'Deadline expired').
+    """
+    msg = str(error).lower()
+    return (
+        "503" in msg
+        or "unavailable" in msg
+        or "deadline expired" in msg
+        or "internalservererror" in msg
+        or "502" in msg
+        or "bad gateway" in msg
+        or "504" in msg
+        or "gateway timeout" in msg
+        or "overloaded" in msg
+    )
+
+
 def raise_for_model_access_error(error: Exception, model: str) -> None:
     """Raise a user-friendly ValueError if *error* is a model-access denial.
 

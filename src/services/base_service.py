@@ -11,7 +11,7 @@ from ..models import (
     model_uses_max_completion_tokens, model_has_fixed_parameters,
 )
 from ..tracking.token_tracker import TokenTracker
-from .api_errors import APISignal, classify_api_error
+from .api_errors import APISignal, classify_api_error, is_transient_error
 from .constants import MAX_RETRIES, BASE_RETRY_DELAY
 
 
@@ -188,6 +188,14 @@ class BaseService:
                 if result is not None:
                     return result
             except Exception as e:
+                if is_transient_error(e) and attempt < MAX_RETRIES - 1:
+                    delay = BASE_RETRY_DELAY * (2 ** attempt) + (0.1 * attempt)
+                    logging.warning(
+                        f"Transient server error on {operation} "
+                        f"(attempt {attempt + 1}/{MAX_RETRIES}), retrying in {delay:.1f}s: {e}"
+                    )
+                    time.sleep(delay)
+                    continue
                 signal = classify_api_error(e, model)
                 if signal == APISignal.CONTENT_FILTER and attempt < MAX_RETRIES - 1:
                     logging.warning(
