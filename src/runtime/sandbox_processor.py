@@ -113,7 +113,6 @@ class SandboxProcessor(_CommandMixin):
             self.pdf_processor = PDFProcessor()
             self.file_output = FileOutputHandler()
         except ValueError as e:
-            logger.error(f"Configuration error: {e}")
             raise CLIError(f"Configuration error: {e}") from e
 
     def _detect_and_validate_file(self, file_path: str) -> str:
@@ -207,7 +206,7 @@ class SandboxProcessor(_CommandMixin):
                     opts,
                 )
             except Exception as e:
-                logger.error(f"Error processing image: {e}", exc_info=True)
+                logger.debug(f"Error processing image: {e}", exc_info=True)
                 raise CLIError(f"Error processing image: {e}") from e
             return
 
@@ -268,7 +267,7 @@ class SandboxProcessor(_CommandMixin):
                 ) from e
             raise CLIError(f"Import error: {e}") from e
         except Exception as e:
-            logger.error(f"Error processing document: {e}", exc_info=True)
+            logger.debug(f"Error processing document: {e}", exc_info=True)
             raise CLIError(f"Error processing document: {e}") from e
 
     def translate_custom_text(
@@ -314,7 +313,7 @@ class SandboxProcessor(_CommandMixin):
             logger.info("Translation cancelled by user")
             print("\nTranslation cancelled.")
         except Exception as e:
-            logger.error(f"Error during translation: {e}", exc_info=True)
+            logger.debug(f"Error during translation: {e}", exc_info=True)
             raise CLIError(f"Error during translation: {e}") from e
 
     def process_image_translation(

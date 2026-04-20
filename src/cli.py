@@ -373,7 +373,6 @@ def main() -> None:
             raise CLIError(f"Unknown command: {args.command}")
 
     except CLIError as e:
-        logger.error(f"Error: {e}")
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
