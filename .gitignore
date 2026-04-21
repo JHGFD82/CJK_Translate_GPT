@@ -43,6 +43,7 @@ data/usage_report.html
 .coverage
 htmlcov/
 coverage.xml
+junit.xml
 
 # OS
 Thumbs.db
