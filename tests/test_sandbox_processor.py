@@ -466,3 +466,177 @@ class TestTranslateCustomText:
         proc.translation_service.translate_page_text.return_value = "结果"
         proc.translate_custom_text("English", "Chinese", abstract=True)
         proc.translation_service.translate_page_text.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# translate_document — ImportError for python-docx (lines 301-302)
+# ---------------------------------------------------------------------------
+
+class TestTranslateDocumentImportError:
+
+    def test_missing_python_docx_raises_cli_error(self, monkeypatch, tmp_path):
+        """When DocxProcessor raises ImportError mentioning python-docx, CLIError wraps it."""
+        proc = _make_processor(monkeypatch)
+        docx_file = tmp_path / "doc.docx"
+        docx_file.write_bytes(b"fake docx content")
+
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.SandboxProcessor._detect_and_validate_file",
+            lambda self, fp: "docx"
+        )
+
+        # Patch _process_text_based_file to raise ImportError as python-docx would
+        def raise_import(*a, **kw):
+            raise ImportError("No module named 'python-docx'")
+
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.SandboxProcessor._process_text_based_file",
+            raise_import,
+        )
+
+        with pytest.raises(CLIError, match="pip install python-docx"):
+            proc.translate_document(str(docx_file), "Chinese", "English")
+
+
+# ---------------------------------------------------------------------------
+# translate_document — image file path (lines 193-207)
+# ---------------------------------------------------------------------------
+
+class TestTranslateDocumentImagePath:
+
+    def test_image_file_delegates_to_process_image_translation(self, monkeypatch, tmp_path):
+        proc = _make_processor(monkeypatch)
+        img = tmp_path / "photo.jpg"
+        img.write_bytes(b"fake image")
+
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.SandboxProcessor._detect_and_validate_file",
+            lambda self, fp: "image"
+        )
+        proc.process_image_translation = MagicMock()
+        proc.translate_document(str(img), "Chinese", "English")
+        proc.process_image_translation.assert_called_once()
+
+    def test_image_file_exception_raises_cli_error(self, monkeypatch, tmp_path):
+        proc = _make_processor(monkeypatch)
+        img = tmp_path / "photo.jpg"
+        img.write_bytes(b"fake image")
+
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.SandboxProcessor._detect_and_validate_file",
+            lambda self, fp: "image"
+        )
+        proc.process_image_translation = MagicMock(side_effect=RuntimeError("API down"))
+        with pytest.raises(CLIError, match="API down"):
+            proc.translate_document(str(img), "Chinese", "English")
+
+
+# ---------------------------------------------------------------------------
+# translate_document — save output path (lines 249-260)
+# ---------------------------------------------------------------------------
+
+class TestTranslateDocumentSaveOutput:
+
+    def test_saves_output_when_output_file_specified(self, monkeypatch, tmp_path):
+        proc = _make_processor(monkeypatch)
+        txt_file = tmp_path / "doc.txt"
+        txt_file.write_text("Hello content", encoding="utf-8")
+
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.SandboxProcessor._detect_and_validate_file",
+            lambda self, fp: "txt"
+        )
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.SandboxProcessor._process_text_based_file",
+            lambda *a, **kw: ["Translated text"]
+        )
+
+        out_file = str(tmp_path / "out.txt")
+        opts = OutputOptions(output_file=out_file)
+        proc.translate_document(str(txt_file), "Chinese", "English", opts=opts)
+        proc.file_output.save_translation_output.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# translate_custom_text — save output path (lines 300-301)
+# ---------------------------------------------------------------------------
+
+class TestTranslateCustomTextSaveOutput:
+
+    def test_saves_output_when_output_file_specified(self, monkeypatch, tmp_path, capsys):
+        proc = _make_processor(monkeypatch)
+        inputs = iter(["Translate this", "---"])
+        monkeypatch.setattr("builtins.input", lambda *_: next(inputs))
+
+        proc.translation_service.translate_text.return_value = "翻訳結果"
+        out_file = str(tmp_path / "result.txt")
+        opts = OutputOptions(output_file=out_file)
+        proc.translate_custom_text("English", "Japanese", opts=opts)
+        proc.file_output.save_translation_output.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# process_image_translation_folder — parallel path (lines 371-457)
+# ---------------------------------------------------------------------------
+
+class TestProcessImageTranslationFolderParallel:
+
+    def test_parallel_path_processes_images(self, monkeypatch, tmp_path, capsys):
+        proc = _make_processor(monkeypatch)
+        folder = tmp_path / "imgs"
+        folder.mkdir()
+        # Create 2 fake images
+        for name in ["a.jpg", "b.jpg"]:
+            (folder / name).write_bytes(b"fake")
+
+        proc.image_translation_service.process_image_translation = MagicMock(
+            return_value=("transcript", "translation")
+        )
+        proc.image_translation_service._get_model = MagicMock(return_value="gpt-4o")
+        proc.image_translation_service._suppress_inline_print = False
+
+        proc.process_image_translation_folder(
+            str(folder), "Chinese", "English", OutputOptions(), workers=2
+        )
+        # Both images should have been processed
+        assert proc.image_translation_service.process_image_translation.call_count == 2
+
+    def test_parallel_worker_exception_stored_as_error(self, monkeypatch, tmp_path, capsys):
+        proc = _make_processor(monkeypatch)
+        folder = tmp_path / "err_imgs"
+        folder.mkdir()
+        (folder / "a.jpg").write_bytes(b"fake")
+
+        proc.image_translation_service.process_image_translation = MagicMock(
+            side_effect=RuntimeError("worker failed")
+        )
+        proc.image_translation_service._get_model = MagicMock(return_value="gpt-4o")
+        proc.image_translation_service._suppress_inline_print = False
+
+        # Should not raise — errors collected and printed
+        proc.process_image_translation_folder(
+            str(folder), "Chinese", "English", OutputOptions(), workers=2
+        )
+        out = capsys.readouterr().out
+        assert "worker failed" in out or "Error" in out
+
+
+# ---------------------------------------------------------------------------
+# process_image_folder — parallel path (lines 481-end)
+# ---------------------------------------------------------------------------
+
+class TestProcessImageFolderParallel:
+
+    def test_parallel_ocr_processes_all_images(self, monkeypatch, tmp_path, capsys):
+        proc = _make_processor(monkeypatch)
+        folder = tmp_path / "ocr_imgs"
+        folder.mkdir()
+        for name in ["x.jpg", "y.jpg"]:
+            (folder / name).write_bytes(b"fake")
+
+        proc.image_processor_service.process_image_ocr = MagicMock(
+            return_value="Extracted text"
+        )
+
+        proc.process_image_folder(str(folder), "English", workers=2)
+        assert proc.image_processor_service.process_image_ocr.call_count == 2

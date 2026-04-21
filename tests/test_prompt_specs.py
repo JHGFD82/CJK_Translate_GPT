@@ -364,3 +364,77 @@ class TestSharedBehaviours:
         noted = TranslationPromptSpec("Chinese", "English", system_note="extra")
         assert len(noted.system_prompt()) > len(base.system_prompt())
         assert len(noted.user_prompt()) == len(base.user_prompt())
+
+
+# ===========================================================================
+# TranslationPromptSpec._context_spec — lines 34, 36 of translation.py
+# ===========================================================================
+
+class TestTranslationContextSpec:
+    """_context_spec branches for abstract and previous_page context types."""
+
+    def test_context_type_abstract_includes_abstract_fragment(self):
+        from src.services.prompts import fragments as F
+        spec = TranslationPromptSpec("Chinese", "English", context_type="abstract")
+        system = spec.system_prompt()
+        # The abstract spec string should appear in the rendered system prompt
+        assert "abstract" in system.lower()
+
+    def test_context_type_previous_page_includes_previous_fragment(self):
+        from src.services.prompts import fragments as F
+        spec = TranslationPromptSpec("Chinese", "English", context_type="previous_page")
+        system = spec.system_prompt()
+        assert "previous" in system.lower() or "context" in system.lower()
+
+    def test_context_type_none_is_default(self):
+        spec_default = TranslationPromptSpec("Chinese", "English")
+        spec_none = TranslationPromptSpec("Chinese", "English", context_type="none")
+        assert spec_default.system_prompt() == spec_none.system_prompt()
+
+    def test_context_type_abstract_differs_from_none(self):
+        spec_none = TranslationPromptSpec("Chinese", "English", context_type="none")
+        spec_abstract = TranslationPromptSpec("Chinese", "English", context_type="abstract")
+        assert spec_none.system_prompt() != spec_abstract.system_prompt()
+
+    def test_context_type_previous_page_differs_from_abstract(self):
+        spec_abstract = TranslationPromptSpec("Chinese", "English", context_type="abstract")
+        spec_prev = TranslationPromptSpec("Chinese", "English", context_type="previous_page")
+        assert spec_abstract.system_prompt() != spec_prev.system_prompt()
+
+
+# ===========================================================================
+# OcrPromptSpec kanbun paths — lines 26, 28, 51, 53 of ocr.py
+# ===========================================================================
+
+class TestOcrPromptSpecKanbun:
+    """kanbun and kanbun_main gate different script notes and user prompt bases."""
+
+    def test_kanbun_main_script_note(self):
+        from src.services.prompts import fragments as F
+        spec = OcrPromptSpec("Japanese", kanbun_main=True)
+        assert spec._script_note() == F.KANBUN_MAIN_SCRIPT_NOTE
+
+    def test_kanbun_script_note(self):
+        from src.services.prompts import fragments as F
+        spec = OcrPromptSpec("Japanese", kanbun=True)
+        assert spec._script_note() == F.KANBUN_SCRIPT_NOTE
+
+    def test_kanbun_main_user_prompt_uses_kanbun_main_base(self):
+        from src.services.prompts import fragments as F
+        spec = OcrPromptSpec("Japanese", kanbun_main=True)
+        usr = spec.user_prompt()
+        assert F.OCR_USER_BASE_KANBUN_MAIN in usr
+
+    def test_kanbun_user_prompt_uses_kanbun_base(self):
+        from src.services.prompts import fragments as F
+        spec = OcrPromptSpec("Japanese", kanbun=True)
+        usr = spec.user_prompt()
+        assert F.OCR_USER_BASE_KANBUN in usr
+
+    def test_kanbun_main_takes_priority_over_kanbun(self):
+        """When both flags are True, kanbun_main should take precedence."""
+        from src.services.prompts import fragments as F
+        spec = OcrPromptSpec("Japanese", kanbun=True, kanbun_main=True)
+        assert spec._script_note() == F.KANBUN_MAIN_SCRIPT_NOTE
+        usr = spec.user_prompt()
+        assert F.OCR_USER_BASE_KANBUN_MAIN in usr

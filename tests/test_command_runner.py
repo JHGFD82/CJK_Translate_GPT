@@ -571,3 +571,301 @@ class TestRunTranscriptionReview:
         args = self._make_review_args(custom_text=True)
         with pytest.raises(CLIError, match="No transcription text"):
             mixin._run_transcription_review(args)
+
+
+# ---------------------------------------------------------------------------
+# _run_translate — dry_run paths (lines 222-279)
+# ---------------------------------------------------------------------------
+
+class TestRunTranslateDryRun:
+
+    def _make_translate_args(self, **overrides):
+        defaults = {
+            "language_code": ("Chinese", "English"),
+            "input_file": None,
+            "custom_text": False,
+            "output_file": None,
+            "auto_save": False,
+            "page_nums": None,
+            "abstract": False,
+            "notes": False,
+            "note_both": None,
+            "note_system": None,
+            "note_user": None,
+            "kanbun": False,
+            "dry_run": True,
+            "workers": 1,
+            "progressive_save": False,
+            "custom_font": None,
+            "temperature": None,
+            "top_p": None,
+            "max_tokens": None,
+        }
+        defaults.update(overrides)
+        return argparse.Namespace(**defaults)
+
+    def _make_dry_mixin(self):
+        mixin = _make_mixin()
+        mixin.translation_service._get_model = MagicMock(return_value="gpt-4o")
+        mixin.translation_service.build_prompts = MagicMock(return_value=("SYS", "USR"))
+        mixin.image_translation_service._get_model = MagicMock(return_value="gpt-4o")
+        mixin.image_translation_service.build_prompts = MagicMock(return_value=("ISYS", "IUSR"))
+        return mixin
+
+    def test_dry_run_no_input_shows_placeholder(self, capsys):
+        mixin = self._make_dry_mixin()
+        args = self._make_translate_args()  # no input_file, no custom_text
+        mixin._run_translate(args)
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+
+    def test_dry_run_txt_file_reads_first_page(self, tmp_path, capsys, monkeypatch):
+        mixin = self._make_dry_mixin()
+        txt = tmp_path / "doc.txt"
+        txt.write_text("Hello world content", encoding="utf-8")
+
+        monkeypatch.setattr(mixin, "_detect_and_validate_file", lambda p: "txt")
+        # Patch TxtProcessor so it returns a predictable page
+        with patch("src.runtime.command_runner.TxtProcessor.process_txt_with_pages", return_value=["Page one text"]):
+            args = self._make_translate_args(input_file=str(txt))
+            mixin._run_translate(args)
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+
+    def test_dry_run_image_file_shows_image_note(self, tmp_path, capsys, monkeypatch):
+        mixin = self._make_dry_mixin()
+        img = tmp_path / "photo.jpg"
+        img.write_bytes(b"fake")
+
+        monkeypatch.setattr(mixin, "_detect_and_validate_file", lambda p: "image")
+        args = self._make_translate_args(input_file=str(img))
+        mixin._run_translate(args)
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+        assert "base64" in out or "image" in out.lower()
+
+    def test_dry_run_custom_text_collects_text(self, monkeypatch, capsys):
+        mixin = self._make_dry_mixin()
+        inputs = iter(["Hello from custom text", "---"])
+        monkeypatch.setattr("builtins.input", lambda *_: next(inputs))
+        args = self._make_translate_args(custom_text=True)
+        mixin._run_translate(args)
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+
+    def test_dry_run_abstract_flag_collects_abstract(self, monkeypatch, capsys):
+        mixin = self._make_dry_mixin()
+        inputs = iter(["Abstract text here", "---"])
+        monkeypatch.setattr("builtins.input", lambda *_: next(inputs))
+        args = self._make_translate_args(abstract=True)
+        mixin._run_translate(args)
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+
+    def test_dry_run_docx_file_reads_first_section(self, tmp_path, capsys, monkeypatch):
+        mixin = self._make_dry_mixin()
+        docx = tmp_path / "doc.docx"
+        docx.write_bytes(b"fake docx")
+
+        monkeypatch.setattr(mixin, "_detect_and_validate_file", lambda p: "docx")
+        with patch("src.runtime.command_runner.DocxProcessor.process_docx_with_pages",
+                   return_value=["Docx page one"]):
+            args = self._make_translate_args(input_file=str(docx))
+            mixin._run_translate(args)
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+
+
+# ---------------------------------------------------------------------------
+# _run_translate — notes flow (lines 182-204)
+# ---------------------------------------------------------------------------
+
+class TestRunTranslateNotes:
+
+    def _make_translate_args(self, **overrides):
+        defaults = {
+            "language_code": ("Chinese", "English"),
+            "input_file": None,
+            "custom_text": True,
+            "output_file": None,
+            "auto_save": False,
+            "page_nums": None,
+            "abstract": False,
+            "notes": True,
+            "note_both": None,
+            "note_system": None,
+            "note_user": None,
+            "kanbun": False,
+            "dry_run": False,
+            "workers": 1,
+            "progressive_save": False,
+            "custom_font": None,
+        }
+        defaults.update(overrides)
+        return argparse.Namespace(**defaults)
+
+    def test_notes_true_custom_text_sets_notes(self, monkeypatch):
+        mixin = _make_mixin()
+        mixin.translation_service.build_prompts = MagicMock(return_value=("SYS", "USR"))
+        # _collect_notes: "user" → note text
+        inputs = iter(["user", "My user note", "---"])
+        monkeypatch.setattr("builtins.input", lambda *_: next(inputs))
+        mixin.translate_custom_text = MagicMock()
+        args = self._make_translate_args()
+        mixin._run_translate(args)
+        assert mixin.translation_service.user_note == "My user note"
+
+    def test_notes_true_image_file_uses_image_prompts(self, tmp_path, monkeypatch):
+        mixin = _make_mixin()
+        img = tmp_path / "photo.jpg"
+        img.write_bytes(b"fake")
+        mixin.image_processor.is_image_file = MagicMock(return_value=True)
+        mixin.image_translation_service.build_prompts = MagicMock(return_value=("ISYS", "IUSR"))
+        mixin.translation_service.build_prompts = MagicMock(return_value=("TSYS", "TUSR"))
+        inputs = iter(["user", "Image note", "---"])
+        monkeypatch.setattr("builtins.input", lambda *_: next(inputs))
+        mixin.translate_document = MagicMock()
+        args = self._make_translate_args(custom_text=False, input_file=str(img))
+        mixin._run_translate(args)
+        mixin.image_translation_service.build_prompts.assert_called_once()
+
+    def test_notes_true_text_file_uses_translation_prompts(self, tmp_path, monkeypatch):
+        mixin = _make_mixin()
+        f = tmp_path / "doc.txt"
+        f.write_text("content")
+        mixin.image_processor.is_image_file = MagicMock(return_value=False)
+        mixin.translation_service.build_prompts = MagicMock(return_value=("TSYS", "TUSR"))
+        inputs = iter(["user", "Text file note", "---"])
+        monkeypatch.setattr("builtins.input", lambda *_: next(inputs))
+        mixin.translate_document = MagicMock()
+        args = self._make_translate_args(custom_text=False, input_file=str(f))
+        mixin._run_translate(args)
+        mixin.translation_service.build_prompts.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# _run_translate — folder path (line 298)
+# ---------------------------------------------------------------------------
+
+class TestRunTranslateFolderInput:
+
+    def _make_translate_args(self, input_file=None, **overrides):
+        defaults = {
+            "language_code": ("Chinese", "English"),
+            "input_file": input_file,
+            "custom_text": False,
+            "output_file": None,
+            "auto_save": False,
+            "page_nums": None,
+            "abstract": False,
+            "notes": False,
+            "note_both": None,
+            "note_system": None,
+            "note_user": None,
+            "kanbun": False,
+            "dry_run": False,
+            "workers": 1,
+            "progressive_save": False,
+            "custom_font": None,
+        }
+        defaults.update(overrides)
+        return argparse.Namespace(**defaults)
+
+    def test_directory_input_delegates_to_process_image_translation_folder(self, tmp_path, monkeypatch):
+        mixin = _make_mixin()
+        folder = tmp_path / "images"
+        folder.mkdir()
+        called = []
+        monkeypatch.setattr(mixin, "process_image_translation_folder",
+                            lambda *a, **kw: called.append(True))
+        args = self._make_translate_args(input_file=str(folder))
+        mixin._run_translate(args)
+        assert called
+
+
+# ---------------------------------------------------------------------------
+# _run_transcribe — dry_run path (lines 337-348)
+# ---------------------------------------------------------------------------
+
+class TestRunTranscribeDryRun:
+
+    def _make_transcribe_args(self, **overrides):
+        defaults = {
+            "language_code": "English",
+            "input_file": None,
+            "output_file": None,
+            "vertical": False,
+            "passes": 1,
+            "workers": 1,
+            "dry_run": True,
+            "notes": False,
+            "note_both": None,
+            "note_system": None,
+            "note_user": None,
+            "kanbun": False,
+            "kanbun_main": False,
+            "temperature": None,
+            "top_p": None,
+            "max_tokens": None,
+            "model": None,
+        }
+        defaults.update(overrides)
+        return argparse.Namespace(**defaults)
+
+    def test_dry_run_shows_output(self, capsys):
+        mixin = _make_mixin()
+        mixin.image_processor_service._get_model = MagicMock(return_value="gpt-4o")
+        mixin.image_processor_service.build_prompts = MagicMock(return_value=("SYS", "USR"))
+        args = self._make_transcribe_args()
+        mixin._run_transcribe(args)
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+
+    def test_dry_run_multi_pass_note_in_output(self, capsys):
+        mixin = _make_mixin()
+        mixin.image_processor_service._get_model = MagicMock(return_value="gpt-4o")
+        mixin.image_processor_service.build_prompts = MagicMock(return_value=("SYS", "USR"))
+        args = self._make_transcribe_args(passes=3)
+        mixin._run_transcribe(args)
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+        assert "pass" in out.lower() or "3" in out
+
+
+# ---------------------------------------------------------------------------
+# _run_transcription_review — dry_run path (lines 422-431)
+# ---------------------------------------------------------------------------
+
+class TestRunTranscriptionReviewDryRun:
+
+    def _make_review_args(self, **overrides):
+        defaults = {
+            "language_code": "Japanese",
+            "input_file": None,
+            "output_file": None,
+            "custom_text": False,
+            "kanbun": False,
+            "kanbun_main": False,
+            "notes": False,
+            "note_both": None,
+            "note_system": None,
+            "note_user": None,
+            "dry_run": True,
+            "temperature": None,
+            "top_p": None,
+            "max_tokens": None,
+        }
+        defaults.update(overrides)
+        return argparse.Namespace(**defaults)
+
+    def test_dry_run_shows_output_without_calling_review(self, capsys):
+        mixin = _make_mixin()
+        mixin.transcription_review_service._get_model = MagicMock(return_value="gpt-4o")
+        mixin.transcription_review_service.build_prompts = MagicMock(return_value=("SYS", "USR"))
+        called = []
+        mixin.process_transcription_review = lambda *a, **kw: called.append(True)
+        args = self._make_review_args()
+        mixin._run_transcription_review(args)
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+        assert not called

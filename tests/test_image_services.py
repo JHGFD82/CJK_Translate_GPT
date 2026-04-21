@@ -310,3 +310,68 @@ class TestRunSingleRefinementPass:
                 "gpt-4o", "system", "sys", "user", "data:url", "prior", "refine", 4000, 2,
             )
         assert result == "Non-empty"
+
+    def test_non_str_content_in_refinement_triggers_retry(self, ocr_svc):
+        """Non-str content in refinement pass should retry (lines 142-143 of image_processor_service.py)."""
+        responses = iter([_FakeResponse(content=12345), _FakeResponse("Good text")])
+        with patch.object(ocr_svc, "_create_completion",
+                          side_effect=lambda *a, **kw: next(responses)):
+            result = ocr_svc._run_single_refinement_pass(
+                "gpt-4o", "system", "sys", "user", "data:url", "prior", "refine", 4000, 2,
+            )
+        assert result == "Good text"
+
+
+class TestProcessImageOcrNonStrContent:
+    """Cover lines 198-199 of image_processor_service.py (non-str content retry)."""
+
+    def test_non_str_content_in_ocr_triggers_retry(self, ocr_svc):
+        responses = iter([_FakeResponse(content=42), _FakeResponse("Good OCR")])
+        with patch.object(ocr_svc.image_processor, "local_image_to_data_url", return_value="data:url"), \
+             patch.object(ocr_svc, "_create_completion",
+                          side_effect=lambda *a, **kw: next(responses)):
+            result = ocr_svc.process_image_ocr("img.jpg", "English")
+        assert result == "Good OCR"
+
+
+class TestImageTranslationNonStrContent:
+    """Cover lines 213-216, 218-221, 223-224 of image_translation_service.py."""
+
+    def test_none_content_triggers_retry(self, img_trans_svc):
+        responses = iter([
+            _FakeResponse(content=None),
+            _FakeResponse("[TRANSCRIPT]\nR\n[TRANSLATION]\nT"),
+        ])
+        with patch.object(img_trans_svc.image_processor, "local_image_to_data_url", return_value="data:url"), \
+             patch.object(img_trans_svc, "_create_completion",
+                          side_effect=lambda *a, **kw: next(responses)):
+            transcript, translation = img_trans_svc.process_image_translation(
+                "img.jpg", "Chinese", "English"
+            )
+        assert translation == "T"
+
+    def test_non_str_content_triggers_retry(self, img_trans_svc):
+        responses = iter([
+            _FakeResponse(content=99999),
+            _FakeResponse("[TRANSCRIPT]\nR2\n[TRANSLATION]\nT2"),
+        ])
+        with patch.object(img_trans_svc.image_processor, "local_image_to_data_url", return_value="data:url"), \
+             patch.object(img_trans_svc, "_create_completion",
+                          side_effect=lambda *a, **kw: next(responses)):
+            _, translation = img_trans_svc.process_image_translation(
+                "img.jpg", "Chinese", "English"
+            )
+        assert translation == "T2"
+
+    def test_empty_stripped_content_triggers_retry(self, img_trans_svc):
+        responses = iter([
+            _FakeResponse(content="   "),
+            _FakeResponse("[TRANSCRIPT]\nR3\n[TRANSLATION]\nT3"),
+        ])
+        with patch.object(img_trans_svc.image_processor, "local_image_to_data_url", return_value="data:url"), \
+             patch.object(img_trans_svc, "_create_completion",
+                          side_effect=lambda *a, **kw: next(responses)):
+            _, translation = img_trans_svc.process_image_translation(
+                "img.jpg", "Chinese", "English"
+            )
+        assert translation == "T3"

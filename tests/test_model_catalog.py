@@ -23,6 +23,7 @@ from src.models import (
     model_has_fixed_parameters,
     model_supports_vision,
     model_uses_max_completion_tokens,
+    remove_model_from_catalog,
     resolve_model,
     save_model_catalog,
 )
@@ -797,4 +798,70 @@ class TestMaybeSyncModelPricing:
         from src.models.pricing import maybe_sync_model_pricing
         maybe_sync_model_pricing("gpt-4o")
         assert load_calls == []  # cache hit — no disk read
+
+    def test_recent_timestamp_populates_cache_without_fetch(self, monkeypatch, tmp_path):
+        """When last_sync is fresh (< 1 hour old), pricing should NOT be re-fetched."""
+        from datetime import datetime, timedelta
+        recent = (datetime.now() - timedelta(minutes=10)).isoformat(timespec="seconds")
+        cat = self._build_catalog(portkey_id="openai/gpt-4o", last_sync=recent)
+        monkeypatch.setattr(catalog_module, "load_model_catalog", lambda: cat)
+
+        fetch_calls = []
+        monkeypatch.setattr(
+            pricing_module_direct, "_fetch_model_pricing",
+            lambda pm, pu: fetch_calls.append(1) or {"input": 9.0, "output": 9.0},
+        )
+
+        from src.models.pricing import maybe_sync_model_pricing
+        maybe_sync_model_pricing("gpt-4o")
+
+        # Fresh timestamp → cache populated, no network call
+        assert fetch_calls == []
+        assert "gpt-4o" in pricing_module_direct._sync_cache
+
+
+# ---------------------------------------------------------------------------
+# remove_model_from_catalog — lines 206-212 of catalog.py
+# ---------------------------------------------------------------------------
+
+class TestRemoveModelFromCatalog:
+
+    def test_removes_existing_model_and_returns_true(self, monkeypatch):
+        import copy
+        cat = copy.deepcopy(SAMPLE_CATALOG)
+        monkeypatch.setattr(catalog_module, "load_model_catalog", lambda: cat)
+        saved = {}
+        monkeypatch.setattr(catalog_module, "save_model_catalog", lambda c: saved.update(c))
+        result = remove_model_from_catalog("gpt-4o-mini")
+        assert result is True
+        assert "gpt-4o-mini" not in saved.get("models", {})
+
+    def test_returns_false_when_model_absent(self, monkeypatch):
+        import copy
+        cat = copy.deepcopy(SAMPLE_CATALOG)
+        monkeypatch.setattr(catalog_module, "load_model_catalog", lambda: cat)
+        result = remove_model_from_catalog("does-not-exist")
+        assert result is False
+
+
+# ---------------------------------------------------------------------------
+# is_model_access_error — line 219 of catalog.py
+# ---------------------------------------------------------------------------
+
+class TestIsModelAccessError:
+
+    def test_returns_true_for_portkey_router_message(self):
+        from src.models.catalog import is_model_access_error
+        msg = "Invalid target name found in the query router"
+        assert is_model_access_error(msg) is True
+
+    def test_returns_false_for_unrelated_error(self):
+        from src.models.catalog import is_model_access_error
+        msg = "Rate limit exceeded"
+        assert is_model_access_error(msg) is False
+
+    def test_case_insensitive_match(self):
+        from src.models.catalog import is_model_access_error
+        msg = "INVALID TARGET NAME FOUND IN THE QUERY ROUTER"
+        assert is_model_access_error(msg) is True
 

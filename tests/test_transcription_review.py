@@ -326,3 +326,57 @@ class TestTranscriptionReviewCLI:
     def test_model_flag(self, parser):
         args = parser.parse_args(["heller", "transcription_review", "J", "-c", "-m", "gpt-4o-mini"])
         assert args.model == "gpt-4o-mini"
+
+
+# ===========================================================================
+# review_transcription — exception and empty-choices paths (lines 158-160, 169)
+# ===========================================================================
+
+class TestReviewTranscriptionExceptionPaths:
+    """Cover lines 158-160 (API exception re-raised) and 169 (empty choices → returns '')."""
+
+    def _make_svc(self):
+        from src.services.transcription_review_service import TranscriptionReviewService
+        svc = TranscriptionReviewService(api_key="fake-key", token_tracker=MagicMock())
+        return svc
+
+    def _patch_catalog(self):
+        return [
+            patch("src.services.transcription_review_service.resolve_model", return_value="gpt-4o"),
+            patch("src.services.transcription_review_service.maybe_sync_model_pricing"),
+            patch("src.services.transcription_review_service.get_model_system_role", return_value="system"),
+            patch("src.services.transcription_review_service.get_model_max_completion_tokens", return_value=4000),
+        ]
+
+    def test_api_exception_is_re_raised(self):
+        """_call_api raising should call handle_api_errors and then re-raise (lines 158-160)."""
+        svc = self._make_svc()
+        patches = self._patch_catalog()
+        for p in patches:
+            p.start()
+        try:
+            with patch.object(svc, "_call_api", side_effect=RuntimeError("boom")), \
+                 patch("src.services.transcription_review_service.handle_api_errors") as mock_handle:
+                with pytest.raises(RuntimeError, match="boom"):
+                    svc.review_transcription("text", "Japanese")
+            mock_handle.assert_called_once()
+        finally:
+            for p in patches:
+                p.stop()
+
+    def test_empty_choices_returns_empty_string(self):
+        """When response has no choices, review_transcription should return '' (line 169)."""
+        svc = self._make_svc()
+        no_choices_resp = MagicMock()
+        no_choices_resp.choices = []
+        patches = self._patch_catalog()
+        for p in patches:
+            p.start()
+        try:
+            with patch.object(svc, "_call_api", return_value=no_choices_resp), \
+                 patch.object(svc, "_record_response_usage"):
+                result = svc.review_transcription("text", "Japanese")
+            assert result == ""
+        finally:
+            for p in patches:
+                p.stop()
