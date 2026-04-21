@@ -1,8 +1,10 @@
 """Tests for model-catalog functions in src/models/."""
 
 import json
+import logging
 
 import pytest
+from unittest.mock import patch
 
 import src.models.catalog as catalog_module
 import src.models.pricing as pricing_module
@@ -598,3 +600,201 @@ class TestAddModelToCatalog:
         model_name, entry = add_model_to_catalog("google/gemini/2.5-pro")
         assert model_name == "gemini/2.5-pro"
         assert entry["portkey_id"] == "google/gemini/2.5-pro"
+
+
+# ---------------------------------------------------------------------------
+# save_model_catalog — exception cleanup path (lines 76-81 of catalog.py)
+# ---------------------------------------------------------------------------
+
+class TestSaveModelCatalogExceptionPath:
+
+    def test_temp_file_cleaned_up_on_write_failure(self, monkeypatch, tmp_path):
+        """If writing the temp file fails the OSError is re-raised and no tmp file lingers."""
+        import os
+        import tempfile as _tempfile
+
+        output_file = tmp_path / "model_catalog.json"
+        monkeypatch.setattr(catalog_module, "get_model_catalog_path", lambda: output_file)
+
+        tmp_created = []
+
+        original_mkstemp = _tempfile.mkstemp
+
+        def fake_mkstemp(dir=None, suffix=None):
+            fd, path = original_mkstemp(dir=dir, suffix=suffix)
+            tmp_created.append(path)
+            return fd, path
+
+        # Make os.replace fail after the temp file is written
+        original_replace = os.replace
+
+        def bad_replace(src, dst):
+            raise OSError("simulated replace failure")
+
+        monkeypatch.setattr(_tempfile, "mkstemp", fake_mkstemp)
+        monkeypatch.setattr(os, "replace", bad_replace)
+        monkeypatch.setattr(catalog_module.os, "replace", bad_replace)
+
+        with pytest.raises(OSError, match="simulated replace failure"):
+            save_model_catalog(SAMPLE_CATALOG)
+
+
+# ---------------------------------------------------------------------------
+# _fetch_model_pricing — zero-price raises RuntimeError (pricing.py line 46)
+# ---------------------------------------------------------------------------
+
+import io
+
+
+class TestFetchModelPricing:
+
+    def _make_urlopen_mock(self, payload: dict):
+        """Return a context manager that yields a readable response with *payload*."""
+        import unittest.mock as _mock
+
+        body = json.dumps(payload).encode()
+        cm = _mock.MagicMock()
+        cm.__enter__ = _mock.Mock(return_value=_mock.MagicMock(read=_mock.Mock(return_value=body)))
+        cm.__exit__ = _mock.Mock(return_value=False)
+        return cm
+
+    def test_zero_prices_raise_runtime_error(self, monkeypatch, tmp_path):
+        catalog_file = tmp_path / "model_catalog.json"
+        catalog_file.write_text(json.dumps(SAMPLE_CATALOG))
+        monkeypatch.setattr(catalog_module, "get_model_catalog_path", lambda: catalog_file)
+
+        payload = {"pay_as_you_go": {
+            "request_token": {"price": 0},
+            "response_token": {"price": 0},
+        }}
+        with patch("urllib.request.urlopen", return_value=self._make_urlopen_mock(payload)):
+            with pytest.raises(RuntimeError, match="No valid pricing data"):
+                from src.models.pricing import _fetch_model_pricing as _fmp
+                _fmp("openai/gpt-4o", 1_000_000)
+
+
+# ---------------------------------------------------------------------------
+# add_model_to_catalog — corrupt catalog JSON falls back to empty (lines 84-85)
+# ---------------------------------------------------------------------------
+
+class TestAddModelToCatalogCorruptCatalog:
+
+    def test_corrupt_catalog_json_creates_fresh_catalog(self, monkeypatch, tmp_path):
+        catalog_file = tmp_path / "model_catalog.json"
+        catalog_file.write_text("{ not valid json }")
+        monkeypatch.setattr(catalog_module, "get_model_catalog_path", lambda: catalog_file)
+        monkeypatch.setattr(pricing_module, "_fetch_model_pricing", _make_fake_fetch(2.0, 8.0))
+
+        model_name, entry = add_model_to_catalog("openai/gpt-4o")
+        assert model_name == "gpt-4o"
+        assert entry["input"] == 2.0
+        # Catalog file should be valid JSON now
+        reloaded = json.loads(catalog_file.read_text())
+        assert "gpt-4o" in reloaded["models"]
+
+
+# ---------------------------------------------------------------------------
+# maybe_sync_model_pricing — missing/stale logic (pricing.py lines 125-153)
+# ---------------------------------------------------------------------------
+
+import src.models.pricing as pricing_module_direct
+
+
+class TestMaybeSyncModelPricing:
+    """Tests for maybe_sync_model_pricing covering the paths not hit elsewhere."""
+
+    def _build_catalog(self, portkey_id=None, last_sync=None):
+        entry = {"input": 2.5, "output": 10.0}
+        if portkey_id:
+            entry["portkey_id"] = portkey_id
+        if last_sync:
+            entry["last_sync"] = last_sync
+        return {
+            "config": {"pricing_unit": 1_000_000, "monthly_limit": 250.0},
+            "models": {"gpt-4o": entry},
+        }
+
+    def setup_method(self):
+        """Clear the in-memory sync cache before each test."""
+        pricing_module_direct._sync_cache.clear()
+
+    def test_model_without_portkey_id_caches_and_returns(self, monkeypatch, tmp_path):
+        catalog_file = tmp_path / "model_catalog.json"
+        cat = self._build_catalog()  # no portkey_id
+        catalog_file.write_text(json.dumps(cat))
+        monkeypatch.setattr(catalog_module, "get_model_catalog_path", lambda: catalog_file)
+        monkeypatch.setattr(catalog_module, "load_model_catalog", lambda: cat)
+
+        from src.models.pricing import maybe_sync_model_pricing
+        maybe_sync_model_pricing("gpt-4o")  # should not raise or make network calls
+        assert "gpt-4o" in pricing_module_direct._sync_cache
+
+    def test_stale_timestamp_triggers_sync(self, monkeypatch, tmp_path):
+        from datetime import datetime, timedelta
+        old = (datetime.now() - timedelta(hours=2)).isoformat(timespec="seconds")
+        catalog_file = tmp_path / "model_catalog.json"
+        cat = self._build_catalog(portkey_id="openai/gpt-4o", last_sync=old)
+        catalog_file.write_text(json.dumps(cat))
+        monkeypatch.setattr(catalog_module, "get_model_catalog_path", lambda: catalog_file)
+        monkeypatch.setattr(catalog_module, "load_model_catalog", lambda: cat)
+        monkeypatch.setattr(
+            pricing_module_direct, "_fetch_model_pricing",
+            lambda provider_model, pricing_unit: {"input": 3.0, "output": 12.0},
+        )
+        # Patch save_model_catalog to capture what would be saved
+        saved = {}
+
+        def fake_save(c):
+            saved.update(c)
+
+        monkeypatch.setattr(catalog_module, "save_model_catalog", fake_save)
+
+        from src.models.pricing import maybe_sync_model_pricing
+        maybe_sync_model_pricing("gpt-4o")
+
+        assert saved.get("models", {}).get("gpt-4o", {}).get("input") == 3.0
+
+    def test_invalid_last_sync_timestamp_triggers_sync(self, monkeypatch, tmp_path):
+        """A non-ISO-format timestamp should be treated as stale and trigger a sync."""
+        catalog_file = tmp_path / "model_catalog.json"
+        cat = self._build_catalog(portkey_id="openai/gpt-4o", last_sync="not-a-date")
+        catalog_file.write_text(json.dumps(cat))
+        monkeypatch.setattr(catalog_module, "get_model_catalog_path", lambda: catalog_file)
+        monkeypatch.setattr(catalog_module, "load_model_catalog", lambda: cat)
+        monkeypatch.setattr(
+            pricing_module_direct, "_fetch_model_pricing",
+            lambda pm, pu: {"input": 1.0, "output": 4.0},
+        )
+        saved = {}
+        monkeypatch.setattr(catalog_module, "save_model_catalog", lambda c: saved.update(c))
+
+        from src.models.pricing import maybe_sync_model_pricing
+        maybe_sync_model_pricing("gpt-4o")
+        assert saved.get("models", {}).get("gpt-4o", {}).get("input") == 1.0
+
+    def test_sync_network_error_logs_warning_and_does_not_raise(self, monkeypatch, tmp_path, caplog):
+        from datetime import datetime, timedelta
+        old = (datetime.now() - timedelta(hours=2)).isoformat(timespec="seconds")
+        cat = self._build_catalog(portkey_id="openai/gpt-4o", last_sync=old)
+        monkeypatch.setattr(catalog_module, "load_model_catalog", lambda: cat)
+        monkeypatch.setattr(
+            pricing_module_direct, "_fetch_model_pricing",
+            lambda pm, pu: (_ for _ in ()).throw(ConnectionError("network down")),
+        )
+
+        with caplog.at_level(logging.WARNING):
+            from src.models.pricing import maybe_sync_model_pricing
+            maybe_sync_model_pricing("gpt-4o")  # must not raise
+        assert any("Could not sync pricing" in r.message for r in caplog.records)
+
+    def test_in_memory_cache_prevents_redundant_disk_reads(self, monkeypatch):
+        from datetime import datetime
+        pricing_module_direct._sync_cache["gpt-4o"] = datetime.now()
+
+        load_calls = []
+        monkeypatch.setattr(catalog_module, "load_model_catalog", lambda: load_calls.append(1) or {})
+
+        from src.models.pricing import maybe_sync_model_pricing
+        maybe_sync_model_pricing("gpt-4o")
+        assert load_calls == []  # cache hit — no disk read
+
