@@ -5,9 +5,16 @@ All services are instantiated with a fake API key and a mocked TokenTracker so
 no real network calls or file I/O are triggered during tests.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _no_sleep():
+    """Patch time.sleep globally so retry-backoff tests don't actually wait."""
+    with patch("time.sleep"):
+        yield
 
 from src.services.image_processor_service import ImageProcessorService
 from src.services.image_translation_service import ImageTranslationService
