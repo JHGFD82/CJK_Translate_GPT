@@ -869,3 +869,305 @@ class TestRunTranscriptionReviewDryRun:
         out = capsys.readouterr().out
         assert "DRY RUN" in out
         assert not called
+
+
+# ---------------------------------------------------------------------------
+# Additional branch-coverage tests for previously untested paths
+# ---------------------------------------------------------------------------
+
+class TestCollectNotesBranches:
+    """Cover the system_prompt-only and user_prompt-only display branches."""
+
+    def test_shows_only_user_prompt_when_system_is_none(self, monkeypatch, capsys):
+        """Branch 97->100: system_prompt is None but user_prompt is not None."""
+        inputs = iter(["user", "---"])
+        monkeypatch.setattr("builtins.input", lambda *_: next(inputs))
+        _CommandMixin._collect_notes(system_prompt=None, user_prompt="USR_PROMPT")
+        out = capsys.readouterr().out
+        assert "USR_PROMPT" in out
+        assert "SYSTEM PROMPT" not in out
+
+    def test_shows_only_system_prompt_when_user_is_none(self, monkeypatch, capsys):
+        """Branch 100->103: system_prompt is not None but user_prompt is None."""
+        inputs = iter(["system", "note text", "---"])
+        monkeypatch.setattr("builtins.input", lambda *_: next(inputs))
+        sys_note, usr_note = _CommandMixin._collect_notes(system_prompt="SYS_PROMPT", user_prompt=None)
+        out = capsys.readouterr().out
+        assert "SYS_PROMPT" in out
+        assert "USER PROMPT" not in out
+        assert sys_note == "note text"
+
+
+class TestRunTranslateExtraEdgeCases:
+    """Cover remaining gaps in _run_translate."""
+
+    def _make_translate_args(self, **overrides):
+        defaults = {
+            "language_code": ("Chinese", "English"),
+            "input_file": None,
+            "custom_text": False,
+            "output_file": None,
+            "auto_save": False,
+            "page_nums": None,
+            "abstract": False,
+            "notes": False,
+            "note_both": None,
+            "note_system": None,
+            "note_user": None,
+            "kanbun": False,
+            "dry_run": False,
+            "workers": 1,
+            "progressive_save": False,
+            "custom_font": None,
+            "temperature": None,
+            "top_p": None,
+            "max_tokens": None,
+        }
+        defaults.update(overrides)
+        return argparse.Namespace(**defaults)
+
+    def test_tuple_length_not_2_raises_cli_error(self):
+        """Line 173: len(lang_tuple) != 2 raises CLIError."""
+        mixin = _make_mixin()
+        args = self._make_translate_args(language_code=("Chinese",))
+        with pytest.raises(CLIError, match="language code"):
+            mixin._run_translate(args)
+
+    def test_dry_run_pdf_file_reads_first_page(self, tmp_path, capsys, monkeypatch):
+        """Lines 241-243: PDF file in dry-run mode."""
+        mixin = _make_mixin()
+        mixin.translation_service._get_model = MagicMock(return_value="gpt-4o")
+        mixin.translation_service.build_prompts = MagicMock(return_value=("SYS", "USR"))
+        pdf = tmp_path / "doc.pdf"
+        pdf.write_bytes(b"%PDF-1.4 fake")
+
+        monkeypatch.setattr(mixin, "_detect_and_validate_file", lambda p: "pdf")
+        mixin.pdf_processor.process_pdf = MagicMock(return_value=iter([MagicMock()]))
+        mixin.pdf_processor.process_page = MagicMock(return_value="PDF page text")
+        args = self._make_translate_args(input_file=str(pdf), dry_run=True)
+        mixin._run_translate(args)
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+
+    def test_dry_run_pdf_empty_file_uses_placeholder(self, tmp_path, capsys, monkeypatch):
+        """Lines 241-243: empty PDF (no pages) falls back to placeholder."""
+        mixin = _make_mixin()
+        mixin.translation_service._get_model = MagicMock(return_value="gpt-4o")
+        mixin.translation_service.build_prompts = MagicMock(return_value=("SYS", "USR"))
+        pdf = tmp_path / "empty.pdf"
+        pdf.write_bytes(b"%PDF-1.4 empty")
+
+        monkeypatch.setattr(mixin, "_detect_and_validate_file", lambda p: "pdf")
+        mixin.pdf_processor.process_pdf = MagicMock(return_value=iter([]))
+        mixin.pdf_processor.process_page = MagicMock(return_value="")
+        args = self._make_translate_args(input_file=str(pdf), dry_run=True)
+        mixin._run_translate(args)
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+
+    def test_dry_run_empty_custom_text_uses_placeholder(self, monkeypatch, capsys):
+        """Line 253: empty custom text in dry-run uses placeholder."""
+        mixin = _make_mixin()
+        mixin.translation_service._get_model = MagicMock(return_value="gpt-4o")
+        mixin.translation_service.build_prompts = MagicMock(return_value=("SYS", "USR"))
+        # Return empty sentinel immediately
+        inputs = iter(["---"])
+        monkeypatch.setattr("builtins.input", lambda *_: next(inputs))
+        args = self._make_translate_args(custom_text=True, dry_run=True)
+        mixin._run_translate(args)
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+
+    def test_dry_run_auto_save_sets_txt_output_format(self, capsys, monkeypatch):
+        """Lines 268-269: auto_save=True in dry-run sets output_format to 'txt'."""
+        mixin = _make_mixin()
+        mixin.translation_service._get_model = MagicMock(return_value="gpt-4o")
+        mixin.translation_service.build_prompts = MagicMock(return_value=("SYS", "USR"))
+        args = self._make_translate_args(dry_run=True, auto_save=True)
+        mixin._run_translate(args)
+        # build_prompts should be called with output_format='txt'
+        call_kwargs = mixin.translation_service.build_prompts.call_args
+        assert call_kwargs is not None
+        kwargs = call_kwargs.kwargs if call_kwargs.kwargs else {}
+        args_positional = call_kwargs.args if call_kwargs.args else ()
+        # output_format should be 'txt' — check it was passed
+        all_args = str(call_kwargs)
+        assert "txt" in all_args
+
+    def test_dry_run_unknown_file_type_uses_placeholder(self, tmp_path, capsys, monkeypatch):
+        """Line 253: else-branch when file_type is not pdf/docx/txt/image in dry-run."""
+        mixin = _make_mixin()
+        mixin.translation_service._get_model = MagicMock(return_value="gpt-4o")
+        mixin.translation_service.build_prompts = MagicMock(return_value=("SYS", "USR"))
+        f = tmp_path / "data.csv"
+        f.write_text("a,b,c")
+        monkeypatch.setattr(mixin, "_detect_and_validate_file", lambda p: "csv")
+        args = self._make_translate_args(input_file=str(f), dry_run=True)
+        mixin._run_translate(args)
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out
+
+    def test_dry_run_with_output_file_sets_format_from_extension(self, tmp_path, capsys):
+        """Lines 268-269: explicit output_file in dry-run sets output_format from extension."""
+        mixin = _make_mixin()
+        mixin.translation_service._get_model = MagicMock(return_value="gpt-4o")
+        mixin.translation_service.build_prompts = MagicMock(return_value=("SYS", "USR"))
+        out_file = str(tmp_path / "result.docx")
+        args = self._make_translate_args(dry_run=True, output_file=out_file)
+        mixin._run_translate(args)
+        call_kwargs = mixin.translation_service.build_prompts.call_args
+        assert call_kwargs is not None
+        all_args = str(call_kwargs)
+        assert "docx" in all_args
+
+
+class TestRunTranscribeExtraEdgeCases:
+    """Cover remaining gaps in _run_transcribe."""
+
+    def _make_transcribe_args(self, **overrides):
+        defaults = {
+            "language_code": "English",
+            "input_file": None,
+            "output_file": None,
+            "vertical": False,
+            "passes": 1,
+            "workers": 1,
+            "dry_run": False,
+            "notes": False,
+            "note_both": None,
+            "note_system": None,
+            "note_user": None,
+            "kanbun": False,
+            "kanbun_main": False,
+            "temperature": None,
+            "top_p": None,
+            "max_tokens": None,
+            "model": None,
+        }
+        defaults.update(overrides)
+        return argparse.Namespace(**defaults)
+
+    def test_inline_note_system_sets_ocr_service_note(self, tmp_path, monkeypatch):
+        """Line 337: note_system sets image_processor_service.system_note."""
+        mixin = _make_mixin()
+        img = tmp_path / "scan.jpg"
+        img.write_bytes(b"fake")
+        monkeypatch.setattr(mixin, "_detect_and_validate_file", lambda p: "image")
+        monkeypatch.setattr(mixin, "process_image", MagicMock())
+        args = self._make_transcribe_args(input_file=str(img), note_system="my sys note")
+        mixin._run_transcribe(args)
+        assert mixin.image_processor_service.system_note == "my sys note"
+
+    def test_inline_note_user_sets_ocr_service_note(self, tmp_path, monkeypatch):
+        """Line 339: note_user sets image_processor_service.user_note."""
+        mixin = _make_mixin()
+        img = tmp_path / "scan.jpg"
+        img.write_bytes(b"fake")
+        monkeypatch.setattr(mixin, "_detect_and_validate_file", lambda p: "image")
+        monkeypatch.setattr(mixin, "process_image", MagicMock())
+        args = self._make_transcribe_args(input_file=str(img), note_user="my usr note")
+        mixin._run_transcribe(args)
+        assert mixin.image_processor_service.user_note == "my usr note"
+
+    def test_kanbun_flag_sets_kanbun_on_ocr_service(self, tmp_path, monkeypatch):
+        """Line 342: kanbun=True sets image_processor_service.kanbun."""
+        mixin = _make_mixin()
+        img = tmp_path / "scan.jpg"
+        img.write_bytes(b"fake")
+        monkeypatch.setattr(mixin, "_detect_and_validate_file", lambda p: "image")
+        monkeypatch.setattr(mixin, "process_image", MagicMock())
+        args = self._make_transcribe_args(input_file=str(img), kanbun=True)
+        mixin._run_transcribe(args)
+        assert mixin.image_processor_service.kanbun is True
+
+    def test_kanbun_main_flag_sets_kanbun_main_on_ocr_service(self, tmp_path, monkeypatch):
+        """Line 345: kanbun_main=True sets image_processor_service.kanbun_main."""
+        mixin = _make_mixin()
+        img = tmp_path / "scan.jpg"
+        img.write_bytes(b"fake")
+        monkeypatch.setattr(mixin, "_detect_and_validate_file", lambda p: "image")
+        monkeypatch.setattr(mixin, "process_image", MagicMock())
+        args = self._make_transcribe_args(input_file=str(img), kanbun_main=True)
+        mixin._run_transcribe(args)
+        assert mixin.image_processor_service.kanbun_main is True
+
+    def test_passes_zero_raises_cli_error(self, tmp_path, monkeypatch):
+        """Line 370: passes < 1 raises CLIError."""
+        mixin = _make_mixin()
+        img = tmp_path / "scan.jpg"
+        img.write_bytes(b"fake")
+        monkeypatch.setattr(mixin, "_detect_and_validate_file", lambda p: "image")
+        args = self._make_transcribe_args(input_file=str(img), passes=0)
+        with pytest.raises(CLIError, match="passes"):
+            mixin._run_transcribe(args)
+
+    def test_notes_flag_triggers_collect_notes_for_transcribe(self, tmp_path, monkeypatch, capsys):
+        """Lines 324-330: notes=True shows prompts and collects notes."""
+        mixin = _make_mixin()
+        img = tmp_path / "scan.jpg"
+        img.write_bytes(b"fake")
+        monkeypatch.setattr(mixin, "_detect_and_validate_file", lambda p: "image")
+        monkeypatch.setattr(mixin, "process_image", MagicMock())
+        mixin.image_processor_service.build_prompts = MagicMock(return_value=("SYS", "USR"))
+        inputs = iter(["user", "my note", "---"])
+        monkeypatch.setattr("builtins.input", lambda *_: next(inputs))
+        args = self._make_transcribe_args(input_file=str(img), notes=True)
+        mixin._run_transcribe(args)
+        assert mixin.image_processor_service.user_note == "my note"
+
+
+class TestRunTranscriptionReviewExtraEdgeCases:
+    """Cover remaining gaps in _run_transcription_review."""
+
+    def _make_review_args(self, **overrides):
+        defaults = {
+            "language_code": "Japanese",
+            "input_file": None,
+            "output_file": None,
+            "custom_text": False,
+            "kanbun": False,
+            "kanbun_main": False,
+            "notes": False,
+            "note_both": None,
+            "note_system": None,
+            "note_user": None,
+            "dry_run": False,
+            "temperature": None,
+            "top_p": None,
+            "max_tokens": None,
+        }
+        defaults.update(overrides)
+        return argparse.Namespace(**defaults)
+
+    def test_notes_flag_triggers_collect_notes(self, tmp_path, monkeypatch, capsys):
+        """Lines 408-411: notes=True shows prompts and collects notes."""
+        mixin = _make_mixin()
+        f = tmp_path / "trans.txt"
+        f.write_text("transcription content", encoding="utf-8")
+        mixin.transcription_review_service.build_prompts = MagicMock(return_value=("SYS", "USR"))
+        monkeypatch.setattr(mixin, "process_transcription_review", MagicMock())
+        inputs = iter(["user", "my review note", "---"])
+        monkeypatch.setattr("builtins.input", lambda *_: next(inputs))
+        args = self._make_review_args(input_file=str(f), notes=True)
+        mixin._run_transcription_review(args)
+        assert mixin.transcription_review_service.user_note == "my review note"
+
+    def test_inline_note_system_sets_review_service_note(self, tmp_path, monkeypatch):
+        """Line 417: note_system sets transcription_review_service.system_note."""
+        mixin = _make_mixin()
+        f = tmp_path / "trans.txt"
+        f.write_text("some transcription", encoding="utf-8")
+        monkeypatch.setattr(mixin, "process_transcription_review", MagicMock())
+        args = self._make_review_args(input_file=str(f), note_system="reviewer sys note")
+        mixin._run_transcription_review(args)
+        assert mixin.transcription_review_service.system_note == "reviewer sys note"
+
+    def test_inline_note_user_sets_review_service_note(self, tmp_path, monkeypatch):
+        """Line 419: note_user sets transcription_review_service.user_note."""
+        mixin = _make_mixin()
+        f = tmp_path / "trans.txt"
+        f.write_text("some transcription", encoding="utf-8")
+        monkeypatch.setattr(mixin, "process_transcription_review", MagicMock())
+        args = self._make_review_args(input_file=str(f), note_user="reviewer usr note")
+        mixin._run_transcription_review(args)
+        assert mixin.transcription_review_service.user_note == "reviewer usr note"

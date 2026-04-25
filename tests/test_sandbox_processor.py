@@ -640,3 +640,282 @@ class TestProcessImageFolderParallel:
 
         proc.process_image_folder(str(folder), "English", workers=2)
         assert proc.image_processor_service.process_image_ocr.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Additional branch-coverage tests for previously untested paths
+# ---------------------------------------------------------------------------
+
+class TestProcessTextBasedFilePageRange:
+    """Line 172: end_page not None → actual_end = min(end_page, ...) branch."""
+
+    def test_page_range_with_explicit_end_clamps_to_document_length(self, tmp_path, monkeypatch):
+        """When page_nums='1-5' but doc only has 2 pages, actual_end is clamped to 1."""
+        proc = _make_processor(monkeypatch)
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.TxtProcessor.process_txt_with_pages",
+            lambda f, target_page_size: ["Page one", "Page two"],
+        )
+        f = tmp_path / "short.txt"
+        f.write_text("Page one\n\nPage two", encoding="utf-8")
+        proc.translation_service.translate_text_pages.return_value = ["翻訳"]
+        result = proc._process_text_based_file(
+            str(f), "txt", "1-5", None, "English", "Japanese",
+            OutputOptions(),
+        )
+        assert result == ["翻訳"]
+        # actual_end was clamped to 1 (min(4, 1) = 1)
+        proc.translation_service.translate_text_pages.assert_called_once()
+
+    def test_exact_page_range_within_document(self, tmp_path, monkeypatch):
+        """page_nums='1-2' with 3-page doc — end_page=1 (0-based) is within range."""
+        proc = _make_processor(monkeypatch)
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.TxtProcessor.process_txt_with_pages",
+            lambda f, target_page_size: ["Page one", "Page two", "Page three"],
+        )
+        f = tmp_path / "three.txt"
+        f.write_text("Page one\n\nPage two\n\nPage three", encoding="utf-8")
+        proc.translation_service.translate_text_pages.return_value = ["結果"]
+        result = proc._process_text_based_file(
+            str(f), "txt", "1-2", None, "English", "Japanese",
+            OutputOptions(),
+        )
+        assert result == ["結果"]
+
+
+class TestTranslateCustomTextExceptionHandling:
+    """Lines 315-317: generic Exception from translate_text raises CLIError."""
+
+    def test_api_exception_raises_cli_error(self, monkeypatch, capsys):
+        proc = _make_processor(monkeypatch)
+        inputs = iter(["Hello world", "---"])
+        monkeypatch.setattr("builtins.input", lambda *_: next(inputs))
+        proc.translation_service.translate_text.side_effect = RuntimeError("API failure")
+        with pytest.raises(CLIError, match="API failure"):
+            proc.translate_custom_text("English", "French")
+
+
+class TestTranslateDocumentAbstractFlag:
+    """Line 246: abstract=True triggers _collect_multiline for abstract text."""
+
+    def test_abstract_flag_collects_abstract_then_translates(self, tmp_path, monkeypatch):
+        proc = _make_processor(monkeypatch)
+        f = tmp_path / "doc.txt"
+        f.write_text("Main content", encoding="utf-8")
+
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.SandboxProcessor._detect_and_validate_file",
+            lambda self, fp: "txt",
+        )
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.SandboxProcessor._process_text_based_file",
+            lambda self, *a, **kw: ["Translated"],
+        )
+        # _collect_multiline is called once for the abstract
+        abstract_calls = []
+        def fake_collect(self_inner, label: str) -> str:
+            abstract_calls.append(label)
+            return "Abstract text here"
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.SandboxProcessor._collect_multiline",
+            fake_collect,
+        )
+        proc.translate_document(str(f), "English", "Japanese", abstract=True)
+        assert any("Abstract" in c for c in abstract_calls)
+
+
+class TestProcessImageTranslationFolderSequentialTranscript:
+    """Line 375: sequential path prints transcript when non-empty."""
+
+    def test_non_empty_transcript_is_printed(self, monkeypatch, tmp_path, capsys):
+        proc = _make_processor(monkeypatch)
+        folder = tmp_path / "imgs"
+        folder.mkdir()
+        (folder / "scan.jpg").write_bytes(b"fake")
+
+        proc.image_translation_service.process_image_translation = MagicMock(
+            return_value=("OCR transcript text", "Translation result")
+        )
+        proc.process_image_translation_folder(
+            str(folder), "Japanese", "English", OutputOptions(), workers=1
+        )
+        out = capsys.readouterr().out
+        assert "OCR transcript text" in out
+        assert "Translation result" in out
+
+    def test_empty_transcript_is_not_printed_as_section(self, monkeypatch, tmp_path, capsys):
+        """Sequential path: empty transcript skips print_section for Transcript."""
+        proc = _make_processor(monkeypatch)
+        folder = tmp_path / "imgs"
+        folder.mkdir()
+        (folder / "scan.jpg").write_bytes(b"fake")
+
+        proc.image_translation_service.process_image_translation = MagicMock(
+            return_value=("", "Translation only")
+        )
+        proc.process_image_translation_folder(
+            str(folder), "Japanese", "English", OutputOptions(), workers=1
+        )
+        out = capsys.readouterr().out
+        assert "Translation only" in out
+
+
+class TestProcessImageFolderSequentialException:
+    """Line 457: sequential process_image_folder catches exception from process_image_ocr."""
+
+    def test_ocr_exception_continues_processing(self, monkeypatch, tmp_path, capsys):
+        proc = _make_processor(monkeypatch)
+        folder = tmp_path / "ocr_err"
+        folder.mkdir()
+        (folder / "bad.jpg").write_bytes(b"fake")
+        (folder / "good.jpg").write_bytes(b"fake")
+
+        call_count = [0]
+        def flaky_ocr(path, language, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise RuntimeError("OCR failed on bad image")
+            return "Good OCR text"
+
+        proc.image_processor_service.process_image_ocr = flaky_ocr
+        # Should complete without raising, printing an error for the first image
+        proc.process_image_folder(str(folder), "English", workers=1)
+        out = capsys.readouterr().out
+        assert "ERROR" in out or "error" in out.lower()
+
+
+# ---------------------------------------------------------------------------
+# Further targeted tests for remaining sandbox_processor coverage gaps
+# ---------------------------------------------------------------------------
+
+class TestTranslateDocumentUnknownFileType:
+    """Line 246: else-branch when file_type is unrecognised in translate_document."""
+
+    def test_unknown_type_raises_cli_error(self, tmp_path, monkeypatch):
+        proc = _make_processor(monkeypatch)
+        f = tmp_path / "data.csv"
+        f.write_text("a,b,c")
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.SandboxProcessor._detect_and_validate_file",
+            lambda self, fp: "csv",
+        )
+        with pytest.raises(CLIError, match="Cannot translate file type"):
+            proc.translate_document(str(f), "English", "Japanese")
+
+
+class TestTranslateDocumentPDFPath:
+    """Lines 220-223: PDF branch in translate_document."""
+
+    def test_pdf_file_delegates_to_pdf_processor(self, tmp_path, monkeypatch):
+        """Lines 220-223: translate_document with pdf file_type calls pdf_processor."""
+        proc = _make_processor(monkeypatch)
+        f = tmp_path / "doc.pdf"
+        f.write_bytes(b"%PDF-1.4 fake")
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.SandboxProcessor._detect_and_validate_file",
+            lambda self, fp: "pdf",
+        )
+        proc.pdf_processor.process_pdf = MagicMock(return_value=iter([MagicMock()]))
+        proc.translation_service.translate_document = MagicMock(return_value=["翻訳結果"])
+        proc.translate_document(str(f), "Japanese", "English")
+        proc.translation_service.translate_document.assert_called_once()
+
+
+class TestTranslateDocumentExceptionHandlers:
+    """Lines 268-271: ImportError (non-python-docx) and generic Exception in translate_document."""
+
+    def test_non_python_docx_import_error_raises_cli_error(self, tmp_path, monkeypatch):
+        """Line 268: ImportError without 'python-docx' in message wraps as 'Import error'."""
+        proc = _make_processor(monkeypatch)
+        f = tmp_path / "doc.docx"
+        f.write_bytes(b"fake")
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.SandboxProcessor._detect_and_validate_file",
+            lambda self, fp: "docx",
+        )
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.SandboxProcessor._process_text_based_file",
+            lambda self, *a, **kw: (_ for _ in ()).throw(ImportError("some other import error")),
+        )
+        with pytest.raises(CLIError, match="Import error"):
+            proc.translate_document(str(f), "English", "Japanese")
+
+    def test_generic_exception_from_processing_raises_cli_error(self, tmp_path, monkeypatch):
+        """Lines 269-271: generic Exception from _process_text_based_file raises CLIError."""
+        proc = _make_processor(monkeypatch)
+        f = tmp_path / "doc.txt"
+        f.write_text("text content")
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.SandboxProcessor._detect_and_validate_file",
+            lambda self, fp: "txt",
+        )
+        monkeypatch.setattr(
+            "src.runtime.sandbox_processor.SandboxProcessor._process_text_based_file",
+            lambda self, *a, **kw: (_ for _ in ()).throw(RuntimeError("translation api down")),
+        )
+        with pytest.raises(CLIError, match="translation api down"):
+            proc.translate_document(str(f), "English", "Japanese")
+
+
+class TestProcessImageTranslationFolderEdgeCases:
+    """Lines 375, 390-393, 399, 457: remaining gaps in process_image_translation_folder."""
+
+    def test_empty_folder_raises_cli_error(self, tmp_path, monkeypatch):
+        """Line 375: empty folder raises CLIError."""
+        proc = _make_processor(monkeypatch)
+        folder = tmp_path / "empty"
+        folder.mkdir()
+        with pytest.raises(CLIError, match="No image files found"):
+            proc.process_image_translation_folder(str(folder), "Japanese", "English")
+
+    def test_sequential_exception_in_loop_continues(self, tmp_path, monkeypatch, capsys):
+        """Lines 390-393: exception in sequential loop prints error and continues."""
+        proc = _make_processor(monkeypatch)
+        folder = tmp_path / "imgs"
+        folder.mkdir()
+        (folder / "err.jpg").write_bytes(b"fake")
+        (folder / "ok.jpg").write_bytes(b"fake")
+
+        call_count = [0]
+        def flaky(path, src_lang, tgt_lang):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise RuntimeError("translation failed")
+            return ("", "translation")
+
+        proc.image_translation_service.process_image_translation = flaky
+        proc.process_image_translation_folder(str(folder), "Japanese", "English", workers=1)
+        out = capsys.readouterr().out
+        assert "ERROR" in out
+
+    def test_sequential_with_auto_save_calls_file_output(self, tmp_path, monkeypatch):
+        """Line 399: sequential path with auto_save=True calls file_output.save_translation_output."""
+        proc = _make_processor(monkeypatch)
+        folder = tmp_path / "imgs"
+        folder.mkdir()
+        (folder / "a.jpg").write_bytes(b"fake")
+
+        proc.image_translation_service.process_image_translation = MagicMock(
+            return_value=("", "Translation")
+        )
+        opts = OutputOptions(auto_save=True)
+        proc.process_image_translation_folder(str(folder), "Japanese", "English", opts=opts, workers=1)
+        proc.file_output.save_translation_output.assert_called_once()
+
+    def test_parallel_with_auto_save_calls_file_output(self, tmp_path, monkeypatch):
+        """Line 457: parallel path with auto_save=True calls file_output.save_translation_output."""
+        proc = _make_processor(monkeypatch)
+        folder = tmp_path / "imgs"
+        folder.mkdir()
+        (folder / "a.jpg").write_bytes(b"fake")
+        (folder / "b.jpg").write_bytes(b"fake")
+
+        proc.image_translation_service.process_image_translation = MagicMock(
+            return_value=("", "Translation")
+        )
+        proc.image_translation_service._get_model = MagicMock(return_value="gpt-4o")
+        proc.image_translation_service._suppress_inline_print = False
+        opts = OutputOptions(auto_save=True)
+        proc.process_image_translation_folder(str(folder), "Japanese", "English", opts=opts, workers=2)
+        proc.file_output.save_translation_output.assert_called_once()
