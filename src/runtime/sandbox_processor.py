@@ -219,18 +219,18 @@ class SandboxProcessor(_CommandMixin):
             if file_type == 'pdf':
                 with open(file_path, 'rb') as f:
                     all_pdf_pages = list(self.pdf_processor.process_pdf(f))
-                for start_page, end_page in _parse_page_ranges(page_nums):
-                    document_text.extend(self.translation_service.translate_document(
-                        iter(all_pdf_pages),
-                        abstract_text,
-                        start_page,
-                        end_page,
-                        source_language,
-                        target_language,
-                        opts,
-                        file_path,
-                        workers=workers,
-                    ))
+                    for start_page, end_page in _parse_page_ranges(page_nums):
+                        document_text.extend(self.translation_service.translate_document(
+                            iter(all_pdf_pages),
+                            abstract_text,
+                            start_page,
+                            end_page,
+                            source_language,
+                            target_language,
+                            opts,
+                            file_path,
+                            workers=workers,
+                        ))
             elif file_type in ('docx', 'txt'):
                 document_text = self._process_text_based_file(
                     file_path,
