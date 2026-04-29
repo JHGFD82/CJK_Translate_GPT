@@ -60,7 +60,7 @@ class TestSequentialFolderOCR:
     def test_processes_images_in_sorted_order(self, sandbox, image_folder):
         call_order: list[str] = []
 
-        def fake_ocr(path, lang, output_format="console", vertical=False, passes=1):
+        def fake_ocr(path, lang, output_format="console", vertical=False, spread=False, passes=1):
             call_order.append(os.path.basename(path))
             return f"text from {os.path.basename(path)}"
 
@@ -73,7 +73,7 @@ class TestSequentialFolderOCR:
         assert call_order == ["01_scan.jpg", "02_scan.jpg", "03_scan.jpg"]
 
     def test_output_saved_in_order(self, sandbox, image_folder, tmp_path):
-        def fake_ocr(path, lang, output_format="console", vertical=False, passes=1):
+        def fake_ocr(path, lang, output_format="console", vertical=False, spread=False, passes=1):
             return f"result:{os.path.basename(path)}"
 
         sandbox.image_processor_service.process_image_ocr = fake_ocr
@@ -102,7 +102,7 @@ class TestParallelFolderOCR:
         seq_text: list[str] = []
         par_text: list[str] = []
 
-        def fake_ocr(path, lang, output_format="console", vertical=False, passes=1):
+        def fake_ocr(path, lang, output_format="console", vertical=False, spread=False, passes=1):
             return f"text:{os.path.basename(path)}"
 
         sandbox.image_processor_service.process_image_ocr = fake_ocr
@@ -116,7 +116,7 @@ class TestParallelFolderOCR:
         # Parallel run (simulate completion in reverse order using a sleep gap)
         call_count = [0]
 
-        def fake_ocr_staggered(path, lang, output_format="console", vertical=False, passes=1):
+        def fake_ocr_staggered(path, lang, output_format="console", vertical=False, spread=False, passes=1):
             call_count[0] += 1
             # Deliberately stagger: last image finishes fastest
             if "01_scan" in path:
@@ -134,7 +134,7 @@ class TestParallelFolderOCR:
 
     def test_workers_gt_image_count_handled_gracefully(self, sandbox, image_folder):
         """More workers than images must not raise."""
-        def fake_ocr(path, lang, output_format="console", vertical=False, passes=1):
+        def fake_ocr(path, lang, output_format="console", vertical=False, spread=False, passes=1):
             return "ok"
 
         sandbox.image_processor_service.process_image_ocr = fake_ocr
@@ -144,7 +144,7 @@ class TestParallelFolderOCR:
 
     def test_worker_exception_produces_error_placeholder(self, sandbox, image_folder, tmp_path):
         """A failed worker must produce an error placeholder in the right position."""
-        def fake_ocr(path, lang, output_format="console", vertical=False, passes=1):
+        def fake_ocr(path, lang, output_format="console", vertical=False, spread=False, passes=1):
             if "02_scan" in path:
                 raise RuntimeError("API timeout")
             return f"ok:{os.path.basename(path)}"
@@ -175,7 +175,7 @@ class TestMultiPassSequentialWithinWorker:
         received_passes: list[int] = []
         lock = threading.Lock()
 
-        def fake_ocr(path, lang, output_format="console", vertical=False, passes=1):
+        def fake_ocr(path, lang, output_format="console", vertical=False, spread=False, passes=1):
             with lock:
                 received_passes.append(passes)
             return "done"
@@ -216,7 +216,7 @@ class TestSingleImageIgnoresWorkers:
         img = tmp_path / "scan.jpg"
         img.write_bytes(b"\xff\xd8\xff")
 
-        def fake_ocr(path, lang, output_format="console", vertical=False, passes=1):
+        def fake_ocr(path, lang, output_format="console", vertical=False, spread=False, passes=1):
             return "transcribed text"
 
         sandbox.image_processor_service.process_image_ocr = fake_ocr
