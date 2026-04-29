@@ -199,6 +199,12 @@ OCR_VERTICAL_REINFORCEMENT = (
     "proceeding right-to-left across columns."
 )
 
+OCR_SPREAD_NOTE = (
+    "IMAGE LAYOUT: This image is a two-page spread (two facing pages scanned together). "
+    "Transcribe all text from both pages as a single continuous document, "
+    "reading the left page first and the right page second (or right-to-left for vertical text)."
+)
+
 # ---------------------------------------------------------------------------
 # Image translation — system prompt sections
 # ---------------------------------------------------------------------------
@@ -251,6 +257,12 @@ IMAGE_TRANSLATION_VERTICAL_BLOCK = (
 
 IMAGE_TRANSLATION_VERTICAL_NOTE = (
     " The text is predominantly vertical (top-to-bottom, right-to-left columns)."
+)
+
+IMAGE_TRANSLATION_SPREAD_NOTE = (
+    "IMAGE LAYOUT: This image is a two-page spread (two facing pages scanned together). "
+    "Process all text from both pages, reading the left page first and the right page second "
+    "(or right-to-left for vertical text)."
 )
 
 # ---------------------------------------------------------------------------

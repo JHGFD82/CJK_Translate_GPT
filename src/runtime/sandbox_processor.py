@@ -188,6 +188,7 @@ class SandboxProcessor(_CommandMixin):
         abstract: bool = False,
         opts: OutputOptions = OutputOptions(),
         workers: int = 1,
+        spread: bool = False,
     ) -> None:
         """Translate a document file (PDF, Word document, or text file)."""
         file_path = os.path.abspath(file_path)
@@ -204,6 +205,7 @@ class SandboxProcessor(_CommandMixin):
                     source_language,
                     target_language,
                     opts,
+                    spread=spread,
                 )
             except Exception as e:
                 logger.debug(f"Error processing image: {e}", exc_info=True)
@@ -322,6 +324,7 @@ class SandboxProcessor(_CommandMixin):
         source_language: str,
         target_language: str,
         opts: OutputOptions = OutputOptions(),
+        spread: bool = False,
     ) -> None:
         """Transcribe and translate an image in a single API call (translate command).
 
@@ -336,7 +339,7 @@ class SandboxProcessor(_CommandMixin):
         )
 
         transcript, translation = self.image_translation_service.process_image_translation(
-            file_path, source_language, target_language
+            file_path, source_language, target_language, spread=spread
         )
 
         if transcript:
@@ -362,6 +365,7 @@ class SandboxProcessor(_CommandMixin):
         target_language: str,
         opts: OutputOptions = OutputOptions(),
         workers: int = 1,
+        spread: bool = False,
     ) -> None:
         """Translate all images in a folder using the combined OCR+translation service.
 
@@ -385,7 +389,7 @@ class SandboxProcessor(_CommandMixin):
                 print(f"[{idx}/{len(image_files)}] {filename}")
                 try:
                     transcript, translation = self.image_translation_service.process_image_translation(
-                        img_path, source_language, target_language
+                        img_path, source_language, target_language, spread=spread
                     )
                 except Exception as e:
                     logger.error(f"Error processing '{filename}': {e}", exc_info=True)
@@ -416,7 +420,7 @@ class SandboxProcessor(_CommandMixin):
         def _translate_one(idx: int, img_path: str) -> tuple[int, str, str, str]:
             filename = os.path.basename(img_path)
             transcript, translation = self.image_translation_service.process_image_translation(
-                img_path, source_language, target_language
+                img_path, source_language, target_language, spread=spread
             )
             return idx, filename, transcript, translation
 
@@ -459,12 +463,12 @@ class SandboxProcessor(_CommandMixin):
                 source_language, target_language, opts.custom_font,
             )
 
-    def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, passes: int = 1) -> None:
+    def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, spread: bool = False, passes: int = 1) -> None:
         """Process an image file with OCR (transcribe command)."""
         logger.info(f"Starting OCR processing: {os.path.basename(file_path)} → {target_language}")
 
         try:
-            extracted_text = self.image_processor_service.process_image_ocr(file_path, target_language, output_format="console", vertical=vertical, passes=passes)
+            extracted_text = self.image_processor_service.process_image_ocr(file_path, target_language, output_format="console", vertical=vertical, spread=spread, passes=passes)
 
             print_section("Extracted Text", extracted_text)
 
@@ -478,7 +482,7 @@ class SandboxProcessor(_CommandMixin):
             logger.error(f"Error processing image: {e}", exc_info=True)
             raise CLIError(f"Error processing image: {e}") from e
 
-    def process_image_folder(self, folder_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, passes: int = 1, workers: int = 1) -> None:
+    def process_image_folder(self, folder_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, spread: bool = False, passes: int = 1, workers: int = 1) -> None:
         """Process all images in a folder with OCR, printing each result and optionally saving combined output.
 
         When ``workers > 1`` images are dispatched in parallel via a ThreadPoolExecutor.
@@ -502,7 +506,7 @@ class SandboxProcessor(_CommandMixin):
                 print(f"[{idx}/{len(image_files)}] {filename}")
                 try:
                     extracted_text = self.image_processor_service.process_image_ocr(
-                        img_path, target_language, output_format="console", vertical=vertical, passes=passes
+                        img_path, target_language, output_format="console", vertical=vertical, spread=spread, passes=passes
                     )
                 except Exception as e:
                     logger.error(f"Error processing '{filename}': {e}", exc_info=True)
@@ -534,7 +538,7 @@ class SandboxProcessor(_CommandMixin):
         def _ocr_one(idx: int, img_path: str) -> tuple[int, str, str]:
             filename = os.path.basename(img_path)
             extracted = self.image_processor_service.process_image_ocr(
-                img_path, target_language, output_format="console", vertical=vertical, passes=passes
+                img_path, target_language, output_format="console", vertical=vertical, spread=spread, passes=passes
             )
             return idx, filename, extracted
 

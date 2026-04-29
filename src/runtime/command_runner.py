@@ -51,10 +51,10 @@ class _CommandMixin:
 
         def _detect_and_validate_file(self, file_path: str) -> str: ...
         def translate_custom_text(self, source_language: str, target_language: str, abstract: bool, opts: OutputOptions) -> None: ...
-        def process_image_translation_folder(self, folder_path: str, source_language: str, target_language: str, opts: OutputOptions, workers: int = 1) -> None: ...
-        def translate_document(self, file_path: str, source_language: str, target_language: str, page_nums: Optional[str], abstract: bool, opts: OutputOptions, workers: int = 1) -> None: ...
-        def process_image_folder(self, folder_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, passes: int = 1, workers: int = 1) -> None: ...
-        def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, passes: int = 1) -> None: ...
+        def process_image_translation_folder(self, folder_path: str, source_language: str, target_language: str, opts: OutputOptions, workers: int = 1, spread: bool = False) -> None: ...
+        def translate_document(self, file_path: str, source_language: str, target_language: str, page_nums: Optional[str], abstract: bool, opts: OutputOptions, workers: int = 1, spread: bool = False) -> None: ...
+        def process_image_folder(self, folder_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, spread: bool = False, passes: int = 1, workers: int = 1) -> None: ...
+        def process_image(self, file_path: str, target_language: str, output_file: Optional[str] = None, vertical: bool = False, spread: bool = False, passes: int = 1) -> None: ...
         def process_prompt(self, user_prompt: str, system_prompt: Optional[str] = None, output_file: Optional[str] = None) -> None: ...
         def process_transcription_review(self, text: str, language: str, kanbun: bool = False, kanbun_main: bool = False, output_file: Optional[str] = None) -> None: ...
 
@@ -228,7 +228,8 @@ class _CommandMixin:
                 file_path_dr = os.path.abspath(args.input_file)
                 file_type_dr = self._detect_and_validate_file(file_path_dr)
                 if file_type_dr == 'image':
-                    sys_p, usr_p = self.image_translation_service.build_prompts(source_language, target_language)
+                    spread_dr = getattr(args, 'spread', False)
+                    sys_p, usr_p = self.image_translation_service.build_prompts(source_language, target_language, spread=spread_dr)
                     self._dry_run_display(
                         self.image_translation_service._get_model(), sys_p, usr_p,
                         note="Image content would be base64-encoded and attached to the user message",
@@ -285,6 +286,7 @@ class _CommandMixin:
             custom_font=getattr(args, 'custom_font', None),
         )
         workers = getattr(args, 'workers', 1)
+        spread = getattr(args, 'spread', False)
         if args.custom_text:
             self.translate_custom_text(
                 source_language,
@@ -301,6 +303,7 @@ class _CommandMixin:
                     target_language,
                     opts,
                     workers=workers,
+                    spread=spread,
                 )
             else:
                 self.translate_document(
@@ -311,6 +314,7 @@ class _CommandMixin:
                     getattr(args, 'abstract', False),
                     opts,
                     workers=workers,
+                    spread=spread,
                 )
         else:
             raise CLIError("No input specified. Use -i for file input or -c for custom text.")
@@ -346,9 +350,10 @@ class _CommandMixin:
 
         if getattr(args, 'dry_run', False):
             vertical_dr = getattr(args, 'vertical', False)
+            spread_dr = getattr(args, 'spread', False)
             passes_dr = getattr(args, 'passes', 1)
             model_dr = self.image_processor_service._get_model()
-            sys_p, usr_p = self.image_processor_service.build_prompts(target_language, vertical=vertical_dr)
+            sys_p, usr_p = self.image_processor_service.build_prompts(target_language, vertical=vertical_dr, spread=spread_dr)
             note = "Image content would be base64-encoded and attached to the user message"
             if passes_dr > 1:
                 note += f"; {passes_dr} OCR passes would run sequentially"
@@ -364,18 +369,19 @@ class _CommandMixin:
         input_path = os.path.abspath(args.input_file)
         output_file = getattr(args, 'output_file', None)
         vertical = getattr(args, 'vertical', False)
+        spread = getattr(args, 'spread', False)
         passes = getattr(args, 'passes', 1)
         workers = getattr(args, 'workers', 1)
         if passes < 1:
             raise CLIError("--passes must be at least 1.")
 
         if os.path.isdir(input_path):
-            self.process_image_folder(input_path, target_language, output_file, vertical=vertical, passes=passes, workers=workers)
+            self.process_image_folder(input_path, target_language, output_file, vertical=vertical, spread=spread, passes=passes, workers=workers)
         else:
             file_type = self._detect_and_validate_file(input_path)
             if file_type != 'image':
                 raise CLIError(f"Transcribe command requires an image file or folder, but got {file_type}.")
-            self.process_image(input_path, target_language, output_file, vertical=vertical, passes=passes)
+            self.process_image(input_path, target_language, output_file, vertical=vertical, spread=spread, passes=passes)
 
     def _run_prompt(self, args: argparse.Namespace) -> None:
         system_prompt_text: Optional[str] = None

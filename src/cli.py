@@ -94,6 +94,7 @@ Translation:
   python main.py heller translate CE -i doc.pdf --dry-run       Preview prompt without API call
   python main.py heller translate CE -i doc.pdf -n              Append ad-hoc notes to prompt
   python main.py heller translate CE -i doc.pdf -w 4            Translate 4 pages in parallel
+  python main.py heller translate JE -i spread.jpg --spread     Image is a two-page spread (images only)
     Note: -w > 1 passes untranslated source text as context (not prior translation) and
     disables --progressive-save. Each page's context_length_exceeded splitting still works.
 
@@ -109,6 +110,7 @@ Transcription (OCR):
   python main.py heller transcribe J -i scan.png                Japanese (kanji + kana)
   python main.py heller transcribe C -i scan.png -m gpt-4o-mini Use a specific model
   python main.py heller transcribe J -i scan.png -v             Vertical text layout
+  python main.py heller transcribe J -i scan.png --spread        Two-page spread (facing pages)
   python main.py heller transcribe J -i scan.png --kanbun        Kanbun (漢文) with 返り点/送り仮名 annotations
   python main.py heller transcribe E -i image.jpg --dry-run     Preview prompt without API call
   python main.py heller transcribe E -i image.jpg -n            Append ad-hoc notes to prompt
@@ -238,6 +240,7 @@ Transcription review (OCR error detection):
             'Workers > 1 uses untranslated source text as context and disables progressive save.'
         ),
     )
+    translate_parser.add_argument('--spread', dest='spread', action='store_true', help='Image is a two-page spread (two facing pages scanned together); only applies to image file inputs')
     _add_common_flags(translate_parser)
     _add_notes_flags(translate_parser)
 
@@ -250,6 +253,7 @@ Transcription review (OCR error detection):
     )
     transcribe_parser.add_argument('-i', '--input', dest='input_file', type=str, required=False, help='Input image file path, or a folder of images to process in order')
     transcribe_parser.add_argument('-v', '--vertical', dest='vertical', action='store_true', help='Text is predominantly vertical (top-to-bottom, right-to-left columns)')
+    transcribe_parser.add_argument('--spread', dest='spread', action='store_true', help='Image is a two-page spread (two facing pages scanned together)')
     kanbun_group = transcribe_parser.add_mutually_exclusive_group()
     kanbun_group.add_argument(
         '--kanbun',
